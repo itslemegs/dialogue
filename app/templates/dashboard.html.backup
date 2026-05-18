@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h2 class="text-xl font-semibold">Dashboard</h2>
+  <a href="/questions/new" class="px-3 py-2 bg-emerald-600 text-white rounded">New Agenda Card</a>
+</div>
+<ul class="space-y-2">
+  {% for q in questions %}
+    <li class="bg-white border rounded p-3">
+      <a class="text-blue-700" href="/questions/{{ q.id }}">{{ q.text }}</a>
+      <div class="text-sm text-slate-500">#{{ q.id }} • {{ q.created_at }}</div>
+    </li>
+  {% else %}
+    <li class="text-slate-500">No questions yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% import "macros/user_flair.html" as uf with context %}
+{% block content %}
+<h2>Users & Roles</h2>
+
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; min-width: 720px;">
+  <thead>
+    <tr>
+      <th style="text-align:left;">ID</th>
+      <th style="text-align:left;">Handle</th>
+      <th style="text-align:left;">Email</th>
+      <th style="text-align:left;">Roles</th>
+      <th style="text-align:left;">Grant</th>
+      <th style="text-align:left;">Revoke</th>
+      <th style="text-align:left;">Ban</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for u in users %}
+    {% set roles = role_map.get(u.id, []) %}
+    {% set target_is_banned = 'banned' in roles %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td>
+        {{ uf.flair_for_user(u=u, roles_list=role_map.get(u.id)) }}
+        {% if target_is_banned %}
+            <span style="margin-left:6px; padding:2px 6px; border-radius:4px; background:#ffd6d6; color:#b00020; font-weight:600;">BANNED</span>
+        {% endif %}
+      </td> 
+      <td>{{ u.email }}</td>
+      {% set primary = roles | reject('equalto', 'member') | list %}
+      <td>{{ (primary if primary else (['member'] if 'member' in roles else [])) | join(', ') or '-' }}</td>
+
+      {% set target_roles = role_map.get(u.id, []) %}
+      {% set target_is_admin = 'admin' in target_roles %}
+      {% set target_is_pres = 'president' in target_roles %}
+      {% set target_is_banned = 'banned' in roles %}
+      {% set is_self = (u.id == actor_id) %}
+      
+      {# Grant protections #}
+      {% set grant_blocked =
+        (actor_is_admin and is_self)
+        or (actor_is_president and (target_is_admin or is_self))
+        or (actor_is_chair and (target_is_admin or target_is_pres or is_self))
+      %}
+      
+      {# Revoke protections (same targets) #}
+      {% set revoke_blocked = grant_blocked %}
+
+      <td>
+        {% if target_is_banned %}
+            <span style="opacity:0.5;">— banned —</span>
+        {% elif grant_blocked %}
+            <span style="opacity:0.5;">— restricted —</span>
+        {% else %}
+          <form method="post" action="/admin/users/{{u.id}}/roles/grant" style="display:flex; gap:6px; align-items:center;">
+            {% set existing = role_map.get(u.id, []) %}
+            {% set grantable = all_roles | reject('in', existing) | list %}
+            {% if grantable|length == 0 %}
+              <span style="opacity:0.5;">— none —</span>
+            {% else %}
+              <select name="role">
+                {% for r in grantable %}
+                  <option value="{{ r }}">{{ r }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit">Grant</button>
+            {% endif %}
+          </form>
+        {% endif %}
+      </td>          
+
+      <td>
+        {% if target_is_banned %}
+            <span style="opacity:0.5;">— banned —</span>
+        {% elif revoke_blocked %}
+            <span style="opacity:0.5;">— restricted —</span>
+        {% else %}
+          <form method="post" action="/admin/users/{{u.id}}/roles/revoke" style="display:flex; gap:6px; align-items:center;">
+            <select name="role">
+              {% if actor_is_admin %}
+                {# admin: any role except 'member' #}
+                {% for r in roles if r != 'member' %}
+                  <option value="{{ r }}">{{ r }}</option>
+                {% endfor %}
+              {% elif actor_is_president %}
+                {# president: only 'chairman' and 'invited speaker' #}
+                {% if 'chairman' in roles %}<option value="chairman">chairman</option>{% endif %}
+                {% if 'invited speaker' in roles %}<option value="invited speaker">invited speaker</option>{% endif %}
+              {% elif actor_is_chair %}
+                {# chair: only 'invited speaker' #}
+                {% if 'invited speaker' in roles %}<option value="invited speaker">invited speaker</option>{% endif %}
+              {% endif %}
+            </select>
+            {% set has_revokable =
+               (actor_is_admin and (roles|reject('equalto','member')|list|length>0)) or
+               (actor_is_president and (('chairman' in roles) or ('invited speaker' in roles))) or
+               (actor_is_chair and ('invited speaker' in roles))
+            %}
+            {% if has_revokable %}
+              <button type="submit">Revoke</button>
+            {% else %}
+              <button type="submit" disabled>Revoke</button>
+            {% endif %}
+          </form>
+        {% endif %}
+      </td>
+      <td>
+        {# who is allowed to ban this row? mirror server-side logic #}
+        {% set can_ban = (actor_is_admin and (not target_is_admin) and (not is_self))
+                            or (actor_is_president and (not target_is_admin) and (not target_is_pres) and (not is_self))
+                            or (actor_is_chair and (not target_is_admin) and (not target_is_pres) and (not is_self)) %}
+
+        {% if not can_ban %}
+            <span style="opacity:0.5;">— restricted —</span>
+        {% else %}
+            {% if target_is_banned %}
+            <form method="post" action="/admin/users/{{u.id}}/unban">
+                <button type="submit">Unban</button>
+            </form>
+            {% else %}
+            <form method="post" action="/admin/users/{{u.id}}/ban">
+                <button type="submit" style="color:#b00020;">Ban</button>
+            </form>
+            {% endif %}
+        {% endif %}
+        </td>        
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p style="margin-top:12px;">
+    <small>
+      <b>Admins</b> can grant/revoke all roles (except baseline <i>member</i>), and can ban.<br>
+      <b>Presidents</b> can grant/revoke <b>chairman</b> and <b>invited speaker</b>, cannot modify admins or baseline <i>member</i>, and can ban.<br>
+      <b>Chairmen</b> can grant/revoke <b>invited speaker</b>, cannot modify other roles or baseline <i>member</i>, and can ban.
+    </small>
+</p>  
+
+<a href="/admin/events/new" class="px-3 py-2 bg-emerald-600 text-white rounded">Create Event</a>
+
+{% endblock %}

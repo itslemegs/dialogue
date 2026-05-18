@@ -1,0 +1,172 @@
+<div class="space-y-4">
+    <h2 class="text-xl font-semibold">Event Management</h2>
+  
+    {% if error %}
+      <div class="mb-2 p-3 rounded bg-rose-100 text-rose-700 text-sm">{{ error }}</div>
+    {% endif %}
+  
+    <!-- CREATE FORM (unchanged except action="/admin/events") -->
+    <form method="post" action="/admin/events" class="bg-white border rounded-xl p-6 space-y-5">
+      <h3 class="text-lg font-medium">Create Event</h3>
+
+      <div>
+        <label class="block text-sm font-medium text-slate-700">Title</label>
+        <input name="title" type="text" placeholder="Enter event title" required
+              value="{{ preset.title if preset else '' }}"
+              class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700">Start (local)</label>
+          <input name="start_local" type="datetime-local" required
+                value="{% if preset and preset.start_local %}{{ preset.start_local.strftime('%Y-%m-%dT%H:%M') if preset.start_local.__class__.__name__ != 'str' else preset.start_local }}{% endif %}"
+                class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          <p class="mt-1 text-xs text-slate-500">Timezone: Asia/Tokyo</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700">Auto-calculated End</label>
+          <input id="auto_end" type="text" readonly
+                class="mt-1 w-full rounded border-slate-200 bg-slate-50 text-slate-600" />
+          <p class="mt-1 text-xs text-slate-500">Updates as you change durations</p>
+        </div>
+      </div>
+
+      <fieldset class="border rounded-lg p-4">
+        <legend class="px-2 text-sm font-medium text-slate-700">Stage durations (minutes)</legend>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Opening</label>
+            <input name="open_min" id="open_min" type="number" min="1" required
+                  value="{{ preset.open_min if preset else '' }}"
+                  class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">General Debate</label>
+            <input name="debate_min" id="debate_min" type="number" min="1" required
+                  value="{{ preset.debate_min if preset else '' }}"
+                  class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Voting</label>
+            <input name="vote_min" id="vote_min" type="number" min="1" required
+                  value="{{ preset.vote_min if preset else '' }}"
+                  class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500" id="sum_label"></p>
+      </fieldset>
+
+      <fieldset class="border rounded-lg p-4">
+        <legend class="px-2 text-sm font-medium text-slate-700">Access</legend>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700">Visibility</label>
+            <select name="access_mode" id="access_mode"
+                    class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500">
+              <option value="open"
+                {% if not preset or not preset.access_mode or preset.access_mode == "open" %}selected{% endif %}>
+                Open to members
+              </option>
+              <option value="passcode"
+                {% if preset and preset.access_mode == "passcode" %}selected{% endif %}>
+                Private (requires passcode)
+              </option>
+            </select>
+          </div>
+
+          <div id="passcode_wrap" class="hidden">
+            <label class="block text-sm font-medium text-slate-700">Passcode</label>
+            <input name="passcode" id="passcode" type="text"
+                  class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500"
+                  placeholder="Set event passcode" />
+            <p class="mt-1 text-xs text-slate-500">Only used when visibility is Private.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="flex items-center justify-end gap-3">
+        <a href="/admin?tab=events" class="px-3 py-2 rounded border text-slate-700">Cancel</a>
+        <button type="submit" class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+          Create Event
+        </button>
+      </div>
+    </form>
+  
+    <!-- EVENTS LIST -->
+    <div class="bg-white border rounded-xl p-6">
+      <h3 class="text-lg font-medium mb-3">Events</h3>
+  
+      {% if events and events|length > 0 %}
+        <div class="overflow-x-auto">
+          <table class="min-w-full border border-slate-200 text-sm">
+            <thead class="bg-slate-50">
+              <tr>
+                <th class="p-2 text-left w-12">ID</th>
+                <th class="p-2 text-left">Title</th>
+                <th class="p-2 text-left">Access</th>
+                <th class="p-2 text-left">Start (JST)</th>
+                <th class="p-2 text-left">End (JST)</th>
+                <th class="p-2 text-left">Duration</th>
+                <th class="p-2 text-left w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in events %}
+              <tr class="border-t">
+                <td class="p-2">{{ e.id }}</td>
+                <td class="p-2">{{ e.title }}</td>
+                <td class="p-2">
+                  {% if e.access_mode == "passcode" %}
+                    <span class="inline-block px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-medium">
+                      Private
+                    </span>
+                  {% else %}
+                    <span class="inline-block px-2 py-1 rounded bg-emerald-100 text-emerald-800 text-xs font-medium">
+                      Open
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="p-2">{{ e.start_local_str }}</td>
+                <td class="p-2">{{ e.end_local_str }}</td>
+                <td class="p-2">
+                  {% if e.duration_min == "—" %}—{% else %}{{ e.duration_min }}{% endif %}
+                </td>
+                <td class="p-2">
+                  <form method="post"
+                        action="/admin/events/{{ e.id }}/delete?next=/admin/events"
+                        onsubmit="return confirm('Delete this event? This also deletes its proposals and stages.');">
+                    <button class="px-3 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">Delete</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="text-sm text-slate-500">No events yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+<script>
+(function () {
+  const mode = document.getElementById("access_mode");
+  const wrap = document.getElementById("passcode_wrap");
+  const input = document.getElementById("passcode");
+  if (!mode || !wrap || !input) return;
+
+  function syncPasscodeVisibility() {
+    const isPrivate = mode.value === "passcode";
+    wrap.classList.toggle("hidden", !isPrivate);
+    input.required = isPrivate;
+    if (!isPrivate) input.value = "";
+  }
+
+  mode.addEventListener("change", syncPasscodeVisibility);
+  syncPasscodeVisibility();
+})();
+</script>

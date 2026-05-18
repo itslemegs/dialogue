@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+{% set active = tab or 'users' %}
+
+<div class="mx-auto max-w-6xl">
+  <h1 class="text-2xl font-bold mb-4">Admin</h1>
+
+  <div role="tablist" aria-label="Admin sections" class="flex gap-2 border-b">
+    <a role="tab" id="tab-users"  href="/admin?tab=users"  aria-controls="panel-users"
+       aria-selected="{{ 'true' if tab=='users' else 'false' }}"
+       class="px-4 py-2 rounded-t {{ 'bg-white border border-b-0 border-slate-200' if tab=='users' else '' }}">
+      User &amp; Role Management
+    </a>
+    <a role="tab" id="tab-events" href="/admin?tab=events" aria-controls="panel-events"
+       aria-selected="{{ 'true' if tab=='events' else 'false' }}"
+       class="px-4 py-2 rounded-t {{ 'bg-white border border-b-0 border-slate-200' if tab=='events' else '' }}">
+      Event Management
+    </a>
+  </div>  
+
+  <!-- Only the active panel is visible/rendered -->
+  <section id="panel-users" role="tabpanel" aria-labelledby="tab-users"
+           class="bg-white border border-t-0 rounded-b p-4 mt-0 {{ '' if active=='users' else 'hidden' }}">
+    {% if active == 'users' %}
+      {% include "admin/_users_roles.html" %}
+    {% endif %}
+  </section>
+
+  <section id="panel-events" role="tabpanel" aria-labelledby="tab-events"
+           class="bg-white border border-t-0 rounded-b p-4 mt-0 {{ '' if active=='events' else 'hidden' }}">
+    {% if active == 'events' %}
+      {% include "admin/_events.html" %}
+    {% endif %}
+  </section>
+</div>
+    
+{% endblock %}

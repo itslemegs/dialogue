@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="relative py-10 sm:py-14">
+  <!-- subtle background flair (scoped to this page only) -->
+  <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+    <div class="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-blue-500/15 blur-3xl"></div>
+    <div class="absolute top-32 right-[-6rem] h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl"></div>
+  </div>
+
+  <div class="mx-auto w-full max-w-md">
+    <div class="rounded-2xl bg-white/80 p-7 shadow-lg ring-1 ring-black/5 backdrop-blur sm:p-8">
+      <div class="mb-6">
+        <div class="flex items-center justify-between">
+          <a href="/" class="text-lg font-semibold tracking-tight text-slate-900">d¡alogüe.</a>
+          <span class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Login</span>
+        </div>
+        <h1 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900">Welcome back</h1>
+        <p class="mt-1 text-sm text-slate-600">Sign in to continue.</p>
+      </div>
+
+      {# If you pass `error` into the template, this will show nicely #}
+      {% if error %}
+      <div class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {{ error }}
+      </div>
+      {% endif %}
+
+      <form method="post" class="space-y-5">
+        <div>
+          <label for="identifier" class="mb-2 block text-sm font-medium text-slate-700">Username</label>
+          <div class="relative">
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              <!-- user/mail icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10 10a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm-7 8a7 7 0 0 1 14 0Z"/>
+              </svg>
+            </span>
+            <input
+              type="text"
+              id="identifier"
+              name="identifier"
+              placeholder="username"
+              required
+              autocomplete="username"
+              aria-label="Username or Email"
+              class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pl-10 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition
+                     focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15"
+            >
+          </div>
+        </div>
+
+        <div>
+          <div class="mb-2 flex items-center justify-between">
+            <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
+            {# if you don't have this route, remove the link #}
+            {# <a href="/forgot" class="text-sm font-medium text-blue-700 hover:underline">Forgot?</a> #}
+          </div>
+
+          <div class="relative">
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              <!-- lock icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M5 8V6a5 5 0 1 1 10 0v2h.5A1.5 1.5 0 0 1 17 9.5v7A1.5 1.5 0 0 1 15.5 18h-11A1.5 1.5 0 0 1 3 16.5v-7A1.5 1.5 0 0 1 4.5 8H5Zm2-2a3 3 0 1 1 6 0v2H7V6Z" clip-rule="evenodd"/>
+              </svg>
+            </span>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              placeholder="••••••••"
+              required
+              autocomplete="current-password"
+              class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pl-10 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition
+                     focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15"
+            >
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" name="remember"
+              class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-4 focus:ring-blue-600/20">
+            Remember me
+          </label>
+          <a href="/register" class="text-sm font-medium text-slate-700 hover:text-slate-900 hover:underline">
+            Create account
+          </a>
+        </div>
+
+        <button
+          type="submit"
+          class="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5
+                 text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700
+                 focus:outline-none focus:ring-4 focus:ring-blue-600/25"
+        >
+          Login
+          <span class="transition group-hover:translate-x-0.5">→</span>
+        </button>
+
+        <p class="text-center text-xs text-slate-500">
+          By continuing, you agree to the platform’s terms and privacy policy.
+        </p>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

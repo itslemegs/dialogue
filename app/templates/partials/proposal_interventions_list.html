@@ -1,0 +1,30 @@
+{% macro render_node(n, user_map) -%}
+  {% set it = n.node %}
+  {% set u  = user_map.get(it.by_user) %}
+  <div class="border-b px-4 py-3" id="pfi-{{ it.id }}">
+    <div class="text-sm text-slate-600">
+      <span class="font-medium">@{{ u.handle if u else ('user' ~ it.by_user) }}</span>
+      <span class="text-xs text-slate-400">#{{ it.local_no }}</span>
+      <a href="#" class="ml-2 text-xs text-indigo-600" data-reply-to="{{ it.id }}" data-reply-label="#{{ it.local_no }}">Reply</a>
+    </div>
+    <div class="mt-1 whitespace-pre-wrap text-slate-800">{{ it.body }}</div>
+
+    {% if n.children and n.children|length > 0 %}
+      <div class="mt-2 ml-4 border-l pl-3 space-y-2">
+        {% for c in n.children %}
+          {{ render_node(c, user_map) }}
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+<div class="divide-y">
+  {% if threads and threads|length %}
+    {% for n in threads %}
+      {{ render_node(n, user_map) }}
+    {% endfor %}
+  {% else %}
+    <div class="p-4 text-slate-500">No interventions yet.</div>
+  {% endif %}
+</div>

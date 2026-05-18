@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Tabled Draft Resolution Texts (L docs)</h1>
+  </div>
+
+  {% if (active|length == 0) and (withdrawn|length == 0) %}
+    <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
+      No drafts visible yet. Drafts appear 3 days after submission.
+    </div>
+  {% endif %}
+
+  {% if active|length %}
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold mb-3">Active</h2>
+      <ul class="space-y-2">
+        {% for d in active %}
+        <li>
+          <a href="/drafts/{{ d.id }}" class="block rounded-xl border bg-white p-4 hover:shadow-sm transition">
+            <div class="flex items-center justify-between">
+              <div class="text-base font-semibold">{{ d.l_number }} — {{ d.title }}</div>
+              <div class="text-xs text-slate-500">{{ d.submitted_at.strftime("%Y-%m-%d %H:%M") }}</div>
+            </div>
+            <div class="mt-1 text-sm text-slate-600">
+              Agenda item: <span class="font-medium">{{ d.agenda_label }}</span>
+              • Main sponsor: <span class="font-medium">{{ d.sponsor_name }}</span>
+              {% if d.status == "REINTRODUCED" %}
+                <span class="ml-2 inline-block px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-800">Reintroduced</span>
+              {% endif %}
+            </div>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if withdrawn|length %}
+    <section class="mb-8">
+      <h2 class="text-lg font-semibold mb-3">Withdrawn (Reintroduction possible)</h2>
+      <ul class="space-y-2">
+        {% for d in withdrawn %}
+        <li class="rounded-xl border bg-white p-4">
+          <div class="flex items-center justify-between">
+            <div class="text-base font-semibold">{{ d.l_number }} — {{ d.title }}</div>
+            <div class="text-xs text-slate-500">{{ d.submitted_at.strftime("%Y-%m-%d %H:%M") }}</div>
+          </div>
+          <div class="mt-1 text-sm text-slate-600">
+            Agenda item: <span class="font-medium">{{ d.agenda_label }}</span>
+            • Main sponsor (at withdrawal): <span class="font-medium">{{ d.sponsor_name }}</span>
+          </div>
+          {% if user %}
+          <form method="post" action="/drafts/{{ d.id }}/reintroduce" class="mt-3">
+            <button class="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700">Reintroduce</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

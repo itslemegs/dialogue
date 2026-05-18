@@ -1,0 +1,567 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
+<div class="text-slate-500 text-sm mb-4">Agenda: {{ proposal.title }}</div>
+
+{% set can_delete = (room.sponsor_id == user.id) or flags.IS_PRESIDENT or flags.IS_CHAIR or flags.IS_CHAIRMAN %}
+{% if can_delete %}
+<form method="post"
+      action="{{ url_for('rooms_delete', event_id=event.id, pid=proposal.id, rid=room.id) }}"
+      onsubmit="return confirm('Delete this room? This will remove chat and draft.');"
+      class="inline-block">
+  <button class="px-3 py-1 bg-rose-600 text-white rounded">Delete room</button>
+</form>
+{% endif %}
+
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+  <!-- Chat -->
+  <section class="md:col-span-7 bg-white border rounded">
+    <div class="p-3 border-b">
+      <form method="post" action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/messages" class="flex gap-2">
+        <input type="hidden" name="parent_id" id="parent_id" value="">
+        <textarea name="body" class="flex-1 border rounded p-2" rows="2" placeholder="Message..." required></textarea>
+        <button class="px-3 py-2 bg-blue-600 text-white rounded">Send</button>
+      </form>
+    </div>
+    <ul class="divide-y">
+      {% for R in threads %}
+        {# render similar to your interventions macro; very minimal: #}
+        <li class="p-3">
+          <div class="text-slate-600 text-sm">
+            #{{ R.node.local_no }} • @{{ user_map[R.node.user_id].handle if user_map.get(R.node.user_id) }}
+            <span class="text-xs text-slate-400">{{ R.node.created_at }}</span>
+          </div>          
+          <div class="whitespace-pre-wrap mt-1">{{ R.node.body }}</div>
+          <button class="text-xs text-indigo-600 mt-1" onclick="document.getElementById('parent_id').value='{{ R.node.id }}'">Reply</button>
+          {% if R.children and R.children|length %}
+            <ul class="pl-4 mt-2 space-y-2 border-l">
+              {% for C in R.children %}
+                <li class="pl-2">
+                  <div class="text-slate-600 text-sm">
+                    #{{ C.node.local_no }} • @{{ user_map[C.node.user_id].handle if user_map.get(C.node.user_id) }}
+                  </div>                  
+                  <div class="whitespace-pre-wrap">{{ C.node.body }}</div>
+                </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </li>
+      {% else %}
+        <li class="p-3 text-slate-500">No messages yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <!-- Draft -->
+  <section class="md:col-span-5 bg-white border rounded p-3">
+    <h3 class="font-semibold">Draft (Room sponsor edits; others can co-sign)</h3>
+
+    {% set is_sponsor = (user and user.id == room.sponsor_id) %}
+    {% if draft.is_submitted %}
+      <div class="mt-2 p-2 rounded bg-emerald-50 text-emerald-700">
+        Submitted as <strong>{{ draft.l_number }}</strong> at {{ draft.submitted_at }}
+      </div>
+    {% endif %}
+
+    {% if is_sponsor and not draft.is_submitted %}
+    <div class="mt-2 p-2 rounded border bg-slate-50 space-y-2">
+      <label class="block text-sm text-slate-600">Write freely (plain paragraphs)</label>
+      <textarea id="plain_text"
+                class="w-full border rounded p-2"
+                rows="6"
+                placeholder="Explain what the draft should do. No UN format needed."></textarea>
+
+      <div class="flex items-center gap-2">
+        <button type="button"
+                id="btn_lookup"
+                class="px-3 py-2 rounded bg-slate-900 text-white">
+          Lookup
+        </button>
+        <button type="button"
+                id="btn_generate"
+                class="px-3 py-1.5 bg-indigo-600 text-white rounded">
+          Generate draft from paragraphs
+        </button>
+        <div id="ai_status" class="text-xs text-slate-500"></div>
+        <div id="lookup_status" class="text-xs text-slate-500"></div>
+      </div>
+      <div id="lookup_panel" class="hidden mt-3 border rounded bg-white">
+          <div class="p-3 border-b flex items-center justify-between">
+            <div class="font-semibold">Cross-check</div>
+            <button type="button"
+                    id="lookup_close"
+                    class="text-xs text-slate-600 hover:underline">
+              Close
+            </button>
+          </div>
+
+          <div id="lookup_results" class="p-3 space-y-3"></div>
+        </div>
+    </div>
+    <!-- <div
+      hx-get="/api/live_summary?kind=PROOM&room_id={{ room.id }}"
+      hx-trigger="load, every 3s"
+      hx-swap="innerHTML"
+    ></div> -->
+    <form method="post" action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/save" class="space-y-2 mt-2">
+      <label class="block text-sm text-slate-600">Title</label>
+      <input id="draft_title"
+           name="title"
+           type="text"
+           maxlength="200"
+           class="w-full border rounded p-2"
+           value="{{ draft.title or '' }}"
+           placeholder="Short title for this draft" />
+
+      {% for label, name in [
+        ('Recalling', 'recalling'), ('Noting', 'noting'), ('Welcoming', 'welcoming'),
+        ('Expressing regret', 'expressing_regret'), ('Expressing deep concern', 'expressing_deep_concern'),
+        ('Emphasizing', 'emphasizing'), ('Decides', 'decides'), ('Requests', 'requests'),
+        ('Calls upon', 'calls_upon'), ('Encourages', 'encourages')
+      ] %}
+        <label class="block text-sm text-slate-600">{{ label }}</label>
+        <textarea id="draft_{{ name }}"
+                  name="{{ name }}"
+                  class="w-full border rounded p-2"
+                  rows="2">{{ getattr(draft, name) or '' }}</textarea>
+      {% endfor %}
+
+      <div class="flex gap-2">
+        <button class="px-3 py-1.5 bg-slate-700 text-white rounded">Save</button>
+        <button formaction="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/submit"
+            class="px-3 py-1.5 bg-emerald-600 text-white rounded">
+          Submit (assign L.#)
+        </button>
+      </div>
+    </form>
+    {% else %}
+      {# read-only view #}
+      <div class="mt-2 grid grid-cols-1 gap-2">
+        {% if draft.title %}
+          <div>
+            <div class="text-xs text-slate-500">Title</div>
+            <div class="border rounded p-2 font-medium">{{ draft.title }}</div>
+          </div>
+        {% endif %}
+        {% for label, name in [
+          ('Recalling', 'recalling'), ('Noting', 'noting'), ('Welcoming', 'welcoming'),
+          ('Expressing regret', 'expressing_regret'), ('Expressing deep concern', 'expressing_deep_concern'),
+          ('Emphasizing', 'emphasizing'), ('Decides', 'decides'), ('Requests', 'requests'),
+          ('Calls upon', 'calls_upon'), ('Encourages', 'encourages')
+        ] %}
+          {% set val = getattr(draft, name) %}
+          {% if val %}
+            <div>
+              <div class="text-xs text-slate-500">{{ label }}</div>
+              <div class="whitespace-pre-wrap border rounded p-2">{{ val }}</div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if not draft.is_submitted and not is_sponsor %}
+      <form method="post" action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/cosign" class="mt-3">
+        <button class="px-3 py-1.5 rounded {{ 'bg-fuchsia-700 text-white' if user and (user.id in (cos_list or [])) else 'bg-slate-100' }}">
+          {{ 'Remove co-sign' if user and (user.id in (cos_list or [])) else 'Co-sign' }}
+        </button>
+      </form>
+    {% else %}
+      <div class="mt-3 text-sm text-slate-500">Co-signing closed after submission.</div>
+    {% endif %}
+
+    <div class="mt-3 text-sm">
+      <div class="text-slate-500">Main sponsor: @{{ user_map[room.sponsor_id].handle if user_map.get(room.sponsor_id) }}</div>
+      <div>Co-signers:
+        {% set ids = (cos_list or []) %}
+        {% if ids and ids|length %}
+          {% for uid in ids %}
+            <span class="inline-block rounded bg-slate-100 px-2 py-0.5 mr-1">@{{ user_map[uid].handle if user_map.get(uid) }}</span>
+          {% endfor %}
+        {% else %}
+          <span class="text-slate-500">—</span>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  <!-- Live Summary -->
+  <!-- <aside class="md:col-span-12 lg:col-span-2 lg:sticky lg:top-4 pb-28">
+    <div
+      id="live_summary"
+      hx-get="/fragments/live_summary?kind=PROOM&room_id={{ room.id }}"
+      hx-trigger="load, every 5s"
+      hx-swap="innerHTML"
+      hx-sync="this:replace"
+    >
+      <div class="bg-white border rounded-lg p-3 text-sm text-slate-500">Loading summary…</div>
+    </div>
+  </aside> -->
+  <aside class="md:col-span-12 lg:col-span-2 lg:sticky lg:top-4 pb-28">
+    <div class="bg-white border rounded-lg shadow-sm">
+      <div class="px-3 py-2 border-b flex items-center justify-between">
+        <div class="text-sm font-semibold">Live summary</div>
+        <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
+      </div>
+      <div class="p-3">
+        <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">Loading…</div>
+        <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-5 text-slate-800"></pre>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+  (function () {
+    const body = document.getElementById("liveSummaryBody");
+    const updated = document.getElementById("liveSummaryUpdated");
+    const status = document.getElementById("liveSummaryStatus");
+    if (!body || !updated || !status) return;
+
+    const url = "/api/live_summary?kind=PROOM&room_id={{ room.id }}";
+    let inflight = false;
+
+    async function tick() {
+      if (inflight) return;
+      inflight = true;
+      status.textContent = "Updating…";
+      try {
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        body.textContent = data.summary || "";
+        updated.textContent = data.updated_at ? ("Updated " + data.updated_at) : "";
+        status.textContent = "";
+      } catch (e) {
+        status.textContent = "Summary unavailable (endpoint or LLM offline)";
+      } finally {
+        inflight = false;
+      }
+    }
+
+    tick();
+    setInterval(tick, 5000);
+  })();
+</script>
+
+<script>
+(function () {
+  const btn = document.getElementById("btn_lookup");
+  const plainEl = document.getElementById("plain_text");
+
+  const statusEl = document.getElementById("lookup_status");
+  const panelEl = document.getElementById("lookup_panel");
+  const resultsEl = document.getElementById("lookup_results");
+  const closeBtn = document.getElementById("lookup_close");
+
+  if (!btn || !plainEl || !statusEl || !panelEl || !resultsEl) return;
+
+  function setStatus(msg, isError=false) {
+    statusEl.textContent = msg || "";
+    statusEl.className = "text-xs " + (isError ? "text-rose-600" : "text-slate-500");
+  }
+
+  function clearResults() {
+    resultsEl.innerHTML = "";
+  }
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function mkSourceMap(sources) {
+    const m = new Map();
+    for (const s of (sources || [])) {
+      if (s && s.id && s.url) m.set(s.id, s);
+    }
+    return m;
+  }
+
+  function render(report) {
+    clearResults();
+    panelEl.classList.remove("hidden");
+
+    if (!report) {
+      resultsEl.appendChild(el("div", "text-sm text-rose-600", "No report returned."));
+      return;
+    }
+
+    if (report.debug?.queries) {
+      setStatus(`Done. Planned ${report.debug.items_planned || 0} item(s).`);
+      console.log("lookup debug:", report.debug);
+    }
+
+    // Optional disclaimer (tiny)
+    if (report.disclaimer) {
+      resultsEl.appendChild(
+        el("div", "text-[11px] text-slate-500 bg-slate-50 border rounded p-2", report.disclaimer)
+      );
+    }
+
+    const items = Array.isArray(report.items) ? report.items : [];
+    if (!items.length) {
+      resultsEl.appendChild(el("div", "text-sm text-slate-600", "No findings. (Search may have failed or returned nothing.)"));
+      return;
+    }
+
+    for (const item of items) {
+      const card = el("div", "border rounded p-3 space-y-2");
+      card.appendChild(el("div", "font-semibold", item.claim || "Cross-check item"));
+
+      const findings = Array.isArray(item.findings) ? item.findings : [];
+      const sources = Array.isArray(item.sources) ? item.sources : [];
+      const srcMap = mkSourceMap(sources);
+
+      if (!findings.length) {
+        card.appendChild(el("div", "text-sm text-slate-600", "No summary available for this item."));
+        resultsEl.appendChild(card);
+        continue;
+      }
+
+      // Only: summary point + citations
+      const ul = el("ul", "space-y-2");
+      for (const f of findings) {
+        const li = el("li", "bg-slate-50 border rounded p-2");
+
+        // summary text
+        if (f.what_it_says) {
+          li.appendChild(el("div", "text-sm", f.what_it_says));
+        } else {
+          li.appendChild(el("div", "text-sm text-slate-600", "(No summary text)"));
+        }
+
+        // citations (clickable)
+        const sids = Array.isArray(f.source_ids) ? f.source_ids : [];
+        if (sids.length) {
+          const citeLine = el("div", "text-xs text-slate-600 mt-1");
+          citeLine.appendChild(el("span", "font-medium", "Citations: "));
+
+          let added = 0;
+          for (const sid of sids) {
+            const s = srcMap.get(sid);
+            if (!s) continue;
+
+            const a = document.createElement("a");
+            a.className = "text-indigo-600 hover:underline mr-2";
+            a.href = s.url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            // keep it compact: show domain-ish label or title snippet
+            a.textContent = s.display_url || (s.title ? s.title.slice(0, 48) : sid);
+            citeLine.appendChild(a);
+            added++;
+            if (added >= 4) break; // don’t spam citations
+          }
+
+          if (added === 0) {
+            citeLine.appendChild(el("span", "", "(no usable URLs returned)"));
+          }
+
+          li.appendChild(citeLine);
+        }
+
+        ul.appendChild(li);
+      }
+
+      card.appendChild(ul);
+      resultsEl.appendChild(card);
+    }
+  }
+
+  async function runLookup() {
+    const text = (plainEl.value || "").trim();
+    if (!text) {
+      setStatus("Please write something first.", true);
+      return;
+    }
+
+    btn.disabled = true;
+    setStatus("Cross-checking…");
+
+    try {
+      const body = {
+        text,
+        jurisdiction: "Japan",
+        topic_hint: "data protection / privacy",
+
+        // FAST DEV SETTINGS
+        max_items: 1,              // was ~6
+        max_queries_per_item: 1,   // was ~3
+        results_per_query: 3,      // was ~5
+        fetch_top_k: 0,            // <-- HUGE speed-up (no page fetching)
+      };
+
+      const res = await fetch("/ai/lookup", {
+        method: "POST",
+        headers: {"Content-Type":"application/json", "Accept":"application/json"},
+        credentials: "include",
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || ("HTTP " + res.status));
+      }
+
+      const data = await res.json();
+      render(data);
+      setStatus("Done.");
+    } catch (e) {
+      setStatus("Cross-check failed: " + (e?.message || e), true);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  btn.addEventListener("click", runLookup);
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => panelEl.classList.add("hidden"));
+  }
+})();
+</script>
+
+<script>
+(function () {
+  const btn = document.getElementById("btn_generate");
+  const statusEl = document.getElementById("ai_status");
+  const plainEl = document.getElementById("plain_text");
+
+  if (!btn || !statusEl || !plainEl) return;
+
+  const endpoint = "/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/generate-json";
+
+  function setStatus(msg, isError = false) {
+    statusEl.textContent = msg || "";
+    statusEl.className = "text-xs " + (isError ? "text-rose-600" : "text-slate-500");
+  }
+
+  function fillDraftFields(payload) {
+    if (!payload) return;
+
+    const titleEl = document.getElementById("draft_title");
+    if (titleEl && payload.title && payload.title.trim()) {
+      titleEl.value = payload.title;
+    }
+
+    const fields = [
+      "recalling",
+      "noting",
+      "welcoming",
+      "expressing_regret",
+      "expressing_deep_concern",
+      "emphasizing",
+      "decides",
+      "requests",
+      "calls_upon",
+      "encourages"
+    ];
+
+    for (const key of fields) {
+      const el = document.getElementById("draft_" + key);
+      const val = payload[key] || "";
+      if (el && val.trim()) {
+        el.value = val;
+      }
+    }
+  }
+
+  async function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function pollDraftJob(jobId) {
+    const statusUrl = `${endpoint}/status/${encodeURIComponent(jobId)}`;
+
+    // 450 * 2s = 15 minutes, matching your long llama timeout strategy.
+    for (let i = 0; i < 450; i++) {
+      await sleep(2000);
+
+      const res = await fetch(statusUrl, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = null;
+      }
+
+      if (!res.ok) {
+        throw new Error((data && data.detail) || `HTTP ${res.status}`);
+      }
+
+      if (data.status === "done") {
+        return data.payload;
+      }
+
+      if (data.status === "error") {
+        throw new Error(data.error || "Draft generation failed.");
+      }
+
+      setStatus(`Generating… ${Math.floor((i + 1) * 2)}s`);
+    }
+
+    throw new Error("Draft generation is still running. Please try again later.");
+  }
+
+  btn.addEventListener("click", async () => {
+    const plain = (plainEl.value || "").trim();
+
+    if (!plain) {
+      setStatus("Please write something first.", true);
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Generating…";
+    setStatus("Starting generation…");
+
+    try {
+      const fd = new FormData();
+      fd.append("plain_text", plain);
+
+      const startRes = await fetch(endpoint, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      });
+
+      let startData = null;
+      try {
+        startData = await startRes.json();
+      } catch (_) {
+        startData = null;
+      }
+
+      if (!startRes.ok) {
+        throw new Error((startData && startData.detail) || `HTTP ${startRes.status}`);
+      }
+
+      if (!startData || startData.status !== "running" || !startData.job_id) {
+        throw new Error("Draft generation did not start correctly.");
+      }
+
+      setStatus("Generating with AI… this may take a while.");
+
+      const payload = await pollDraftJob(startData.job_id);
+
+      fillDraftFields(payload);
+
+      setStatus("Draft generated. Review, then click Save.");
+    } catch (e) {
+      setStatus("Generation failed: " + (e?.message || e), true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Generate draft from paragraphs";
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,718 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold">
+      {{ draft.l_number or "(unassigned)" }} — {{ title_show }}
+    </h1>
+    <div>
+      {% if can_withdraw %}
+      <form method="post" action="/events/{{ draft.event_id }}/drafts/{{ draft.id }}/withdraw" onsubmit="return confirm('Withdraw this draft?');">
+        <button class="px-3 py-1.5 rounded bg-rose-600 text-white text-sm hover:bg-rose-700">Withdraw</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="text-sm text-slate-600 mb-6">
+    Agenda item: <span class="font-medium">{{ agenda_label }}</span>
+    <!-- {% if agenda_id %}<a href="/questions/{{ agenda_id }}" class="text-blue-700 underline ml-1">view</a>{% endif %} -->
+    • Main sponsor: <span class="font-medium">{{ sponsor_name }}</span>
+    • Status: <span class="font-medium">{{ draft.status }}</span>
+    • Submitted: {{ draft.submitted_at.strftime("%Y-%m-%d %H:%M") }}
+  </div>
+
+  {# quick language buttons #}
+  <div class="flex flex-wrap gap-2 mb-4">
+    {% for code, meta in supported_langs.items() %}
+      <a href="{{ request.url.include_query_params(lang=code) }}"
+        class="px-2.5 py-1 rounded-full text-sm border
+                {{ 'bg-slate-900 text-white border-slate-900' if lang==code else 'bg-white hover:bg-slate-50' }}">
+        {{ meta.label }}
+      </a>
+    {% endfor %}
+  </div>
+
+  {% if lang != "en" and translation_status != "done" %}
+<div
+  id="translation-status-box"
+  data-draft-id="{{ draft.id }}"
+  data-lang="{{ lang }}"
+  class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900"
+>
+  <div class="font-semibold">
+    Translation is being prepared.
+  </div>
+
+  <div class="mt-1">
+    The draft will appear automatically when the {{ lang_meta.label }} translation is ready.
+  </div>
+
+  <div class="mt-3 h-2 overflow-hidden rounded-full bg-amber-100">
+    <div class="h-full w-1/3 animate-pulse rounded-full bg-amber-300"></div>
+  </div>
+
+  {% if translation_error %}
+  <div class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-red-700">
+    Translation error: {{ translation_error }}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+(() => {
+  const box = document.getElementById("translation-status-box");
+  if (!box) return;
+
+  const draftId = box.dataset.draftId;
+  const lang = box.dataset.lang;
+
+  let tries = 0;
+  const maxTries = 120;
+
+  async function pollTranslation() {
+    tries += 1;
+
+    try {
+      const res = await fetch(
+        `/drafts/${draftId}/translation-status?lang=${encodeURIComponent(lang)}`,
+        {
+          headers: {
+            "Accept": "application/json"
+          }
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (data.ready) {
+        window.location.reload();
+        return;
+      }
+
+      if (data.status === "failed") {
+        box.className = "mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800";
+        box.innerHTML = `
+          <div class="font-semibold">Translation failed.</div>
+          <div class="mt-1">${data.error || "Please try again later."}</div>
+        `;
+        return;
+      }
+
+    } catch (err) {
+      console.warn("Translation polling failed:", err);
+    }
+
+    if (tries < maxTries) {
+      window.setTimeout(pollTranslation, 1500);
+    }
+  }
+
+  window.setTimeout(pollTranslation, 1000);
+})();
+</script>
+{% endif %}
+
+{% if not hide_draft_for_translation %}
+
+  <!-- Official-style document (all languages, same layout) -->
+<section id="doc_body" class="rounded-2xl border bg-white p-6 prose max-w-none"
+         dir="{{ lang_meta.dir }}">
+  {% set T = draft_text %}
+  {% set L = ui_labels %}
+
+  {% if T.recalling or T.noting or T.welcoming or T.expressing_regret or T.expressing_deep_concern or T.emphasizing or T.decides or T.requests or T.calls_upon or T.encourages %}
+
+    {% if T.recalling %}<p><em>{{ L.recalling }}</em>, {{ T.recalling|e }}</p>{% endif %}
+    {% if T.noting %}<p><em>{{ L.noting }}</em>, {{ T.noting|e }}</p>{% endif %}
+    {% if T.welcoming %}<p><em>{{ L.welcoming }}</em>, {{ T.welcoming|e }}</p>{% endif %}
+    {% if T.expressing_regret %}<p><em>{{ L.expressing_regret }}</em>, {{ T.expressing_regret|e }}</p>{% endif %}
+    {% if T.expressing_deep_concern %}<p><em>{{ L.expressing_deep_concern }}</em>, {{ T.expressing_deep_concern|e }}</p>{% endif %}
+    {% if T.emphasizing %}<p><em>{{ L.emphasizing }}</em>, {{ T.emphasizing|e }}</p>{% endif %}
+
+    {% if T.decides %}<p><strong>{{ L.decides }}:</strong> {{ T.decides|e }}</p>{% endif %}
+    {% if T.requests %}<p><strong>{{ L.requests }}:</strong> {{ T.requests|e }}</p>{% endif %}
+    {% if T.calls_upon %}<p><strong>{{ L.calls_upon }}:</strong> {{ T.calls_upon|e }}</p>{% endif %}
+    {% if T.encourages %}<p><strong>{{ L.encourages }}:</strong> {{ T.encourages|e }}</p>{% endif %}
+
+  {% else %}
+    <p class="text-slate-500 text-sm">No structured text stored.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+  <!-- Co-signers -->
+  <section class="mt-8">
+    <h2 class="text-lg font-semibold mb-2">Co-signers</h2>
+    <div class="text-sm">
+      {% if early_cosigns|length == 0 and late_cosigns|length == 0 %}
+        <p class="text-slate-600">No co-signers yet.</p>
+      {% endif %}
+
+      {% if early_cosigns|length %}
+        <div class="mb-2">
+          <div class="text-slate-500 text-xs uppercase tracking-wide mb-1">Original</div>
+          <ul class="list-disc ml-5">
+            {% for c in early_cosigns %}<li>{{ c.name }}</li>{% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      {% if late_cosigns|length %}
+        <div>
+          <div class="text-slate-500 text-xs uppercase tracking-wide mb-1">Addendum ({{ draft.l_number }}/Add)</div>
+          <ul class="list-disc ml-5">
+            {% for c in late_cosigns %}
+              <li>{{ c.name }}{% if c.created_at %} <span class="text-xs text-slate-400">({{ c.created_at[:10] }})</span>{% endif %}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if can_cosign %}
+      <form method="post" action="/drafts/{{ draft.id }}/cosign" class="mt-3">
+        <button class="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700">Co-sign</button>
+      </form>
+    {% elif already_cosigned %}
+      <div class="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-block">
+        You have already co-signed.
+      </div>
+    {% endif %}
+  </section>
+
+  <!-- Amendments list -->
+<section class="mt-10">
+  <h2 class="text-lg font-semibold mb-2">Amendments</h2>
+
+  {% if amends|length == 0 %}
+    <div class="text-sm text-slate-600">No amendments submitted yet.</div>
+  {% else %}
+    <ul class="space-y-2">
+      {% for a in amends %}
+        <li>
+          <a
+            href="/events/{{ draft.event_id }}/proposal-discussion/{{ draft.proposal_id }}/rooms/{{ draft.room_id }}/drafts/{{ draft.id }}/amendments/{{ a.id }}"
+            class="block rounded-xl border bg-white p-4 hover:shadow-sm transition"
+          >
+            <div class="flex items-center justify-between">
+              <div class="font-medium">{{ a.label }}</div>
+              <div class="text-xs text-slate-500">{{ a.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+            </div>
+
+            <div class="mt-1 text-sm line-clamp-2 text-slate-600">
+              {{ a.body_markdown[:200] }}{% if a.body_markdown|length > 200 %}…{% endif %}
+            </div>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+
+<!-- Amendment form / builder -->
+<section class="mt-8">
+  <h3 class="text-base font-semibold mb-2">Propose an Amendment</h3>
+
+  <p class="text-sm text-slate-600 mb-3">
+    Use the builder to compose UN-style edits. Add multiple operations; the system will compile them before submission.
+  </p>
+
+  <div
+    id="amend-tool"
+    class="rounded-2xl border bg-white p-4 space-y-4"
+    data-generate-endpoint="/events/{{ draft.event_id }}/proposal-discussion/{{ draft.proposal_id }}/rooms/{{ draft.room_id }}/drafts/{{ draft.id }}/amend/generate-json"
+  >
+    <div class="grid gap-1 text-sm text-slate-700">
+      <div>Agenda item: <span class="font-medium">{{ agenda_label }}</span></div>
+      <div>Resolution number: <span class="font-medium">{{ draft.l_number or "—" }}</span></div>
+    </div>
+
+    <!-- Plain-language AI helper -->
+    <div class="rounded-2xl border bg-slate-50 p-4 space-y-3">
+      <label for="am_plain_text" class="block text-sm font-medium text-slate-700">
+        Describe your amendment in plain language
+      </label>
+
+      <textarea
+        id="am_plain_text"
+        class="w-full border rounded-xl p-3 text-sm"
+        rows="5"
+        placeholder="Example: Replace the operative clause starting with “Encourages Member States…” so that it also includes support for developing countries. Then add a new operative clause requesting technical reports and training workshops."
+      ></textarea>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          id="am_btn_generate"
+          class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
+        >
+          Generate amendment operations
+        </button>
+
+        <div id="am_ai_status" class="text-xs text-slate-500"></div>
+      </div>
+
+      <div class="text-xs text-slate-500">
+        Tip: include clause numbers if you know them, such as “replace operative 4(a).” Otherwise use wording like “starting with…”.
+      </div>
+    </div>
+
+    <!-- Manual builder -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-sm font-semibold text-slate-800">Operations</h4>
+
+        <button
+          type="button"
+          id="add-op"
+          class="px-3 py-1.5 rounded bg-slate-700 text-white text-sm hover:bg-slate-800"
+        >
+          Add operation
+        </button>
+      </div>
+
+      <div id="ops" class="space-y-3"></div>
+    </div>
+
+    <form
+      id="amend-form"
+      method="post"
+      action="/events/{{ draft.event_id }}/proposal-discussion/{{ draft.proposal_id }}/rooms/{{ draft.room_id }}/drafts/{{ draft.id }}/amend"
+      class="pt-2"
+    >
+      <input type="hidden" name="body_markdown" id="amend-body">
+
+      <button
+        class="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+      >
+        Submit Amendment
+      </button>
+    </form>
+  </div>
+</section>
+
+<script>
+(function () {
+  const tool = document.getElementById("amend-tool");
+  if (!tool) return;
+
+  const ops = document.getElementById("ops");
+  const addBtn = document.getElementById("add-op");
+  const form = document.getElementById("amend-form");
+  const bodyField = document.getElementById("amend-body");
+
+  const aiBtn = document.getElementById("am_btn_generate");
+  const aiStatus = document.getElementById("am_ai_status");
+  const plainEl = document.getElementById("am_plain_text");
+
+  const aiEndpoint = tool.dataset.generateEndpoint;
+
+  const CLAUSE_TYPES = [
+    { v: "preambular", label: "Preambular" },
+    { v: "operative", label: "Operative" }
+  ];
+
+  const ACTIONS = [
+    { v: "REMOVE", label: "REMOVE" },
+    { v: "ADD", label: "ADD" },
+    { v: "REPLACE", label: "REPLACE" }
+  ];
+
+  function setAIStatus(message, isError = false) {
+    aiStatus.textContent = message || "";
+    aiStatus.className = "text-xs " + (isError ? "text-rose-600" : "text-slate-500");
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function oneLine(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
+  }
+
+  function quoteLine(text) {
+    return `"${oneLine(text)}"`;
+  }
+
+  function el(tag, attrs = {}, children = []) {
+    const node = document.createElement(tag);
+
+    Object.entries(attrs).forEach(([key, value]) => {
+      if (key === "class") node.className = value;
+      else if (key === "text") node.textContent = value;
+      else node.setAttribute(key, value);
+    });
+
+    children.forEach(child => {
+      node.appendChild(typeof child === "string" ? document.createTextNode(child) : child);
+    });
+
+    return node;
+  }
+
+  function addOperation(prefill = {}) {
+    const row = el("div", {
+      class: "grid grid-cols-1 md:grid-cols-6 gap-2 items-start border rounded-xl p-3 bg-white",
+      "data-op-row": "1"
+    });
+
+    const action = el("select", {
+      class: "border rounded p-2 md:col-span-1",
+      "data-role": "action"
+    });
+
+    ACTIONS.forEach(item => {
+      action.appendChild(el("option", { value: item.v }, [item.label]));
+    });
+
+    const clauseType = el("select", {
+      class: "border rounded p-2 md:col-span-1",
+      "data-role": "clause_type"
+    });
+
+    CLAUSE_TYPES.forEach(item => {
+      clauseType.appendChild(el("option", { value: item.v }, [item.label]));
+    });
+
+    const target = el("input", {
+      class: "border rounded p-2 md:col-span-2",
+      "data-role": "target",
+      placeholder: "Target, e.g. operative 4(a), or clause starting with “Encourages…”"
+    });
+
+    const content = el("textarea", {
+      class: "border rounded p-2 md:col-span-2",
+      "data-role": "content",
+      rows: "2",
+      placeholder: "Text to ADD or replacement text. Leave blank only for REMOVE whole target."
+    });
+
+    const removeBtn = el("button", {
+      type: "button",
+      class: "text-sm text-rose-700 hover:underline"
+    }, ["Remove"]);
+
+    removeBtn.addEventListener("click", () => row.remove());
+
+    row.appendChild(action);
+    row.appendChild(clauseType);
+    row.appendChild(target);
+    row.appendChild(content);
+    row.appendChild(el("div", { class: "md:col-span-6 flex justify-end" }, [removeBtn]));
+
+    ops.appendChild(row);
+
+    if (prefill.action) action.value = prefill.action;
+    if (prefill.clause_type) clauseType.value = prefill.clause_type;
+    if (prefill.target) target.value = prefill.target;
+    if (typeof prefill.content === "string") content.value = prefill.content;
+  }
+
+  function clearOperations() {
+    ops.innerHTML = "";
+  }
+
+  function getRows() {
+    return Array.from(ops.querySelectorAll("[data-op-row]"));
+  }
+
+  function validateRows() {
+    const rows = getRows();
+
+    if (!rows.length) {
+      return "Add at least one operation.";
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const action = row.querySelector('[data-role="action"]').value;
+      const clauseType = row.querySelector('[data-role="clause_type"]').value;
+      const target = oneLine(row.querySelector('[data-role="target"]').value);
+      const content = oneLine(row.querySelector('[data-role="content"]').value);
+
+      if (!clauseType) {
+        return `Operation ${i + 1}: clause type is required.`;
+      }
+
+      if ((action === "REMOVE" || action === "REPLACE") && !target) {
+        return `Operation ${i + 1}: target is required.`;
+      }
+
+      if ((action === "ADD" || action === "REPLACE") && !content) {
+        return `Operation ${i + 1}: ${action} requires text content.`;
+      }
+    }
+
+    return "";
+  }
+
+  function buildMarkdown() {
+    const lines = [];
+
+    getRows().forEach(row => {
+      const action = row.querySelector('[data-role="action"]').value;
+      const clauseType = row.querySelector('[data-role="clause_type"]').value;
+      const rawTarget = oneLine(row.querySelector('[data-role="target"]').value);
+      const content = oneLine(row.querySelector('[data-role="content"]').value);
+
+      const target = rawTarget || (
+        clauseType === "operative" ? "as new operative clause" : "as new preambular clause"
+      );
+
+      if (action === "REMOVE") {
+        if (content) {
+          lines.push(`REMOVE in the ${clauseType} ${target}`);
+          lines.push(`  ${quoteLine(content)}`);
+        } else {
+          lines.push(`REMOVE the whole ${clauseType} ${target}`);
+        }
+      }
+
+      if (action === "ADD") {
+        lines.push(`ADD the following ${clauseType} ${target}`);
+        lines.push(`  ${quoteLine(content)}`);
+      }
+
+      if (action === "REPLACE") {
+        lines.push(`REPLACE in the ${clauseType} ${target}`);
+        lines.push(`  ${quoteLine(content)}`);
+      }
+
+      lines.push("");
+    });
+
+    return lines.join("\n").trim();
+  }
+
+  function fillFromOperations(operations) {
+    const opsList = Array.isArray(operations) ? operations : [];
+
+    clearOperations();
+
+    if (!opsList.length) {
+      addOperation();
+      return false;
+    }
+
+    opsList.forEach(op => {
+      addOperation({
+        action: op.action || "ADD",
+        clause_type: op.clause_type || "operative",
+        target: op.target || "",
+        content: typeof op.content === "string" ? op.content : ""
+      });
+    });
+
+    return true;
+  }
+
+  async function pollAmendJob(jobId) {
+    const statusUrl = `${aiEndpoint}/status/${encodeURIComponent(jobId)}`;
+
+    for (let i = 0; i < 180; i++) {
+      await sleep(2000);
+
+      const res = await fetch(statusUrl, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      });
+
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = null;
+      }
+
+      if (!res.ok) {
+        throw new Error((data && data.detail) || `HTTP ${res.status}`);
+      }
+
+      if (data.status === "done") {
+        return data.payload;
+      }
+
+      if (data.status === "error") {
+        throw new Error(data.error || "Amendment generation failed.");
+      }
+
+      setAIStatus(`Generating… ${Math.floor((i + 1) * 2)}s`);
+    }
+
+    throw new Error("Amendment generation is still running. Please try again later.");
+  }
+
+  addBtn.addEventListener("click", () => addOperation());
+
+  // Start with one blank operation.
+  addOperation();
+
+  form.addEventListener("submit", (event) => {
+    const error = validateRows();
+
+    if (error) {
+      event.preventDefault();
+      alert(error);
+      return;
+    }
+
+    const md = buildMarkdown();
+
+    if (!md.trim()) {
+      event.preventDefault();
+      alert("Add at least one operation.");
+      return;
+    }
+
+    bodyField.value = md;
+  });
+
+  aiBtn.addEventListener("click", async () => {
+    const plain = oneLine(plainEl.value);
+
+    if (!plain) {
+      setAIStatus("Please describe your amendment first.", true);
+      return;
+    }
+
+    const originalText = aiBtn.textContent;
+    aiBtn.disabled = true;
+    aiBtn.textContent = "Generating…";
+    setAIStatus("Starting amendment generation…");
+
+    try {
+      const fd = new FormData();
+      fd.append("plain_text", plain);
+
+      const startRes = await fetch(aiEndpoint, {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      });
+
+      let startData = null;
+      try {
+        startData = await startRes.json();
+      } catch (_) {
+        startData = null;
+      }
+
+      if (!startRes.ok) {
+        throw new Error((startData && startData.detail) || `HTTP ${startRes.status}`);
+      }
+
+      let payload = null;
+
+      // New async route shape.
+      if (startData && startData.status === "running" && startData.job_id) {
+        payload = await pollAmendJob(startData.job_id);
+      }
+
+      // Backward-compatible shape, in case the route directly returns the generated object.
+      else if (startData && Array.isArray(startData.operations)) {
+        payload = startData;
+      }
+
+      else if (startData && startData.payload) {
+        payload = startData.payload;
+      }
+
+      if (!payload) {
+        throw new Error("Amendment generation did not return a usable payload.");
+      }
+
+      const ok = fillFromOperations(payload.operations);
+
+      if (!ok) {
+        setAIStatus("No operations generated. Try adding clause numbers or clearer target wording.", true);
+        return;
+      }
+
+      setAIStatus("Operations generated. Review carefully before submitting.");
+    } catch (error) {
+      setAIStatus("Generation failed: " + (error?.message || error), true);
+    } finally {
+      aiBtn.disabled = false;
+      aiBtn.textContent = originalText;
+    }
+  });
+})();
+</script>
+
+<script>
+(function(){
+  const draftId = {{ draft.id }};
+  const titleEl = document.getElementById("doc_title");
+  const docEl = document.getElementById("doc_body");
+  const sel = document.getElementById("lang_sel");
+  const btnT = document.getElementById("btn_translate");
+  const btnO = document.getElementById("btn_original");
+  const status = document.getElementById("tr_status");
+
+  const origTitle = titleEl.textContent;
+  const origHTML = docEl.innerHTML;
+
+  const mem = new Map(); // lang -> payload
+
+  function setRTL(on){
+    if (on) docEl.setAttribute("dir", "rtl");
+    else docEl.removeAttribute("dir");
+  }
+
+  function renderParagraphs(paras){
+    docEl.innerHTML = "";
+    (paras || []).forEach(p => {
+      const el = document.createElement("p");
+      el.textContent = p;
+      docEl.appendChild(el);
+    });
+  }
+
+  btnO.addEventListener("click", () => {
+    titleEl.textContent = origTitle;
+    docEl.innerHTML = origHTML;
+    setRTL(false);
+    status.textContent = "";
+  });
+
+  btnT.addEventListener("click", async () => {
+    const lang = sel.value;
+    if (lang === "en") { btnO.click(); return; }
+
+    status.textContent = "Translating…";
+
+    try {
+      if (!mem.has(lang)) {
+        const r = await fetch(`/drafts/${draftId}/translate?lang=${encodeURIComponent(lang)}`, {
+          headers: {"Accept": "application/json"}
+        });
+        if (!r.ok) throw new Error(await r.text());
+        mem.set(lang, await r.json());
+      }
+
+      const data = mem.get(lang);
+      if (data.title) {
+        // Replace only the title part after "—"
+        const left = origTitle.split("—")[0].trim();
+        titleEl.textContent = `${left} — ${data.title}`;
+      }
+      renderParagraphs(data.paragraphs || []);
+      setRTL(lang === "ar");
+      status.textContent = "";
+    } catch (e) {
+      console.error(e);
+      status.textContent = "Translation failed.";
+    }
+  });
+})();
+</script>
+
+{% endblock %}

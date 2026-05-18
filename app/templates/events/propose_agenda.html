@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Propose Agenda Item</h1>
+    {% if event %}
+      <div class="text-sm text-slate-600"><span class="font-medium">{{ event.title }}</span></div>
+    {% endif %}
+  </div>
+
+  {% if ok %}
+    <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3">
+      ✅ Proposal submitted. The president will review it.
+    </div>
+  {% endif %}
+  {% if err %}
+    <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3">
+      ⚠️ {{ err }}
+    </div>
+  {% endif %}
+
+  <form method="post" action="/events/{{ event.id }}/propose-agenda" class="bg-white border rounded-2xl p-6 space-y-4">
+    <div>
+      <label for="title" class="block text-sm font-medium text-slate-700">Agenda title <span class="text-rose-500">*</span></label>
+      <input id="title" name="title" required maxlength="160"
+             class="mt-1 w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+             placeholder="e.g., Establishing a Working Group on Cyber Resilience" />
+      <div class="mt-1 text-xs text-slate-500"><span id="tcount">0</span>/160</div>
+    </div>
+
+    <div>
+      <label for="background" class="block text-sm font-medium text-slate-700">Background / Rationale <span class="text-rose-500">*</span></label>
+      <textarea id="background" name="background" required rows="8"
+                class="mt-1 w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+                placeholder="Explain the context, need, and intended outcomes."></textarea>
+      <p class="mt-1 text-xs text-slate-500">Provide enough context so reviewers understand the purpose and scope.</p>
+    </div>
+
+    <div>
+      <label for="source_url" class="block text-sm font-medium text-slate-700">URL Source (optional)</label>
+      <input id="source_url" name="source_url" type="url"
+             class="mt-1 w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+             placeholder="https://example.org/report-or-press-release" />
+      <p class="mt-1 text-xs text-slate-500">If provided, include a credible reference or primary source.</p>
+    </div>
+
+    <div class="flex items-center gap-2 pt-1">
+      <input id="submit_anonymously" name="submit_anonymously" type="checkbox" value="true"
+             class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+             {% if not user %} checked {% endif %} />
+      <label for="submit_anonymously" class="text-sm text-slate-700">
+        Submit anonymously
+        {% if not user %}
+          <span class="text-xs text-slate-500">(you're not logged in)</span>
+        {% endif %}
+      </label>
+    </div>
+
+    <div class="pt-2">
+      <button type="submit"
+              class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
+        Submit proposal
+      </button>
+    </div>
+  </form>
+
+  <section class="mt-8">
+    <h2 class="text-lg font-semibold mb-3">My proposals for this event</h2>
+    {% if user %}
+      {% if mine and mine|length > 0 %}
+        <ul class="space-y-3">
+          {% for p in mine %}
+            <li class="bg-white border rounded-xl p-4">
+              <div class="flex items-start justify-between">
+                <div>
+                  <div class="font-semibold">{{ p.title }}</div>
+                  <div class="mt-1 text-sm text-slate-600 line-clamp-3">{{ p.background }}</div>
+                  {% if p.source_url %}
+                    <div class="mt-1 text-xs">
+                      <a class="text-indigo-600 hover:underline break-all" href="{{ p.source_url }}" target="_blank" rel="noopener">
+                        {{ p.source_url }}
+                      </a>
+                    </div>
+                  {% endif %}
+                  <div class="mt-2 text-xs text-slate-500">
+                    Submitted {{ p.created_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                  </div>
+                </div>
+                <span class="ml-4 shrink-0 px-2 py-0.5 text-xs rounded
+                  {% if p.status == 'pending' %} bg-amber-100 text-amber-700
+                  {% elif p.status == 'accepted' %} bg-emerald-100 text-emerald-700
+                  {% elif p.status == 'rejected' %} bg-rose-100 text-rose-700
+                  {% else %} bg-slate-100 text-slate-700 {% endif %}">
+                  {{ p.status|capitalize }}
+                </span>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="rounded-xl border bg-white p-6 text-slate-500">No proposals yet.</div>
+      {% endif %}
+    {% else %}
+      <div class="rounded-xl border bg-white p-6 text-slate-500">
+        You're submitting anonymously. Log in to see your personal proposal list here.
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+(function(){
+  const title = document.getElementById('title');
+  const tcount = document.getElementById('tcount');
+  if (title && tcount) {
+    const update = () => tcount.textContent = String(title.value.length);
+    title.addEventListener('input', update);
+    update();
+  }
+  const u = document.getElementById('source_url');
+  if (u) {
+    u.addEventListener('blur', () => {
+      let v = u.value.trim();
+      if (!v) return;
+      if (!/^https?:\/\//i.test(v)) u.value = 'https://' + v;
+    });
+  }
+})();
+</script>
+{% endblock %}

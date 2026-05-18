@@ -1,0 +1,13 @@
+services:
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8081/
+      - SEARXNG_SECRET=change-me-to-a-long-random-string
+      - UWSGI_WORKERS=2
+      - UWSGI_THREADS=4
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    restart: unless-stopped

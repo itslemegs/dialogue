@@ -1,0 +1,9 @@
+python-dotenv
+uvicorn
+fastapi[all]
+sqlmodel[asyncio]
+psycopg[binary]
+asyncpg
+passlib[bcrypt]
+alembic
+greenletpython-dotenv==1.1.1

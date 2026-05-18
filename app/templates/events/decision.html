@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Decision</h1>
+
+    {% if event %}
+      <div class="text-sm text-slate-600 text-right">
+        <div class="font-medium">{{ event.title }}</div>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if not event %}
+    <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
+      No upcoming or live event.
+    </div>
+  {% elif (not results_drafts) and (not results_amendments) %}
+    <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
+      No tabled draft resolutions or amendments for this event yet.
+    </div>
+  {% else %}
+
+    <p class="mb-4 text-sm text-slate-600">
+      This page summarizes the outcome and vote tallies for all
+      <span class="font-semibold">tabled draft resolutions (L documents)</span>
+      and their
+      <span class="font-semibold">amendments</span>
+      in this event. Final adoption of drafts is decided on the Proposal Floor;
+      this page is read-only.
+    </p>
+
+    {# ===================== DRAFT RESOLUTIONS (L docs) ===================== #}
+    {% if results_drafts %}
+      <h2 class="mt-6 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Tabled draft resolutions (L documents)
+      </h2>
+
+      <div class="space-y-4">
+        {% for item in results_drafts %}
+          {% set d = item.draft %}
+          {% set evote = item.early_vote %}
+          {% set fvote = item.formal_vote %}
+          {% set outcome = item.outcome %}
+
+          {% set badge_classes = {
+            "Adopted": "bg-emerald-100 text-emerald-800",
+            "Withdrawn": "bg-amber-100 text-amber-800",
+            "Reintroduced": "bg-blue-100 text-blue-800",
+            "Not adopted": "bg-rose-100 text-rose-800",
+            "Pending": "bg-slate-100 text-slate-700"
+          } %}
+          {% set badge_class = badge_classes.get(outcome, "bg-slate-100 text-slate-700") %}
+
+          <div class="rounded-2xl border bg-white p-5 sm:p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+              <div>
+                <div class="text-xs font-mono text-slate-500">
+                  {{ d.l_number or ("L/" ~ d.id) }}
+                </div>
+                <h3 class="text-lg font-semibold">
+                  {{ d.title or "Untitled draft resolution" }}
+                </h3>
+
+                <p class="mt-1 text-xs text-slate-500">
+                  Sponsor ID: {{ d.sponsor_id }}
+                  {% if d.cosigners_json %}
+                    · Cosigners: {{ d.cosigners_json|length }}
+                  {% endif %}
+                </p>
+              </div>
+
+              <div class="flex flex-col items-start sm:items-end gap-1">
+                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
+                  {{ outcome }}
+                </span>
+                <p class="text-xs text-slate-500">
+                  Status: {{ d.status.value }}
+                </p>
+              </div>
+            </div>
+
+            {# Early voting block (if it existed) #}
+            {% if evote %}
+              <div class="mt-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Early voting (consensus test)
+                  {% if evote.is_open %}
+                    <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
+                      still open
+                    </span>
+                  {% else %}
+                    <span class="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      closed
+                    </span>
+                  {% endif %}
+                </div>
+                <div class="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
+                  <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">Yes</div>
+                    <div class="mt-1 text-base font-semibold">{{ evote.yes or 0 }}</div>
+                  </div>
+                  <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">No</div>
+                    <div class="mt-1 text-base font-semibold">{{ evote.no or 0 }}</div>
+                  </div>
+                  <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">Abstain</div>
+                    <div class="mt-1 text-base font-semibold">{{ evote.abstain or 0 }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {# Formal voting block (if it existed) #}
+            {% if fvote %}
+              <div class="mt-4 border-t pt-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Formal voting
+                  {% if fvote.is_open %}
+                    <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
+                      still open
+                    </span>
+                  {% else %}
+                    <span class="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                      closed
+                    </span>
+                  {% endif %}
+                </div>
+                <div class="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
+                  <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">Yes</div>
+                    <div class="mt-1 text-base font-semibold">{{ fvote.yes or 0 }}</div>
+                  </div>
+                  <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">No</div>
+                    <div class="mt-1 text-base font-semibold">{{ fvote.no or 0 }}</div>
+                  </div>
+                  <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">Abstain</div>
+                    <div class="mt-1 text-base font-semibold">{{ fvote.abstain or 0 }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {# =========================== AMENDMENTS =========================== #}
+    {% if results_amendments %}
+    <h2 class="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        Amendments
+    </h2>
+
+    <div class="space-y-4">
+        {% for item in results_amendments %}
+        {# expected structure: item.amendment, item.draft (optional), item.vote_state, item.outcome #}
+        {% set a = item.amendment %}
+        {% set d = item.draft %}
+        {% set v = item.vote_state %}
+        {% set outcome = item.outcome %}
+
+        {% set badge_classes = {
+            "Adopted": "bg-emerald-100 text-emerald-800",
+            "Not adopted": "bg-rose-100 text-rose-800",
+            "Pending": "bg-slate-100 text-slate-700"
+        } %}
+        {% set badge_class = badge_classes.get(outcome, "bg-slate-100 text-slate-700") %}
+
+        <div class="rounded-2xl border bg-white p-5 sm:p-6">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div>
+                <div class="text-xs font-mono text-slate-500">
+                {{ a.label or ("AMD/" ~ a.id) }}
+                </div>
+
+                <h3 class="text-lg font-semibold">
+                {{ a.label or "Untitled amendment" }}
+                </h3>
+
+                <p class="mt-1 text-xs text-slate-500">
+                {% if d %}
+                    On draft: {{ d.l_number or ("L/" ~ d.id) }}
+                {% else %}
+                    Draft ID: {{ a.draft_id }}
+                {% endif %}
+                · Submitted by ID: @{{ (a.submitted_by_id in user_map) and user_map[a.submitted_by_id].handle or '—' }}
+                </p>
+            </div>
+
+            <div class="flex flex-col items-start sm:items-end gap-1">
+                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
+                {{ outcome }}
+                </span>
+
+                {% if v %}
+                <p class="text-xs text-slate-500">
+                    Vote: {{ 'open' if v.is_open else 'closed' }}
+                </p>
+                {% endif %}
+            </div>
+            </div>
+
+            <!-- {# show a snippet/body #}
+            {% if a.body_markdown %}
+            <div class="mt-3 text-sm text-slate-700 whitespace-pre-wrap">
+                {{ a.body_markdown }}
+            </div>
+            {% endif %} -->
+
+            {# Single-phase voting block #}
+            {% if v %}
+            <div class="mt-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Amendment vote (consensus check)
+                {% if v.is_open %}
+                    <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
+                    still open
+                    </span>
+                {% else %}
+                    <span class="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
+                    closed
+                    </span>
+                {% endif %}
+                </div>
+
+                <div class="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
+                <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">Yes</div>
+                    <div class="mt-1 text-base font-semibold">{{ v.yes or 0 }}</div>
+                </div>
+                <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">No</div>
+                    <div class="mt-1 text-base font-semibold">{{ v.no or 0 }}</div>
+                </div>
+                <div class="rounded-xl border bg-slate-50 px-3 py-2">
+                    <div class="text-xs text-slate-500">Abstain</div>
+                    <div class="mt-1 text-base font-semibold">{{ v.abstain or 0 }}</div>
+                </div>
+                </div>
+
+                {% if not v.is_open %}
+                <div class="mt-2 text-sm text-slate-700">
+                    Result:
+                    {% if (v.no or 0) == 0 and (v.yes or 0) > 0 %}
+                    <span class="text-emerald-700 font-medium">Adopted by consensus</span>
+                    {% elif (v.yes or 0) == 0 and (v.no or 0) == 0 %}
+                    <span class="text-slate-600">No votes cast</span>
+                    {% else %}
+                    <span class="text-rose-700 font-medium">Not adopted</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="mt-4 text-sm text-slate-500">
+                No vote record yet.
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}

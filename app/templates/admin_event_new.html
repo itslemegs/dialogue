@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="fixed inset-x-0 top-14 bottom-0 overflow-auto bg-slate-50">
+  <div class="max-w-3xl mx-auto p-6">
+    <h1 class="text-2xl font-semibold mb-4">Create Event</h1>
+
+    {% if error %}
+      <div class="mb-4 p-3 rounded bg-rose-100 text-rose-700 text-sm">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" class="bg-white border rounded-xl p-6 space-y-5">
+      <div>
+        <label class="block text-sm font-medium text-slate-700">Title</label>
+        <input name="title" type="text" required
+               value="{{ preset.title }}"
+               class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700">Start (local)</label>
+          <input name="start_local" type="datetime-local" required
+                 value="{{ preset.start_local.strftime('%Y-%m-%dT%H:%M') if preset.start_local else '' }}"
+                 class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          <p class="mt-1 text-xs text-slate-500">Timezone: Asia/Tokyo</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700">Auto-calculated End</label>
+          <input id="auto_end" type="text" readonly
+                 class="mt-1 w-full rounded border-slate-200 bg-slate-50 text-slate-600" />
+          <p class="mt-1 text-xs text-slate-500">Updates as you change durations</p>
+        </div>
+      </div>
+
+      <fieldset class="border rounded-lg p-4">
+        <legend class="px-2 text-sm font-medium text-slate-700">Stage durations (minutes)</legend>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Opening</label>
+            <input name="open_min" id="open_min" type="number" min="1" required
+                   value="{{ preset.open_min }}"
+                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">General Debate</label>
+            <input name="debate_min" id="debate_min" type="number" min="1" required
+                   value="{{ preset.debate_min }}"
+                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600">Voting</label>
+            <input name="vote_min" id="vote_min" type="number" min="1" required
+                   value="{{ preset.vote_min }}"
+                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+          </div>
+        </div>
+        <p class="mt-3 text-xs text-slate-500" id="sum_label"></p>
+      </fieldset>
+
+      <div class="flex items-center justify-end gap-3">
+        <a href="/dashboard" class="px-3 py-2 rounded border text-slate-700">Cancel</a>
+        <button type="submit" class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Create Event</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  const startEl = document.querySelector('input[name="start_local"]');
+  const openEl  = document.getElementById('open_min');
+  const debEl   = document.getElementById('debate_min');
+  const voteEl  = document.getElementById('vote_min');
+  const endOut  = document.getElementById('auto_end');
+  const sumLbl  = document.getElementById('sum_label');
+
+  const pad = (n)=> String(n).padStart(2,'0');
+
+  function parseLocal(dt) {
+    if (!dt) return null;
+    const [d,t] = dt.split('T');
+    if (!d || !t) return null;
+    const [Y,M,D] = d.split('-').map(Number);
+    const [h,m]   = t.split(':').map(Number);
+    return new Date(Y, M-1, D, h, m, 0);
+  }
+
+  function update() {
+    const start = parseLocal(startEl.value);
+    const o = parseInt(openEl.value || '0', 10);
+    const g = parseInt(debEl.value  || '0', 10);
+    const v = parseInt(voteEl.value || '0', 10);
+    const total = o + g + v;
+    sumLbl.textContent = `Total duration: ${total} minutes`;
+
+    if (start && total > 0) {
+      const end = new Date(start.getTime() + total*60000);
+      endOut.value = `${end.getFullYear()}-${pad(end.getMonth()+1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}`;
+    } else {
+      endOut.value = '';
+    }
+  }
+
+  [startEl, openEl, debEl, voteEl].forEach(el => el.addEventListener('input', update));
+  update();
+})();
+</script>
+{% endblock %}

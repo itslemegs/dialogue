@@ -1,0 +1,33 @@
+
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/
+dist/
+build/
+.pytest_cache/
+
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+.pytest_cache/
+dist/
+build/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local databases / dumps
+*.db
+*.db-shm
+*.db-wal
+*.dump
+
+# Local archives / backups
+*.tar.gz

@@ -1,0 +1,46 @@
+{# app/templates/events/proposal_floor.html #}
+{% extends "base.html" %}
+
+{% block content %}
+
+{% set IS_ADMIN = flags.IS_ADMIN %}
+{% set IS_CHAIR = flags.IS_CHAIR %}
+{% set IS_PRESIDENT = flags.IS_PRESIDENT %}
+{% set IS_MEMBER = flags.IS_MEMBER %}
+
+<div class="max-w-4xl mx-auto">
+  <h1 class="text-2xl font-bold mb-4">Proposal Floor</h1>
+
+  {% if not rows or rows|length == 0 %}
+    <div class="p-4 border rounded bg-white text-slate-600">
+      No tabled drafts are currently available for discussion.
+    </div>
+  {% else %}
+    <div class="space-y-4">
+      {% for row in rows %}
+      <section class="bg-white border rounded p-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <div class="text-sm text-slate-500">Agenda: {{ row.proposal.title }}</div>
+            <h2 class="text-lg font-semibold mt-0.5">
+              {{ row.draft.l_number or '(unassigned)' }} — {{ row.draft.title or '(Untitled draft)' }}
+            </h2>
+            <div class="text-xs text-slate-500">
+              Sponsor: @{{ (row.draft.sponsor_id in user_map) and user_map[row.draft.sponsor_id].handle or '—' }}
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <a href="/events/{{ event.id }}/proposal-floor/draft/{{ row.draft.id }}" class="px-3 py-1.5 rounded bg-indigo-600 text-white">Open</a>
+            {% if row.amendments and row.amendments|length %}
+              <a href="/events/{{ event.id }}/proposal-floor/amendment/{{ row.amendments[0].id }}" class="px-3 py-1.5 rounded bg-fuchsia-700 text-white">
+                Amendments ({{ row.amendments|length }})
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

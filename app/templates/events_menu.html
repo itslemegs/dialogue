@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Event Menu</h1>
+    {% if event %}
+      <div id="event-meta"
+           data-start="{{ event.starts_at_iso }}"
+           data-end="{{ event.ends_at_iso or '' }}"
+           data-stages='{{ event.stages_json | default([], true) | tojson | safe }}'
+           class="text-sm text-slate-600">
+        <span class="font-medium">{{ event.title }}</span>
+      </div>
+    {% endif %}
+  </div>
+
+  {% if not event %}
+    <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
+      No upcoming or live event.
+    </div>
+  {% else %}
+    <!-- Grid of menu cards -->
+    <div id="menu-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Propose Agenda -->
+            <a data-key="propose_agenda" href="/events/{{ event.id }}/propose-agenda"
+            class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+           <div class="flex items-center justify-between">
+             <div class="text-lg font-semibold">Propose Agenda</div>
+             <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+           </div>
+           <p class="mt-2 text-sm text-slate-500">Open from creation; locks 90 days before start.</p>
+           <div class="mt-4 text-4xl">📝</div>
+           <div class="hint mt-3 text-xs text-slate-500"></div>
+   
+           <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+           <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+         </a>
+   
+         {# Review Agenda — president only #}
+         {% if flags and (flags.IS_PRESIDENT or flags.IS_CHAIR) %}
+         <a data-key="review_agenda" href="/events/{{ event.id }}/review-agenda"
+            class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+           <div class="flex items-center justify-between">
+             <div class="text-lg font-semibold">Review Agenda</div>
+             <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+           </div>
+           <p class="mt-2 text-sm text-slate-500">Opens 90 days before start; closes 60 days before.</p>
+           <div class="mt-4 text-4xl">📋</div>
+           <div class="hint mt-3 text-xs text-slate-500"></div>
+   
+           <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+           <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+         </a>
+         {% endif %}
+   
+         <!-- View Agenda -->
+         <a data-key="view_agenda" href="/events/{{ event.id }}/view-agenda"
+            class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+           <div class="flex items-center justify-between">
+             <div class="text-lg font-semibold">View Agenda</div>
+             <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+           </div>
+           <p class="mt-2 text-sm text-slate-500">Opens 60 days before start.</p>
+           <div class="mt-4 text-4xl">👀</div>
+           <div class="hint mt-3 text-xs text-slate-500"></div>
+   
+           <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+           <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+         </a>   
+
+      <!-- General Floor -->
+      <a data-key="general_floor" href="/events/{{ event.id }}/general-floor"
+         class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-semibold">General Floor</div>
+          <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+        </div>
+        <p class="mt-2 text-sm text-slate-500">Opens at event start; never locks.</p>
+        <div class="mt-4 text-4xl">🎤</div>
+        <div class="hint mt-3 text-xs text-slate-500"></div>
+        <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+      </a>
+
+      <!-- Proposal Discussion -->
+      <a data-key="proposal_discussion" href="/events/{{ event.id }}/proposal-discussion"
+         class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-semibold">Proposal Discussion</div>
+          <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+        </div>
+        <p class="mt-2 text-sm text-slate-500">Opens at start; locks when voting starts.</p>
+        <div class="mt-4 text-4xl">💬</div>
+        <div class="hint mt-3 text-xs text-slate-500"></div>
+        <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+      </a>
+
+      <!-- View Tabled Draft Resolution Text -->
+      <a data-key="view_draft_resolution" href="/events/{{ event.id }}/view-draft"
+        class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-semibold">View Tabled Draft Resolution Text</div>
+          <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+        </div>
+        <p class="mt-2 text-sm text-slate-500">Opens at event start; never locks.</p>
+        <div class="mt-4 text-4xl">📜</div>
+        <div class="hint mt-3 text-xs text-slate-500"></div>
+        <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+      </a>
+
+      <!-- Proposal Floor -->
+      <a data-key="proposal_floor" href="/events/{{ event.id }}/proposal-floor"
+         class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-semibold">Proposal Floor</div>
+          <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+        </div>
+        <p class="mt-2 text-sm text-slate-500">Opens when voting starts; locks when voting ends.</p>
+        <div class="mt-4 text-4xl">🗳️</div>
+        <div class="hint mt-3 text-xs text-slate-500"></div>
+        <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+      </a>
+
+      <!-- Decision -->
+      <a data-key="decision" href="/events/{{ event.id }}/decision"
+         class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
+        <div class="flex items-center justify-between">
+          <div class="text-lg font-semibold">Decision</div>
+          <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
+        </div>
+        <p class="mt-2 text-sm text-slate-500">Opens when voting starts; locks when voting ends.</p>
+        <div class="mt-4 text-4xl">✅</div>
+        <div class="hint mt-3 text-xs text-slate-500"></div>
+        <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+      </a>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+  (function () {
+    const meta = document.getElementById('event-meta');
+    if (!meta) return;
+  
+    // parse meta
+    const start = new Date(meta.dataset.start);
+    const end = meta.dataset.end ? new Date(meta.dataset.end) : null;
+    let stages = [];
+    try { stages = JSON.parse(meta.dataset.stages || '[]'); } catch(_) {}
+  
+    // useful constants
+    const DAY = 24 * 60 * 60 * 1000;
+    const D60 = 60 * DAY;
+    const D90 = 90 * DAY;
+  
+    // find voting stage window
+    const voting = stages.find(s => {
+      const n = (s.name || '').toLowerCase();
+      const k = (s.kind || '').toLowerCase();
+      return n.includes('vote') || k === 'voting';
+    }) || null;
+  
+    const voteStart = voting?.start ? new Date(voting.start) : null;
+    const voteEnd   = voting?.end   ? new Date(voting.end)   : null;
+  
+    const grid = document.getElementById('menu-grid');
+    const cards = grid ? Array.from(grid.querySelectorAll('a[data-key]')) : [];
+  
+    function fmt(dt) {
+      try {
+        return new Intl.DateTimeFormat(undefined, {
+          year:"numeric", month:"short", day:"2-digit",
+          hour:"2-digit", minute:"2-digit"
+        }).format(dt);
+      } catch(_) { return dt.toLocaleString(); }
+    }
+  
+    function setLocked(card, locked, reasonText) {
+      const overlay = card.querySelector('.lock-overlay');
+      const icon = card.querySelector('.lock-icon');
+      const badge = card.querySelector('.status-badge');
+      const hint = card.querySelector('.hint');
+  
+      if (locked) {
+        overlay?.classList.remove('hidden');
+        icon?.classList.remove('hidden');
+        card.classList.add('cursor-not-allowed', 'opacity-70');
+        badge.textContent = 'Locked';
+        badge.className = 'status-badge text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700';
+        hint.textContent = reasonText || '';
+        card.addEventListener('click', preventIfLocked);
+      } else {
+        overlay?.classList.add('hidden');
+        icon?.classList.add('hidden');
+        card.classList.remove('cursor-not-allowed', 'opacity-70');
+        badge.textContent = 'Open';
+        badge.className = 'status-badge text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700';
+        hint.textContent = reasonText || '';
+        card.removeEventListener('click', preventIfLocked);
+      }
+    }
+  
+    function preventIfLocked(e) {
+      const overlay = this.querySelector('.lock-overlay');
+      if (overlay && !overlay.classList.contains('hidden')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  
+    function tick() {
+      const now = new Date();
+  
+      cards.forEach(card => {
+        const key = card.dataset.key;
+  
+        // defaults
+        let locked = true;
+        let hint = '';
+        let opensAt = null;
+        let locksAt = null;
+  
+        if (key === 'propose_agenda') {
+          // Open from creation; locks 90 days before start.
+          const lockTime = new Date(start.getTime() - D90);
+          locksAt = lockTime;
+  
+          if (now > lockTime) {
+            locked = false;
+            hint = `Locks on ${fmt(lockTime)}`;
+          } else {
+            locked = true;
+            hint = `Locked since ${fmt(lockTime)}`;
+          }
+        }
+  
+        if (key === 'review_agenda') {
+          // Opens 90 days before start; closes (locks) 60 days before start.
+          const windowOpen  = new Date(start.getTime() - D90);
+          const windowClose = new Date(start.getTime() - D60);
+  
+          opensAt = windowOpen;
+          locksAt = windowClose;
+  
+          if (now <= windowOpen) {
+            locked = true;
+            hint = `Opens on ${fmt(windowOpen)}`;
+          } else if (now >= windowClose) {
+            locked = true;
+            hint = `Closed since ${fmt(windowClose)}`;
+          } else {
+            locked = false;
+            hint = `Closes on ${fmt(windowClose)}`;
+          }
+        }
+  
+        if (key === 'view_agenda') {
+          // Opens 60 days before start; never locks (stays open afterwards).
+          const openTime = new Date(start.getTime() - D60);
+          opensAt = openTime;
+  
+          if (now <= openTime) {
+            locked = false;
+            hint = `Opened at ${fmt(openTime)}`;
+          } else {
+            locked = true;
+            hint = `Opens on ${fmt(openTime)}`;
+          }
+        }
+  
+        if (key === 'general_floor') {
+          // Opens at event start; never locks.
+          opensAt = start;
+          if (now <= start) {
+            locked = false;
+            hint = `Opened at ${fmt(start)}`;
+          } else {
+            locked = true;
+            hint = `Opens on ${fmt(start)}`;
+          }
+        }
+  
+        if (key === 'proposal_discussion') {
+          // Opens at start; locks when voting starts.
+          opensAt = start;
+          const vs = voteStart;
+
+          const lockBeforeVoteStart = vs ? vs - (4 * 24 * 60 * 60 * 1000) : null;
+          
+          if (now > start) {
+            locked = true;
+            hint = `Opens on ${fmt(start)}`;
+          } else if (lockBeforeVoteStart && now >= lockBeforeVoteStart) {
+            locked = true;
+            hint = `Locked 4 days before voting starts (${fmt(lockBeforeVoteStart)})`;
+          } else if (vs && now >= vs) {
+            locked = true;
+            hint = `Locked since voting started (${fmt(vs)})`;
+          } else {
+            locked = false;
+            hint = voteStart ? `Locks 4 days before voting starts (${fmt(lockBeforeVoteStart)})` : 'Open';
+          }
+        }
+
+        if (key === 'view_draft_resolution') {
+          // Opens at event start; never locks.
+          opensAt = start;
+          if (now <= start) {
+            locked = false;
+            hint = `Opened at ${fmt(start)}`;
+          } else {
+            locked = true;
+            hint = `Opens on ${fmt(start)}`;
+          }
+        }
+  
+        if (key === 'proposal_floor' || key === 'decision') {
+          // Opens when voting starts; locks when voting ends.
+          // const vs = voteStart, ve = voteEnd;
+          const vs = now, ve = voteEnd;
+          opensAt = vs;
+          locksAt = ve;
+  
+          if (!vs || (now >= vs)) {
+            locked = false;
+            hint = 'Opens when voting starts';
+          } else if (now < vs) {
+            locked = true;
+            hint = `Opens on ${fmt(vs)}`;
+          } else if (ve && now >= ve) {
+            locked = true;
+            hint = `Locked since voting ended (${fmt(ve)})`;
+          } else {
+            locked = false;
+            hint = ve ? `Locks on ${fmt(ve)}` : 'Open';
+          }
+        }
+  
+        setLocked(card, locked, hint);
+      });
+    }
+  
+    tick();
+    const iv = setInterval(tick, 1000 * 15);
+    window.addEventListener('beforeunload', () => clearInterval(iv));
+  })();
+  </script>
+  
+{% endblock %}

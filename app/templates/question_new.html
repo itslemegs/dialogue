@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-xl font-semibold mb-4">Create Agenda Card</h2>
+<form method="post" action="/questions" class="space-y-3 max-w-2xl">
+  <label class="block">Question</label>
+  <textarea name="text" class="border p-2 w-full" rows="3" required
+    placeholder="e.g., Should private messaging be restricted in the EU, and if so, under what safeguards?"></textarea>
+  <label class="block">Decision points (one per line)</label>
+  <textarea name="decision_points" class="border p-2 w-full" rows="5" required
+    placeholder="Encryption policy&#10;Oversight mechanism&#10;Law-enforcement exceptions"></textarea>
+  <button class="px-4 py-2 bg-blue-600 text-white rounded">Create</button>
+</form>
+{% endblock %}

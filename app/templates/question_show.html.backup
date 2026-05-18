@@ -1,0 +1,864 @@
+{% extends "base.html" %}
+{% from "macros/interventions.html" import render_node with context %}
+{% import "macros/user_flair.html" as uf with context %}
+{% block content %}
+{% set IS_ADMIN = flags.IS_ADMIN %}
+{% set IS_CHAIR = flags.IS_CHAIR %}
+{% set IS_PRESIDENT = flags.IS_PRESIDENT %}
+{% set IS_MEMBER = flags.IS_MEMBER %}
+<h2 class="text-xl font-bold mb-2">Agenda</h2>
+<div class="bg-white border rounded p-4 mb-4">
+  <p class="text-lg">{{ q.text }}</p>
+  <div class="mt-3">
+    <span class="text-sm font-semibold">Decision points</span>
+    <ol class="list-decimal ml-6 space-y-1 mt-1">
+      {% for p in points %}<li>{{ p }}</li>{% endfor %}
+    </ol>
+  </div>
+</div>
+
+{% if IS_PRESIDENT or IS_CHAIR %}
+<form method="post" action="/questions/{{ q.id }}/delete"
+      onsubmit="return confirm('Delete this question and all related items?');"
+      class="mb-4">
+  <button class="px-3 py-2 bg-red-600 text-white rounded">Delete Question</button>
+</form>
+{% endif %}
+
+<!-- Speaker list (UN-style) -->
+<section class="mt-6 bg-white border rounded p-4">
+  <div class="flex items-center justify-between">
+    <h3 class="font-semibold">Speaker list</h3>
+  </div>
+
+  <!-- Minimal queue brief (safe for users) -->
+  <div id="queue-brief" class="mt-3 text-sm flex flex-wrap gap-3 text-slate-700">
+    <span id="qb-now"    class="px-2 py-1 rounded bg-slate-100"></span>
+    <span id="qb-ahead"  class="px-2 py-1 rounded bg-slate-100"></span>
+    <span id="qb-left"   class="px-2 py-1 rounded bg-slate-100"></span>
+  </div>
+
+  <div class="mt-3 flex flex-wrap gap-2 items-center">
+    <!-- Request the floor (shown when OPEN and user is not currently speaking) -->
+    <form id="btn-request-floor" method="post" action="/questions/{{ q.id }}/floor/register" class="hidden">
+      <input type="hidden" name="kind" value="GENERAL">
+      <button class="px-3 py-1.5 bg-blue-600 text-white rounded">Request the floor</button>
+    </form>
+  
+    <!-- Withdraw (always visible for simplicity; harmless when no queued req) -->
+    <form id="btn-withdraw" method="post" action="/questions/{{ q.id }}/floor/withdraw" class="hidden">
+      <button class="px-3 py-1.5 bg-slate-700 text-white rounded">Withdraw request</button>
+    </form>    
+  
+    <!-- Request RoR to all (shown when CLOSED and not currently speaking) -->
+    {% if not IS_CHAIR or not IS_PRESIDENT %}
+      <form id="btn-ror-all" method="post" action="/questions/{{ q.id }}/floor/register" class="hidden">
+        <input type="hidden" name="kind" value="ROR_ALL">
+        <button class="px-3 py-1.5 bg-fuchsia-700 text-white rounded">
+          Request Right of Reply (to all)
+        </button>
+      </form>
+    {% endif %}   
+
+    {% if IS_PRESIDENT or IS_CHAIR %}
+      {# toggle button stays controlled by open/closed #}
+      <form method="post" action="/questions/{{ q.id }}/floor/toggle">
+        <button class="px-3 py-1.5 {{ 'bg-amber-600' if floor.is_open else 'bg-emerald-700' }} text-white rounded">
+          {{ 'Close list' if floor.is_open else 'Open list' }}
+        </button>
+      </form>
+
+      <form method="post" action="/questions/{{ q.id }}/floor/call_next" id="form-call-next" style="display:none">
+        <button id="btn-call-next" class="px-3 py-1.5 bg-indigo-600 text-white rounded">
+          Call next speaker
+        </button>
+      </form>
+      
+      <form method="post" action="/questions/{{ q.id }}/floor/finish_current" id="form-finish-current" style="display:none">
+        <button id="btn-finish-current" class="px-3 py-1.5 bg-rose-600 text-white rounded">
+          Finish current
+        </button>
+      </form>
+    {% endif %}
+
+    {% if IS_PRESIDENT or IS_CHAIR %}
+      <form method="post" action="/questions/{{ q.id }}/floor/invite_ror"
+          class="inline ml-2 js-ajax-invite">
+        <input type="hidden" name="relates_to_id" value="">
+        <input type="hidden" name="kind" value="ROR_ALL">
+        <input name="to_handle" placeholder="@handle" class="border px-2 py-1 rounded text-sm" required>
+        <button class="ml-1 px-2 py-1 rounded text-sm bg-fuchsia-700 text-white">Invite RoR (to all)</button>
+      </form>
+    {% endif %}
+
+    {% if IS_PRESIDENT or IS_CHAIR %}
+      <form method="post" action="/questions/{{ q.id }}/floor/take_now" class="flex items-center gap-2">
+        <input name="message" class="border px-2 py-1 rounded text-sm w-64" placeholder="Announcement to everyone">
+        <button class="px-3 py-1.5 bg-black text-white rounded">Announcement</button>
+      </form>
+    {% endif %}
+  
+    <!-- recognized banner -->
+    <div id="recognized-banner" class="mt-2 text-sm text-emerald-700 {% if not can_speak %}hidden{% endif %}">
+      🔔 You've been recognized: you have the floor.
+    </div>
+  
+    <!-- live badge (JS already updates this) -->
+    <span id="floor-open-badge" class="px-2 py-1 rounded bg-slate-200 text-slate-600">Loading...</span>
+  </div>  
+
+  {% if IS_ADMIN or IS_CHAIR %}
+
+    <div class="mt-4">
+      {% if IS_ADMIN or IS_CHAIR %}
+        <div class="mt-4 space-y-3" id="admin-queue-ui">
+          <div id="admin-now" class="text-sm px-2 py-1 inline-block rounded bg-emerald-100 text-emerald-700"></div>
+
+          <div class="flex gap-2 text-xs">
+            <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="ALL">All</button>
+            <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="QUEUED">Queued</button>
+            <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="DONE">Done</button>
+            <button type="button" class="ml-auto px-2 py-1 rounded bg-slate-100" id="toggle-compact">Compact</button>
+          </div>
+
+          <div id="admin-nextup" class="border rounded">
+            <div class="px-3 py-2 text-xs text-slate-500 border-b">Next up</div>
+            <table class="w-full text-sm" id="table-nextup"><tbody></tbody></table>
+            <button type="button" class="w-full text-sm px-3 py-2 text-blue-700 hover:underline" id="btn-more" hidden>Show more…</button>
+          </div>
+
+          <!-- History (DONE / WITHDRAWN) -->
+          <details class="mt-4">
+            <summary class="text-sm text-slate-500 cursor-pointer">History (DONE / WITHDRAWN)</summary>
+            <table class="w-full text-sm mt-2">
+              <thead>
+                <tr class="text-left text-slate-500">
+                  <th class="py-1">Pos</th>
+                  <th>Handle</th>
+                  <th>Kind</th>
+                  <th>Status</th>
+                  <th class="text-right">Requested</th>
+                </tr>
+              </thead>
+              <tbody id="speaker-history"></tbody>
+            </table>
+          </details>
+        </div>
+      {% endif %}
+      <div id="current-speaker-line" class="mt-3 text-sm text-slate-700"></div>
+    </div>
+  {% endif %}
+
+  {% if floor.current_speaker_request_id %}
+    <div class="mt-3 text-sm text-slate-700">
+      Current speaker request ID: <span class="font-mono">{{ floor.current_speaker_request_id }}</span>
+      • Time limit: {{ floor.speaking_time_sec }}s
+    </div>
+  {% endif %}
+</section>
+
+<!-- Interventions (full width) -->
+<section class="mt-8">
+  <h3 class="font-semibold mb-3">Threaded interventions</h3>
+
+  {% if can_speak %}
+    <!-- composer (only visible to the current SPEAKING user) -->
+    <form id="composer-box" method="post" action="/questions/{{ q.id }}/interventions" class="space-y-2 mb-4 bg-white border rounded p-3 hidden">
+      <div class="flex items-center gap-2">
+        <select name="point_key" class="border p-2 rounded" required>
+          {% for p in points %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+        <!-- hidden reply target -->
+        <input type="hidden" name="relates_to_id" id="relates_to_id">
+        <!-- small chip shown only when replying -->
+        <span id="reply-chip" class="hidden text-xs px-2 py-1 rounded bg-slate-100 text-slate-700"></span>
+      </div>
+    
+      <textarea name="body" rows="3" placeholder="Share your view…" class="border p-2 rounded w-full" required></textarea>
+    
+      <div class="flex items-center gap-2">
+        <button class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
+        <button type="button" class="text-slate-600 text-sm" onclick="clearReply()">Clear reply</button>
+      </div>
+    
+      <div class="text-xs text-emerald-700 mt-1">
+        You have the floor (time limit {{ floor.speaking_time_sec }}s).
+      </div>
+    </form>
+    <div id="composer-locked" class="hidden"></div>
+  {% else %}
+    <form id="composer-box" class="hidden" method="post" action="/questions/{{ q.id }}/interventions" class="space-y-2 mb-4 bg-white border rounded p-3 hidden">
+      <div class="flex items-center gap-2">
+        <select name="point_key" class="border p-2 rounded" required>
+          {% for p in points %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+        </select>
+        <!-- hidden reply target -->
+        <input type="hidden" name="relates_to_id" id="relates_to_id">
+        <!-- small chip shown only when replying -->
+        <span id="reply-chip" class="hidden text-xs px-2 py-1 rounded bg-slate-100 text-slate-700"></span>
+      </div>
+    
+      <textarea name="body" rows="3" placeholder="Share your view…" class="border p-2 rounded w-full" required></textarea>
+    
+      <div class="flex items-center gap-2">
+        <button class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
+        <button type="button" class="text-slate-600 text-sm" onclick="clearReply()">Clear reply</button>
+      </div>
+    
+      <div class="text-xs text-emerald-700 mt-1">
+        You have the floor (time limit {{ floor.speaking_time_sec }}s).
+      </div>
+    </form>
+    <div id="composer-locked" class="mb-4 bg-slate-50 border border-dashed rounded p-3 text-sm text-slate-600">
+      The floor is reserved for the current speaker. You can <strong>request the floor</strong> above.
+    </div>
+  {% endif %}
+
+  <!-- thread list -->
+  <div class="bg-white border rounded-md">
+    <ul id="threads-container"
+        class="divide-y divide-slate-200"
+        data-last-child-id="{{ last_child_id }}">
+      {% for R in threads %}
+        {{ render_node(R, user_map, q, can_speak, user) }}
+      {% else %}
+        <li class="p-4 text-slate-500">No interventions yet. Be the first to post.</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+</section>
+
+<!-- Proposals (full width, below threads)
+<section class="mt-10">
+  <h3 class="font-semibold mb-2">Propose Clause Text</h3>
+  <form method="post" action="/questions/{{ q.id }}/proposals" class="space-y-2 bg-white border rounded p-3">
+    <select name="point_key" class="border p-2 w-full" required>
+      {% for p in points %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+    </select>
+    <select name="op" class="border p-2 w-full" required>
+      <option value="add">add</option>
+      <option value="replace">replace</option>
+      <option value="delete">delete</option>
+      <option value="parameterize">parameterize</option>
+    </select>
+    <textarea name="text" rows="3" placeholder="Operative clause text" class="border p-2 w-full" required></textarea>
+    <button class="px-3 py-2 bg-emerald-600 text-white rounded">Submit</button>
+  </form>
+
+  <h4 class="mt-4 font-medium">Proposals</h4>
+  <ul class="mt-2 space-y-2">
+    {% for pr in props %}
+      <li class="bg-white border p-3 rounded">
+        <div class="text-sm text-slate-500">#{{ pr.id }} • {{ pr.point_key }} • {{ pr.op }}</div>
+        <div class="mt-1 whitespace-pre-wrap">{{ pr.text }}</div>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<div class="mt-6">
+  <a href="/dashboard" class="text-blue-600">← Back</a>
+</div>
+
+<section class="mt-8">
+  <h3 class="font-semibold mb-2">Drafting</h3>
+
+  {% if draft %}
+    <div class="mb-2 text-sm text-slate-600">Draft #{{ draft.id }} • Status: {{ draft.status }}</div>
+  {% else %}
+    <div class="mb-2 text-sm text-slate-600">No draft yet. Promote a proposal to start.</div>
+  {% endif %}
+
+  <div class="grid md:grid-cols-2 gap-4">
+    <div>
+      <h4 class="font-medium">Promote proposal → clause</h4>
+      <form method="post" action="/questions/{{ q.id }}/draft/promote" class="space-y-2">
+        <input type="number" name="proposal_id" placeholder="Proposal ID" class="border p-2 w-full" required>
+        <select name="status" class="border p-2 w-full">
+          <option>YELLOW</option><option>GREEN</option><option>RED</option>
+        </select>
+        <button class="px-3 py-2 bg-amber-600 text-white rounded">Promote</button>
+      </form>
+
+      <h4 class="mt-4 font-medium">Clauses</h4>
+      <ul class="mt-2 space-y-2">
+        {% for c in clauses %}
+          <li class="bg-white border p-3 rounded">
+            <div class="text-sm">[{{ c.status }}] <span class="text-slate-500">{{ c.point_key }}</span></div>
+            <div class="mt-1 whitespace-pre-wrap">{{ c.text }}</div>
+            {% if draft %}
+              <form method="post" action="/drafts/{{ draft.id }}/clause/{{ c.id }}/status" class="mt-2 flex gap-2">
+                <select name="status" class="border p-1">
+                  <option>GREEN</option><option>YELLOW</option><option>RED</option>
+                </select>
+                <button class="px-2 py-1 bg-slate-700 text-white rounded">Update status</button>
+              </form>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div>
+      <h4 class="font-medium">Objections</h4>
+      {% if draft %}
+        <form method="post" action="/drafts/{{ draft.id }}/objections" class="space-y-2">
+          <input name="clause_id" placeholder="Clause ID (e.g., c_ab12cd34)" class="border p-2 w-full" required>
+          <select name="reason_code" class="border p-2 w-full">
+            <option>LEGAL</option><option>TECH_FEASIBILITY</option>
+            <option>RIGHTS_IMPACT</option><option>PRECEDENT</option><option>AMBIGUITY</option>
+          </select>
+          <textarea name="alt_text" rows="2" placeholder="Alternative/suggested fix" class="border p-2 w-full"></textarea>
+          <button class="px-3 py-2 bg-red-600 text-white rounded">File objection</button>
+        </form>
+
+        <ul class="mt-3 space-y-2">
+          {% for o in objs %}
+            <li class="bg-white border p-3 rounded text-sm">
+              Clause {{ o.clause_id }} — {{ o.reason_code }}{% if o.alt_text %}: “{{ o.alt_text }}”{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-sm text-slate-500">No draft yet — promote a proposal to start a draft, then you’ll be able to file objections.</p>
+      {% endif %}
+    </div>
+  </div>
+</section> -->
+
+<script defer src="/static/js/interventions-replies-toggle.js"></script>
+
+<script>
+  const CURRENT_USER_ID = {{ user.id }};
+  const IS_RAPP = {{ 'true' if IS_PRESIDENT or IS_CHAIR else 'false' }};
+  async function refreshFloor(){
+    try{
+      const res = await fetch('/questions/{{ q.id }}/floor/state', { credentials: 'include' });
+      if(!res.ok) return;
+      const data = await res.json();
+
+      // Badge: open/closed
+      const badge = document.getElementById('floor-open-badge');
+      if (badge){
+        if (data.is_open){
+          badge.textContent = 'Open';
+          badge.className = 'px-2 py-1 rounded bg-emerald-100 text-emerald-700';
+        } else {
+          badge.textContent = 'Closed';
+          badge.className = 'px-2 py-1 rounded bg-slate-200 text-slate-600';
+        }
+      }
+
+      // // Current speaker line
+      // const line = document.getElementById('current-speaker-line');
+      // if (line){
+      //   if (data.current_user_id){
+      //     const cur = data.speakers.find(s => s.user_id === data.current_user_id && s.status === 'SPEAKING');
+      //     line.textContent = cur ? `Current speaker: @${cur.handle} (req #${cur.id})` : '';
+      //   } else {
+      //     line.textContent = 'No one currently speaking.';
+      //   }
+      // }
+
+      // ---- Admin queue UI (only if present in DOM) ----
+      const ui      = document.getElementById('admin-queue-ui');
+      if (ui) {
+        const nowBox   = document.getElementById('admin-now');
+        const nextBody = document.querySelector('#table-nextup tbody');
+        const btnMore  = document.getElementById('btn-more');
+        const doneBody = document.getElementById('tbody-done');
+
+        // local render state (persist between polls)
+        window.__queueState ||= { filter: 'ALL', showCount: 10, compact: false, lastSpeakingId: null };
+        const S = window.__queueState;
+
+        // filter buttons
+        ui.querySelectorAll('[data-filter]').forEach(btn=>{
+          btn.onclick = () => { S.filter = btn.dataset.filter; S.showCount = 10; render(); };
+        });
+        const compactBtn = document.getElementById('toggle-compact');
+        if (compactBtn && !compactBtn.__wired) {
+          compactBtn.__wired = true;
+          compactBtn.onclick = () => {
+            S.compact = !S.compact;
+            ui.classList.toggle('compact', S.compact);
+            render();
+          };
+        }
+
+        // --- Split speakers into next-up and history ---
+        const speakers = data.speakers || [];
+
+        // statuses
+        const speaking = speakers.find(s => s.status === 'SPEAKING') || null;
+        const queued   = speakers.filter(s => s.status === 'QUEUED');
+        const history  = speakers.filter(s => s.status === 'DONE' || s.status === 'WITHDRAWN');
+
+        // now box
+        nowBox.textContent = speaking ? `Current: @${speaking.handle} (req #${speaking.id})` : 'No one currently speaking.';
+
+        // auto-scroll to current if it changed
+        if (speaking && S.lastSpeakingId !== speaking.id) {
+          S.lastSpeakingId = speaking.id;
+          // optional: bring "Next up" into view for the chair
+          document.getElementById('admin-nextup')?.scrollIntoView({ block: 'nearest' });
+        }
+
+        // --- Build Next up (SPEAKING + QUEUED only) ---
+        const nextUp = [];
+        if (speaking) nextUp.push(speaking);
+        nextUp.push(...queued);
+
+        // Ensure a minimum page size of 5
+        if (S.showCount < 5) S.showCount = 5;
+
+        // Render Next up (paged)
+        if (nextBody) {
+          nextBody.innerHTML = nextUp.slice(0, S.showCount).map(renderRow).join('');
+        }
+
+        // Show more… should appear ONLY if there are >5 next-up items AND we're not showing all
+        if (btnMore) {
+          const shouldShowMore = nextUp.length > 5 && S.showCount < nextUp.length;
+          btnMore.hidden = !shouldShowMore;
+
+          // Wire once
+          if (!btnMore.__wired) {
+            btnMore.__wired = true;
+            btnMore.addEventListener('click', () => {
+              // Grow by 20 each click (cap at total)
+              S.showCount = Math.min(S.showCount + 20, nextUp.length);
+              if (nextBody) {
+                nextBody.innerHTML = nextUp.slice(0, S.showCount).map(renderRow).join('');
+              }
+              // Recompute visibility after expanding
+              btnMore.hidden = !(nextUp.length > 5 && S.showCount < nextUp.length);
+            });
+          }
+        }
+
+        // helper: consistent row renderer
+        function renderRow(s) {
+          const kindBadge = (s.kind === 'ROR' || s.kind === 'ROR_ALL')
+            ? 'bg-fuchsia-100 text-fuchsia-700'
+            : 'bg-slate-100 text-slate-700';
+
+          let statusBadge = 'bg-slate-100 text-slate-600';
+          if (s.status === 'SPEAKING')  statusBadge = 'bg-emerald-100 text-emerald-700';
+          else if (s.status === 'QUEUED')     statusBadge = 'bg-amber-100 text-amber-700';
+          else if (s.status === 'DONE')       statusBadge = 'bg-slate-200 text-slate-700';
+          else if (s.status === 'WITHDRAWN')  statusBadge = 'bg-rose-100 text-rose-700';
+
+          const ts = new Date(s.created_at).toLocaleString();
+
+          return `
+            <tr class="border-t">
+              <td class="py-1">${s.position ?? ''}</td>
+              <td><span class="px-2 py-0.5 rounded text-xs ${kindBadge}">${s.kind}</span></td>
+              <td><span class="px-2 py-0.5 rounded text-xs ${statusBadge}">${s.status}</span></td>
+              <td class="text-right text-slate-500">${ts}</td>
+            </tr>`;
+        }
+
+        // --- Next up (Current + Queued only) ---
+        const tbody = document.getElementById('speaker-rows');
+        if (nextBody) {
+          const rows = [];
+          if (speaking) rows.push(renderRow(speaking));
+          rows.push(...queued.map(renderRow));
+          nextBody.innerHTML = rows.join('');
+        }
+
+        // --- History (DONE + WITHDRAWN) ---
+        const histBody = document.getElementById('speaker-history');
+        if (histBody) {
+          // newest first (optional); remove .sort if you want chronological
+          const sorted = history.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          histBody.innerHTML = sorted.map(renderRow).join('');
+        }
+      }
+
+      // After updating UI:
+      const composer = document.getElementById('composer-box');
+      const locked = document.getElementById('composer-locked');
+      const relField = document.getElementById('relates_to_id');
+      const chip = document.getElementById('reply-chip');
+      const select = document.querySelector('select[name="point_key"]');
+
+      const canSpeak = (data.current_user_id && data.current_user_id === CURRENT_USER_ID);
+
+      // --- Show/Hide "Withdraw request" for this user ---
+      const withdrawForm = document.getElementById('btn-withdraw');
+
+      // Does THIS user have a queued request?
+      const hasOwnQueued = (data.speakers || []).some(
+        s => s.user_id === CURRENT_USER_ID && s.status === 'QUEUED'
+      );
+
+      // Only show withdraw when they’re queued (hide otherwise)
+      if (withdrawForm) {
+        if (hasOwnQueued && !IS_RAPP) {
+          withdrawForm.classList.remove('hidden');
+          withdrawForm.style.display = '';         // in case inline styles were used
+        } else {
+          withdrawForm.classList.add('hidden');
+          withdrawForm.style.display = 'none';
+        }
+      }
+
+      // --- Toggle controls based on floor open/closed + speaking state ---
+      const formRequestFloor = document.getElementById('btn-request-floor');
+      const formRorAll = document.getElementById('btn-ror-all');
+      const recognized = document.getElementById('recognized-banner');
+      const toggleBtn = document.getElementById('btn-toggle-open');
+
+      // show request-floor only when floor is OPEN and user is NOT currently speaking
+      if (formRequestFloor){
+        if (data.is_open && !canSpeak){
+          formRequestFloor.classList.remove('hidden');
+        } else {
+          formRequestFloor.classList.add('hidden');
+        }
+      }
+
+      // always available unless speaking or chair
+      if (formRorAll){
+        if (!canSpeak && !IS_RAPP){
+          formRorAll.classList.remove('hidden');
+        } else {
+          formRorAll.classList.add('hidden');
+        }
+      }
+
+      // per-post RoR for users: always unless speaking (and never for chair)
+      document.querySelectorAll('.ror-form').forEach(el => {
+        if (!canSpeak && !IS_RAPP){
+          el.classList.remove('hidden');
+        } else {
+          el.classList.add('hidden');
+        }
+      });
+
+      // per-post RoR for admin: always (ignore canSpeak/IS_RAPP)
+      document.querySelectorAll('.ror-invite').forEach(el => {
+        el.classList.remove('hidden');
+      });
+
+      // recognized banner mirrors composer visibility
+      if (recognized){
+        if (canSpeak){
+          recognized.classList.remove('hidden');
+        } else {
+          recognized.classList.add('hidden');
+        }
+      }
+
+      // hide request-related forms for the chair entirely
+      if (IS_RAPP) {
+        const rf = document.getElementById('btn-request-floor');
+        const wd = document.getElementById('btn-withdraw');
+        const ra = document.getElementById('btn-ror-all');
+        if (rf) rf.classList.add('hidden');
+        if (wd) wd.classList.add('hidden');
+        if (ra) ra.classList.add('hidden');
+        document.querySelectorAll('.ror-form').forEach(el => el.classList.add('hidden'));
+      }
+
+      if (composer && locked){
+        const privileged = IS_RAPP; // chair or president
+        if (canSpeak || privileged){
+          composer.classList.remove('hidden');
+          locked.classList.add('hidden');
+
+          if (relField && chip){
+            if (data.current_kind === 'ROR' && data.current_target_intervention_id){
+              relField.value = data.current_target_intervention_id;
+              chip.textContent = `Replying to #${data.current_target_intervention_id}`;
+              chip.classList.remove('hidden');
+            } else if (data.current_kind === 'ROR_ALL') {
+              relField.value = '';  // no single target
+              chip.textContent = 'Right of Reply to all';
+              chip.classList.remove('hidden');
+            } else {
+              // GENERAL floor: clear chip
+              relField.value = '';
+              chip.classList.add('hidden');
+            }
+          }
+        } else {
+          composer.classList.add('hidden');
+          locked.classList.remove('hidden');
+          if (relField) relField.value = '';
+          if (chip) chip.classList.add('hidden');
+        }
+      }
+      // chair action buttons
+      const formCall   = document.getElementById('form-call-next');
+      const formFinish = document.getElementById('form-finish-current');
+
+      const hasQueued   = (data.speakers || []).some(s => s.status === 'QUEUED');
+      const hasSpeaking = (data.speakers || []).some(s => s.status === 'SPEAKING');
+
+      if (formCall)   formCall.style.display   = hasQueued   ? '' : 'none';
+      if (formFinish) formFinish.style.display = hasSpeaking ? '' : 'none';
+
+      // --- Minimal queue brief (safe for users) ---
+      const queueBriefNow   = document.getElementById('qb-now');
+      const queueBriefAhead = document.getElementById('qb-ahead');
+      const queueBriefLeft  = document.getElementById('qb-left');
+
+      const speakers = data.speakers || [];
+      const speaking = speakers.find(s => s.status === 'SPEAKING') || null;
+      const queued   = speakers.filter(s => s.status === 'QUEUED');
+
+      // Now speaking (anyone can see the handle only; users don’t see the table)
+      if (queueBriefNow) {
+        queueBriefNow.textContent = speaking
+          ? `Now speaking: @${speaking.handle}`
+          : 'Now speaking: —';
+      }
+
+      // People ahead of *this* user (only makes sense if this user is queued)
+      let aheadCount = 0;
+      const mine = queued.find(s => s.user_id === CURRENT_USER_ID);
+      if (mine) {
+        // positions are already sent; ensure numeric compare
+        const myPos = Number(mine.position);
+        aheadCount = queued.filter(s => Number(s.position) < myPos).length;
+      }
+      if (queueBriefAhead) {
+        queueBriefAhead.textContent = `People before your turn: ${mine ? aheadCount : '—'}`;
+      }
+
+      // Speakers left on queue (exclude the current speaker)
+      if (queueBriefLeft) {
+        queueBriefLeft.textContent = `Speakers left in queue: ${queued.length}`;
+      }
+
+      // // --- Admin “who’s speaking” chip ---
+      // const adminChip = document.getElementById('admin-now-speaking');
+      // if (adminChip) {
+      //   adminChip.textContent = speaking
+      //     ? `Current: @${speaking.handle} • req #${speaking.id}`
+      //     : 'No one currently speaking.';
+      // }
+    }catch(e){
+      // ignore transient errors
+    }
+  }
+
+  // poll every 3 seconds
+  setInterval(refreshFloor, 3000);
+  refreshFloor();
+</script>
+
+<script>
+  document.addEventListener('click', (e) => {
+    // future: could handle delegated clicks if you add buttons
+  });
+  document.addEventListener('submit', async (e) => {
+    const f = e.target;
+    if (!f.classList.contains('js-ajax-invite')) return;
+    e.preventDefault();
+    const url = f.action + (f.action.includes('?') ? '&' : '?') + 'ajax=1';
+    const formData = new FormData(f);
+    const btn = f.querySelector('button');
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try{
+      const res = await fetch(url, { method: 'POST', body: formData, credentials: 'include', headers: { 'Accept': 'application/json' } });
+      const data = await res.json();
+      if (data.ok) {
+        btn.textContent = 'Invited ✓';
+        // optional toast:
+        toast('Invitation sent.');
+        if (typeof refreshFloor === 'function') refreshFloor();
+        setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+        f.reset();
+      } else {
+        btn.textContent = 'Error';
+        setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+      }
+    } catch {
+      btn.textContent = 'Error';
+      setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+    }
+  });
+  
+  function toast(msg){
+    let t = document.getElementById('toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.className = 'fixed bottom-4 right-4 bg-black text-white text-sm px-3 py-2 rounded';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = 1;
+    setTimeout(() => { t.style.opacity = 0; }, 2000);
+  }
+</script>
+
+<script>
+  async function maybeRefreshThreads(){
+    try{
+      const head = await fetch('/questions/{{ q.id }}/interventions/head?ts=' + Date.now(), { credentials: 'include' });
+      if (!head.ok) return;
+      const h = await head.json();
+  
+      const el = document.getElementById('threads-container');
+      if (!el) return;
+  
+      const curChild = parseInt(el.dataset.lastChildId || '0', 10);
+      const curAny   = parseInt(el.dataset.lastAnyId   || '0', 10);
+      const incChild = parseInt(h.last_child_id || 0,   10);
+      const incAny   = parseInt(h.last_any_id   || 0,   10);
+  
+      // Refresh if a new child OR a new root appeared
+      if (incChild > curChild || incAny > curAny){
+        const res = await fetch('/questions/{{ q.id }}/interventions/fragment?ts=' + Date.now(), { credentials: 'include' });
+        if (!res.ok) return;
+        const html = await res.text();
+  
+        const top = window.scrollY;
+        el.innerHTML = html;
+        el.dataset.lastChildId = String(incChild);
+        el.dataset.lastAnyId   = String(incAny);
+        window.scrollTo({ top, left: 0, behavior: 'instant' });
+      }
+    }catch(e){}
+  }
+  setInterval(maybeRefreshThreads, 3000);
+  maybeRefreshThreads();
+</script>
+
+<!-- near the end of body in question_show.html (outside macros) -->
+<div id="notif-box" class="fixed bottom-4 right-4 w-80 space-y-2 z-50"></div>
+
+<script>
+  let inviteHandlerAttached = false;
+  
+  async function pullNotifications(){
+    try{
+      const res = await fetch('/notifications/pull', { credentials: 'include' });
+      if(!res.ok) return;
+      const items = await res.json();
+  
+      const box = document.getElementById('notif-box');
+      if(!box) return;
+  
+      // Only render INVITE_ROR here; others are handled by base poller
+      const invites = items.filter(n => n.type === 'INVITE_ROR' && n.payload && n.payload.invite_id);
+  
+      if (!invites.length){
+        box.innerHTML = '';
+      } else {
+        box.innerHTML = invites.map(n => `
+          <div class="border rounded p-3 bg-white shadow">
+            <div class="text-sm">${n.message}</div>
+            <div class="mt-2 flex gap-2">
+              <button class="px-2 py-1 rounded bg-emerald-600 text-white text-sm js-invite-act"
+                      data-act="accept" data-iid="${n.payload.invite_id}">Accept</button>
+              <button class="px-2 py-1 rounded bg-rose-600 text-white text-sm js-invite-act"
+                      data-act="decline" data-iid="${n.payload.invite_id}">Decline</button>
+            </div>
+            <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
+          </div>
+        `).join('');
+      }
+  
+      // Bind once (delegated)
+      if (!inviteHandlerAttached){
+        inviteHandlerAttached = true;
+        box.addEventListener('click', async (e) => {
+          const btn = e.target.closest('.js-invite-act');
+          if(!btn) return;
+          const iid = btn.dataset.iid;
+          const act = btn.dataset.act;
+          btn.disabled = true;
+  
+          try{
+            const res = await fetch(`/invites/${iid}/${act}?ajax=1`, {
+              method: 'POST',
+              credentials: 'include'
+            });
+            if (res.ok){
+              btn.textContent = act === 'accept' ? 'Accepted ✓' : 'Declined ✓';
+              // Clear this invite card after a short delay
+              setTimeout(pullNotifications, 600);
+              // If accepted, refresh the floor view for both chair and user
+              if (act === 'accept' && typeof refreshFloor === 'function') refreshFloor();
+            } else {
+              btn.textContent = 'Error';
+            }
+          } catch {
+            btn.textContent = 'Error';
+          } finally {
+            setTimeout(() => { btn.disabled = false; }, 800);
+          }
+        });
+      }
+    } catch(e){}
+  }
+  
+  // Poll alongside other updaters
+  setInterval(pullNotifications, 5000);
+  pullNotifications();
+</script>
+
+<script>
+  (function wirePrivilegedTakeFloor() {
+    const form = document.getElementById('composer-box');
+    if (!form || form.__wiredPriv) return;
+    form.__wiredPriv = true;
+
+    form.addEventListener('submit', async (e) => {
+      // Only intercept for privileged users
+      if (!IS_RAPP) return;
+
+      // If already speaking, let it through
+      const res = await fetch('/questions/{{ q.id }}/floor/state', { credentials: 'include' });
+      if (!res.ok) return; // fail open
+      const data = await res.json();
+      const canSpeak = (data.current_user_id && data.current_user_id === CURRENT_USER_ID);
+      if (canSpeak) return; // already recognized
+
+      // Not speaking yet -> take the floor immediately
+      e.preventDefault();
+
+      // (Optional) derive kind/target from chip/hidden field
+      const relField = form.querySelector('#relates_to_id');
+      const hasTarget = relField && relField.value.trim() !== '';
+
+      // You can POST a minimal body; backend ignores message for this path.
+      const fd = new FormData();
+      if (hasTarget) {
+        fd.set('kind', 'ROR');
+        fd.set('target_intervention_id', relField.value.trim());
+      } else {
+        fd.set('kind', 'GENERAL');
+      }
+
+      try {
+        // Prefer a dedicated endpoint if you have one for speakers:
+        // e.g., /questions/:id/floor/take_now_speaking
+        const take = await fetch('/questions/{{ q.id }}/floor/take_now?ajax=1', {
+          method: 'POST',
+          credentials: 'include',
+          body: fd
+        });
+
+        // If success, submit the intervention form for real
+        if (take.ok) {
+          form.submit();
+        } else {
+          toast('Could not take floor.');
+        }
+      } catch {
+        toast('Network error taking floor.');
+      }
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="text-xl font-semibold mb-2">Rooms for: {{ proposal.title }}</h2>
+
+<form method="post"
+      action="{{ url_for('rooms_create', event_id=event.id, pid=proposal.id) }}"
+      class="space-x-2 mb-4">
+  <input name="title" class="border px-2 py-1 rounded" placeholder="Room title" required>
+  <input name="description" class="border px-2 py-1 rounded" placeholder="Short description">
+  <button class="px-3 py-1 bg-blue-600 text-white rounded">Create room</button>
+</form>
+
+<ul class="space-y-2">
+  {% for r in rooms %}
+    <li class="border rounded p-3">
+        <div class="font-semibold flex items-center justify-between">
+          <span>{{ r.title }}</span>
+          {% set can_delete = (r.sponsor_id == user.id) or flags.IS_PRESIDENT or flags.IS_CHAIR or flags.IS_CHAIRMAN %}
+          {% if can_delete %}
+          <form method="post"
+                action="{{ url_for('rooms_delete', event_id=event.id, pid=proposal.id, rid=r.id) }}"
+                onsubmit="return confirm('Delete this room?');"
+                class="inline-block">
+            <button class="px-2 py-0.5 text-xs bg-rose-600 text-white rounded">Delete</button>
+          </form>
+          {% endif %}
+        </div>
+        <div class="text-sm text-slate-500">Sponsor: @{{ r.sponsor.handle }}</div>
+        <a class="text-indigo-600 hover:underline"
+           href="{{ url_for('rooms_show', event_id=event.id, pid=proposal.id, rid=r.id) }}">Open</a>
+      </li>      
+  {% else %}
+    <li class="text-slate-500">No rooms yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

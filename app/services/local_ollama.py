@@ -1,0 +1,74 @@
+# app/services/local_llm.py
+import os
+from types import SimpleNamespace
+from typing import Any, Dict, List
+
+import httpx
+
+
+class LocalChatClient:
+    def __init__(self):
+        self.base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        self.model = os.getenv("OLLAMA_MODEL", "tinyllama")
+        self.default_timeout_s = float(os.getenv("OLLAMA_TIMEOUT_S", "300"))
+        self.keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+
+    def chat_completion(
+        self,
+        *,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 800,
+        timeout_s: float | None = None,
+        json_mode: bool = False,   # <--- NEW
+    ):
+        payload: Dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "keep_alive": self.keep_alive,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            },
+        }
+
+        # Ask Ollama to constrain output to JSON when possible.
+        want_json = json_mode or (os.getenv("OLLAMA_JSON_MODE", "1") == "1")
+        if want_json:
+            payload["format"] = "json"
+
+        url = f"{self.base_url}/api/chat"
+        t = (timeout_s or self.default_timeout_s)
+
+        try:
+            r = httpx.post(url, json=payload, timeout=t)
+            r.raise_for_status()
+        except httpx.HTTPStatusError:
+            # If this Ollama build/model doesn't support `format`,
+            # retry once without it.
+            if "format" in payload:
+                payload.pop("format", None)
+                r = httpx.post(url, json=payload, timeout=t)
+                r.raise_for_status()
+            else:
+                raise
+
+        data = r.json()
+        text = ((data.get("message") or {}).get("content")) or ""
+
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=text))]
+        )
+
+
+_CLIENT = None
+
+def get_chat_client():
+    global _CLIENT
+    backend = os.getenv("LLM_BACKEND", "ollama").lower()
+    if backend == "ollama":
+        if _CLIENT is None:
+            _CLIENT = LocalChatClient()
+        return _CLIENT
+    raise RuntimeError(f"Unknown LLM_BACKEND={backend}. Supported: ollama")

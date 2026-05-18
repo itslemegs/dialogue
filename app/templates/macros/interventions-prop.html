@@ -1,0 +1,111 @@
+{# app/templates/macros/interventions.html #}
+
+{% import "macros/user_flair.html" as uf with context %}
+
+{% set IS_ADMIN = flags.IS_ADMIN %}
+{% set IS_CHAIR = flags.IS_CHAIR %}
+{% set IS_PRESIDENT = flags.IS_PRESIDENT %}
+{% set IS_MEMBER = flags.IS_MEMBER %}
+
+{% macro count_desc(n) %}
+  {# Total descendants (not just direct children) #}
+  {% set ns = namespace(total=0) %}
+  {% for c in n.children recursive %}
+    {% set ns.total = ns.total + 1 %}
+    {% if c.children %}
+      {{ loop(c.children) }}
+    {% endif %}
+  {% endfor %}
+  {{ ns.total }}
+{% endmacro %}
+
+{% macro render_node(N, user_map, q, can_speak, user, depth=0, is_first=false, is_last=false) %}
+  {% set it = N.node %}
+  {% set only_child = (is_first and is_last) %}
+  {% set reply_count = count_desc(N)|int %}
+  {% set has_children = (N.children and (N.children | length) > 0) %}
+  {% set author = user_map.get(it.by_user) %}
+
+  {# Build author_roles from role_map (avoids lazy-load issues) #}
+  {% set author_roles = role_map.get(it.by_user, []) if role_map is defined else [] %}
+
+  <li class="{% if depth == 0 %}border-t border-slate-200 first:border-t-0{% else %}pl-0{% endif %}">
+    <div class="flex gap-3 {% if depth == 0 %}px-4 py-4{% else %}py-2 ml-5{% endif %}">
+
+      {# Avatar + connector lines #}
+      <div class="relative shrink-0">
+        <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-semibold"
+             title="{{ author.handle if author else 'user' }}">
+          {{ author.handle[0]|upper if author else "?" }}
+        </div>
+
+        {% if (depth > 0 and is_first) or only_child %}
+          <div class="absolute -top-4 w-5 h-9 border-l-2 border-b-2 border-slate-300 rounded-bl-lg pointer-events-none z-0 -translate-x-5"></div>
+        {% endif %}
+        {% if depth > 0 and not only_child and not is_first %}
+          <div class="absolute -top-4 left-1/2 w-0 h-4 border-l-2 border-slate-300"></div>
+        {% endif %}
+        {% if depth > 0 and not only_child and not is_last %}
+          <div class="absolute top-10 left-1/2 w-0 bottom-0 border-l-2 border-slate-300"></div>
+        {% endif %}
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 text-sm">
+          {{ uf.flair_for_user(u=author, roles_list=author_roles) }}
+          <span class="text-slate-400">•</span>
+          <span class="text-slate-500">{{ it.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</span>
+          <!-- <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-100">{{ it.point_key }}</span> -->
+        </div>
+
+        <div class="mt-2 whitespace-pre-wrap leading-relaxed">{{ it.body }}</div>
+
+        <div class="mt-2 flex items-center gap-4 text-sm">
+          {% if (not IS_PRESIDENT or not IS_CHAIR or not IS_ADMIN) and not can_speak %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/register" class="inline ror-form">
+              <input type="hidden" name="kind" value="ROR">
+              <input type="hidden" name="relates_to_id" value="{{ it.id }}">
+              <button class="text-fuchsia-700 hover:underline">Request Right of Reply</button>
+            </form>
+          {% endif %}
+          {% if IS_PRESIDENT or IS_CHAIR %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/invite_ror" class="inline ml-2 js-ajax-invite ror-invite">
+              <input type="hidden" name="relates_to_id" value="{{ it.id }}">
+              <input type="hidden" name="kind" value="ROR">
+              <input name="to_handle" placeholder="@handle" class="border px-2 py-1 rounded text-sm" required>
+              <button class="ml-1 px-2 py-1 rounded text-sm bg-amber-600 text-white">Invite RoR</button>
+            </form>
+          {% endif %}
+
+          <span class="text-slate-400 text-xs">#{{ it.local_no or it.id }}</span>
+          {% if it.relates_to_id %}
+            <span class="text-slate-400 text-xs">↩︎ to #{{ it.relates_to_id }}</span>
+          {% endif %}
+        </div>
+
+        {% if reply_count|int > 0 and has_children %}
+          <button
+            type="button"
+            class="mt-3 ml-3 text-sm text-slate-600 hover:text-slate-800 flex items-center gap-1 js-toggle-replies"
+            data-target="replies-{{ it.local_no or it.id }}"
+            aria-expanded="false"
+            aria-controls="replies-{{ it.local_no or it.id }}">
+            <svg class="w-4 h-4 transition-transform duration-150" data-chevron viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+            </svg>
+            <span data-closed>View {{ reply_count }} repl{{ 'y' if reply_count == 1 else 'ies' }}</span>
+            <span data-open class="hidden">Hide replies</span>
+          </button>
+        {% endif %}
+
+        {% if has_children %}
+          <ul id="replies-{{ it.local_no or it.id }}" class="mt-3 ml-3 hidden">
+            {% for C in N.children %}
+              {{ render_node(C, user_map, q, can_speak, user, depth+1, loop.first, loop.last) }}
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    </div>
+  </li>
+{% endmacro %}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Unlock Event</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <main class="max-w-2xl mx-auto px-4 py-10">
+    <div class="mb-6">
+      <a href="/dashboard" class="text-sm text-emerald-700 hover:underline">← Back to dashboard</a>
+    </div>
+
+    <section class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 md:p-8">
+      <div class="mb-6">
+        <p class="text-xs font-semibold tracking-wide uppercase text-amber-700">Private Event</p>
+        <h1 class="mt-1 text-2xl font-bold text-slate-900">{{ event.title }}</h1>
+        <p class="mt-2 text-sm text-slate-600">
+          This event requires a passcode before you can enter.
+        </p>
+      </div>
+
+      {% if err %}
+        <div class="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {{ err }}
+        </div>
+      {% endif %}
+
+      <form method="post" action="/events/{{ event.id }}/unlock" class="space-y-5">
+        <div>
+          <label for="passcode" class="block text-sm font-medium text-slate-700">
+            Event passcode
+          </label>
+          <input
+            id="passcode"
+            name="passcode"
+            type="password"
+            required
+            autofocus
+            class="mt-1 w-full rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500"
+            placeholder="Enter passcode"
+          />
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button
+            type="submit"
+            class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            Unlock event
+          </button>
+
+          <a
+            href="/dashboard"
+            class="inline-flex items-center justify-center rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </a>
+        </div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

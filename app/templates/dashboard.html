@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="fixed inset-x-0 top-14 bottom-4 overflow-hidden bg-slate-50">
+  <div class="grid grid-cols-1 xl:grid-cols-[1.45fr,0.75fr] gap-6 w-full h-full overflow-auto p-6">
+
+    <!-- Left: Events -->
+    <section class="min-h-0">
+      <div class="h-full rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-semibold text-slate-900">Events</h2>
+            <p class="text-sm text-slate-500 mt-1">Live and upcoming sessions</p>
+          </div>
+          <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+            {{ dashboard_events|length }}
+          </span>
+        </div>
+
+        <div class="p-4 md:p-5 space-y-4 max-h-[calc(100vh-8rem)] overflow-auto">
+          {% if dashboard_events %}
+            {% for ev in dashboard_events %}
+              <a href="{{ ev.menu_href }}"
+                 class="js-event-card group relative block border rounded-2xl overflow-hidden hover:shadow-lg transition min-h-[20rem]"
+                 data-event-id="{{ ev.id }}"
+                 data-start="{{ ev.starts_at_iso }}"
+                 data-end="{{ ev.ends_at_iso or '' }}"
+                 data-stages='{{ ev.stages|safe }}'
+                 data-state="{{ ev.state }}">
+
+                <div class="absolute inset-0 bg-cover bg-center"
+                     style="background-image: url('/static/img/home-bg.jpg');"></div>
+
+                {% if ev.state == 'live' %}
+                  <div class="absolute inset-0 bg-emerald-950/55 group-hover:bg-emerald-950/45 transition"></div>
+                {% elif ev.locked %}
+                  <div class="absolute inset-0 bg-amber-950/50 group-hover:bg-amber-950/40 transition"></div>
+                {% else %}
+                  <div class="absolute inset-0 bg-black/45 group-hover:bg-black/35 transition"></div>
+                {% endif %}
+
+                <div class="relative z-10 h-full p-6 md:p-8 flex flex-col justify-between text-white">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.18em] text-white/75">Event</p>
+                      <h3 class="mt-2 text-2xl md:text-3xl font-bold leading-tight">
+                        {{ ev.title }}
+                      </h3>
+                      <p class="text-sm opacity-90 mt-2">
+                        <time class="js-event-start-human">{{ ev.starts_at_human }}</time>
+                      </p>
+                    </div>
+
+                    <div class="flex flex-col items-end gap-2 shrink-0">
+                      <span class="js-event-badge px-2 py-1 rounded text-xs font-semibold bg-white/90 text-slate-900 backdrop-blur">
+                        {% if ev.state == 'live' %}Live{% else %}Upcoming{% endif %}
+                      </span>
+
+                      {% if ev.locked %}
+                        <span class="px-2 py-1 rounded text-xs font-semibold bg-amber-100/95 text-amber-900 backdrop-blur">
+                          Passcode
+                        </span>
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <div class="mt-8">
+                    <!-- Upcoming -->
+                    <div class="js-countdown-wrap">
+                      <div class="text-4xl md:text-5xl font-extrabold tracking-tight js-countdown">--h --m --s</div>
+                      <p class="text-sm mt-2 text-white/80">until start</p>
+                    </div>
+
+                    <!-- Live -->
+                    <div class="js-live-wrap hidden mt-6">
+                      <div class="flex items-center justify-between gap-3">
+                        <div>
+                          <p class="text-xs uppercase tracking-[0.16em] text-white/70">Current stage</p>
+                          <p class="js-stage-name mt-1 text-lg font-semibold">In progress</p>
+                        </div>
+                        <div class="text-right">
+                          <p class="text-xs uppercase tracking-[0.16em] text-white/70">Time remaining</p>
+                          <p class="js-stage-remain mt-1 text-lg font-semibold">--:--:--</p>
+                        </div>
+                      </div>
+
+                      <div class="mt-4 h-2.5 rounded-full bg-white/20 overflow-hidden">
+                        <div class="js-live-progress h-full rounded-full bg-white/90" style="width:0%"></div>
+                      </div>
+                    </div>
+
+                    <!-- Ended -->
+                    <div class="js-ended-wrap hidden mt-6">
+                      <p class="text-lg font-semibold">Event ended</p>
+                      <p class="js-ended-when text-sm text-white/80 mt-1">Ended</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-6 flex flex-wrap gap-2">
+                    {% for st in ev.stages_json %}
+                      <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-white/15 text-white border border-white/15">
+                        {{ st.name }}
+                      </span>
+                    {% endfor %}
+                  </div>
+                </div>
+              </a>
+            {% endfor %}
+          {% else %}
+            <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+              <div class="text-5xl font-bold text-slate-300">—</div>
+              <p class="text-sm text-slate-500 mt-2">No live or upcoming events</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: Department of Records -->
+    <aside class="min-h-0">
+      <a href="/records/menu"
+         class="group relative flex flex-col justify-between border rounded-2xl overflow-hidden hover:shadow-lg transition min-h-[20rem] xl:min-h-full">
+
+        <div class="absolute inset-0 bg-cover bg-center"
+             style="background-image: url('/static/img/home-bg.jpg');"></div>
+        <div class="absolute inset-0 bg-indigo-600/50 group-hover:bg-indigo-600/40 transition"></div>
+
+        <div class="relative z-10 p-8 flex flex-col justify-between h-full text-white">
+          <div class="flex items-center justify-between">
+            <h2 class="text-2xl font-semibold">Department of Records</h2>
+            <span class="inline-flex items-center gap-1 text-white/90 px-2 py-1 rounded text-sm font-semibold">
+              Open
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 5l7 7-7 7"/>
+              </svg>
+            </span>
+          </div>
+
+          <div class="mt-6 space-y-3">
+            <p class="text-lg font-medium">Browse agendas, interventions, minutes, and official documents.</p>
+            <ul class="text-sm text-white/90 space-y-1">
+              <li>• Recent agendas</li>
+              <li>• Speaker records</li>
+              <li>• Decisions &amp; resolutions</li>
+            </ul>
+          </div>
+        </div>
+      </a>
+    </aside>
+
+  </div>
+</div>
+
+{% if dashboard_events %}
+<script>
+(function () {
+  const cards = Array.from(document.querySelectorAll('.js-event-card'));
+  if (!cards.length) return;
+
+  function fmt2(n) {
+    return String(n).padStart(2, '0');
+  }
+
+  function humanSince(d) {
+    const s = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const days = Math.floor(h / 24);
+    return `${days}d ago`;
+  }
+
+  function clamp01(x) {
+    return Math.max(0, Math.min(1, x));
+  }
+
+  function parseStages(root) {
+    try {
+      return JSON.parse(root.getAttribute('data-stages') || '[]');
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function currentStage(now, start, end, stages) {
+    for (const st of stages) {
+      if (!st.start || !st.end) continue;
+      const a = new Date(st.start).getTime();
+      const b = new Date(st.end).getTime();
+      const t = now.getTime();
+      if (t >= a && t < b) {
+        const pct = clamp01((t - a) / (b - a));
+        const remain = Math.max(0, Math.floor((b - t) / 1000));
+        return { name: st.name || 'Stage', pct, remain };
+      }
+    }
+
+    if (start && end) {
+      const a = start.getTime();
+      const b = end.getTime();
+      const t = now.getTime();
+      if (t >= a && t < b) {
+        const pct = clamp01((t - a) / (b - a));
+        const remain = Math.max(0, Math.floor((b - t) / 1000));
+        return { name: 'In progress', pct, remain };
+      }
+    }
+
+    return null;
+  }
+
+  function setState(root, state) {
+    const badge = root.querySelector('.js-event-badge');
+    const countdownWrap = root.querySelector('.js-countdown-wrap');
+    const liveWrap = root.querySelector('.js-live-wrap');
+    const endedWrap = root.querySelector('.js-ended-wrap');
+
+    if (state === 'upcoming') {
+      badge.textContent = 'Upcoming';
+      badge.className = 'js-event-badge px-2 py-1 rounded text-xs font-semibold bg-sky-100 text-sky-700';
+      countdownWrap.classList.remove('hidden');
+      liveWrap.classList.add('hidden');
+      endedWrap.classList.add('hidden');
+    } else if (state === 'live') {
+      badge.textContent = 'Live';
+      badge.className = 'js-event-badge px-2 py-1 rounded text-xs font-semibold bg-emerald-100 text-emerald-700';
+      countdownWrap.classList.add('hidden');
+      liveWrap.classList.remove('hidden');
+      endedWrap.classList.add('hidden');
+    } else {
+      badge.textContent = 'Ended';
+      badge.className = 'js-event-badge px-2 py-1 rounded text-xs font-semibold bg-slate-200 text-slate-600';
+      countdownWrap.classList.add('hidden');
+      liveWrap.classList.add('hidden');
+      endedWrap.classList.remove('hidden');
+    }
+  }
+
+  function tickCard(root) {
+    const startISO = root.getAttribute('data-start');
+    const endISO = root.getAttribute('data-end');
+    const stages = parseStages(root);
+
+    const start = startISO ? new Date(startISO) : null;
+    const end = endISO ? new Date(endISO) : null;
+
+    const countdown = root.querySelector('.js-countdown');
+    const stageName = root.querySelector('.js-stage-name');
+    const stageRemain = root.querySelector('.js-stage-remain');
+    const liveProgress = root.querySelector('.js-live-progress');
+    const endedWhen = root.querySelector('.js-ended-when');
+
+    const now = new Date();
+
+    if (start && now < start) {
+      setState(root, 'upcoming');
+
+      let delta = Math.max(0, Math.floor((start - now) / 1000));
+      if (delta > 86400) {
+        const d = Math.floor(delta / 86400); delta %= 86400;
+        const h = Math.floor(delta / 3600); delta %= 3600;
+        const m = Math.floor(delta / 60);
+        countdown.textContent = `${d}d ${fmt2(h)}h ${fmt2(m)}m`;
+      } else {
+        const h = Math.floor(delta / 3600); delta %= 3600;
+        const m = Math.floor(delta / 60);
+        const s = delta % 60;
+        countdown.textContent = `${fmt2(h)}h ${fmt2(m)}m ${fmt2(s)}s`;
+      }
+      return;
+    }
+
+    const ended = end ? (now >= end) : false;
+
+    if (!ended && start && now >= start) {
+      setState(root, 'live');
+      const st = currentStage(now, start, end, stages);
+      if (st) {
+        stageName.textContent = st.name;
+        liveProgress.style.width = (st.pct * 100).toFixed(1) + '%';
+        const h = Math.floor(st.remain / 3600);
+        const m = Math.floor((st.remain % 3600) / 60);
+        const s = st.remain % 60;
+        stageRemain.textContent = `${fmt2(h)}:${fmt2(m)}:${fmt2(s)}`;
+      } else {
+        stageName.textContent = 'In progress';
+        liveProgress.style.width = '100%';
+        stageRemain.textContent = '—';
+      }
+      return;
+    }
+
+    setState(root, 'ended');
+    endedWhen.textContent = end ? `Ended ${humanSince(end)}` : 'Ended';
+  }
+
+  function tickAll() {
+    cards.forEach(tickCard);
+  }
+
+  tickAll();
+  setInterval(tickAll, 1000);
+
+  let lastIds = cards.map(c => c.getAttribute('data-event-id')).sort().join(',');
+
+  setInterval(async () => {
+    try {
+      const r = await fetch('/api/events/next', { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) return;
+
+      const j = await r.json();
+      const events = Array.isArray(j.events) ? j.events : [];
+      const newIds = events.map(e => String(e.id)).sort().join(',');
+
+      if (newIds !== lastIds) {
+        window.location.reload();
+        return;
+      }
+
+      for (const ev of events) {
+        const root = document.querySelector(`.js-event-card[data-event-id="${ev.id}"]`);
+        if (!root) continue;
+        if (ev.start) root.setAttribute('data-start', ev.start);
+        root.setAttribute('data-end', ev.end || '');
+        root.setAttribute('data-stages', JSON.stringify(ev.stages || []));
+      }
+    } catch (_) {}
+  }, 10000);
+})();
+</script>
+{% endif %}
+
+{% endblock %}

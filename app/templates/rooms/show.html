@@ -36,6 +36,42 @@
     }
   }
 </style>
+
+<style>
+  [data-draft-hint] {
+    position: relative;
+  }
+
+  .draft-hint-tooltip {
+    position: fixed;
+    z-index: 9999;
+    max-width: min(300px, calc(100vw - 2rem));
+    padding: .6rem .75rem;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, .96);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .12);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, .22);
+    font-size: .78rem;
+    line-height: 1.4;
+    text-align: left;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px) scale(.98);
+    transition: opacity .12s ease, transform .12s ease;
+  }
+
+  .draft-hint-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .draft-hint-tooltip {
+      transition: none;
+    }
+  }
+</style>
 <h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
 <div class="text-slate-500 text-sm mb-4">Agenda: {{ proposal.title }}</div>
 
@@ -233,6 +269,7 @@ Delete room
     <p class="text-xs text-indigo-700 mt-2">
       You do not need to use every opening. Choose one or more that best explain
       the background or reasons for your proposal.
+      <span class="font-semibold">Hover or tap the highlighted guidance beside a clause if you need help.</span>
     </p>
   </div>
 
@@ -274,16 +311,23 @@ Delete room
       'Example: the importance of transparency, accountability, and digital trust…'
     )
   ] %}
-    <div class="space-y-1">
-      <label class="block text-sm font-semibold text-slate-700">
+  <div class="space-y-1">
+    <div class="flex items-center justify-between gap-3">
+      <label for="draft_{{ name }}"
+             class="block text-sm font-semibold text-slate-700">
         {{ label }}
       </label>
 
-      <p class="text-xs text-slate-500">
-        {{ description }}
-      </p>
+      <button type="button"
+              class="draft-guidance-hint text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-300 rounded"
+              data-draft-hint="{{ description }}"
+              data-draft-hint-side="top"
+              aria-label="Guidance for {{ label }}">
+        ? Hover or tap for guidance
+      </button>
+    </div>
 
-      <textarea id="draft_{{ name }}"
+    <textarea id="draft_{{ name }}"
                 name="{{ name }}"
                 class="w-full border rounded-lg p-2"
                 rows="2"
@@ -313,6 +357,7 @@ Delete room
     <p class="text-xs text-indigo-700 mt-2">
       You do not need to use every opening. Choose one or more depending on the
       kind of action you want the proposal to take.
+      <span class="font-semibold">Hover or tap the highlighted guidance beside a clause if you need help.</span>
     </p>
   </div>
 
@@ -342,16 +387,23 @@ Delete room
       'Example: researchers and platforms to share best practices on transparency…'
     )
   ] %}
-    <div class="space-y-1">
-      <label class="block text-sm font-semibold text-slate-700">
+  <div class="space-y-1">
+    <div class="flex items-center justify-between gap-3">
+      <label for="draft_{{ name }}"
+             class="block text-sm font-semibold text-slate-700">
         {{ label }}
       </label>
 
-      <p class="text-xs text-slate-500">
-        {{ description }}
-      </p>
+      <button type="button"
+              class="draft-guidance-hint text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-300 rounded"
+              data-draft-hint="{{ description }}"
+              data-draft-hint-side="top"
+              aria-label="Guidance for {{ label }}">
+        ? Hover or tap for guidance
+      </button>
+    </div>
 
-      <textarea id="draft_{{ name }}"
+    <textarea id="draft_{{ name }}"
                 name="{{ name }}"
                 class="w-full border rounded-lg p-2"
                 rows="2"
@@ -1177,4 +1229,138 @@ Delete room
     });
   })();
 </script>
+
+<script>
+  (function draftGuidanceHints() {
+    const HINT_SELECTOR = "[data-draft-hint]";
+    const PAD = 10;
+    const OFFSET = 10;
+
+    let activeEl = null;
+    let tooltip = null;
+    let hideTimer = null;
+
+    function ensureTooltip() {
+      if (tooltip) return tooltip;
+
+      tooltip = document.createElement("div");
+      tooltip.id = "draft-guidance-tooltip";
+      tooltip.className = "draft-hint-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      document.body.appendChild(tooltip);
+
+      return tooltip;
+    }
+
+    function showFor(el) {
+      const text = (el.getAttribute("data-draft-hint") || "").trim();
+      if (!text) return;
+
+      clearTimeout(hideTimer);
+      activeEl = el;
+
+      const t = ensureTooltip();
+      t.textContent = text;
+      el.setAttribute("aria-describedby", t.id);
+      t.classList.add("is-visible");
+
+      requestAnimationFrame(() => positionTooltip(el));
+    }
+
+    function hide() {
+      if (!tooltip) return;
+
+      const old = activeEl;
+      activeEl = null;
+
+      if (old && old.getAttribute("aria-describedby") === tooltip.id) {
+        old.removeAttribute("aria-describedby");
+      }
+
+      tooltip.classList.remove("is-visible");
+    }
+
+    function positionTooltip(el) {
+      if (!tooltip || !el) return;
+
+      const side = el.getAttribute("data-draft-hint-side") || "top";
+      const r = el.getBoundingClientRect();
+      const tr = tooltip.getBoundingClientRect();
+
+      const centerX = r.left + r.width / 2;
+      const centerY = r.top + r.height / 2;
+
+      let top;
+      let left;
+
+      if (side === "bottom") {
+        top = r.bottom + OFFSET;
+        left = centerX - tr.width / 2;
+      } else if (side === "left") {
+        top = centerY - tr.height / 2;
+        left = r.left - tr.width - OFFSET;
+      } else if (side === "right") {
+        top = centerY - tr.height / 2;
+        left = r.right + OFFSET;
+      } else {
+        top = r.top - tr.height - OFFSET;
+        left = centerX - tr.width / 2;
+      }
+
+      if (top < PAD) {
+        top = r.bottom + OFFSET;
+      }
+
+      if (top + tr.height > window.innerHeight - PAD) {
+        top = Math.max(PAD, r.top - tr.height - OFFSET);
+      }
+
+      left = Math.max(
+        PAD,
+        Math.min(left, window.innerWidth - tr.width - PAD)
+      );
+
+      tooltip.style.top = `${Math.round(top)}px`;
+      tooltip.style.left = `${Math.round(left)}px`;
+    }
+
+    document.addEventListener("pointerover", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el) return;
+      showFor(el);
+    });
+
+    document.addEventListener("pointerout", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el || el !== activeEl) return;
+      if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+
+      hideTimer = setTimeout(hide, 80);
+    });
+
+    document.addEventListener("focusin", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el) return;
+      showFor(el);
+    });
+
+    document.addEventListener("focusout", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el || el !== activeEl) return;
+      hide();
+    });
+
+    window.addEventListener("scroll", () => {
+      if (activeEl) positionTooltip(activeEl);
+    }, true);
+
+    window.addEventListener("resize", () => {
+      if (activeEl) positionTooltip(activeEl);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hide();
+    });
+  })();
+  </script>
 {% endblock %}

@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 # app/services/amend_ai.py
 import json
 import os
@@ -1479,6 +1480,7 @@ def generate_amend_ops_from_paragraphs(
     agenda_label: Optional[str] = None,
     draft_text: Optional[str] = None,
 ) -> AmendGen:
+    require_ai_features()
     source_text = (plain_text or "").strip()
     model_text = _clamp_text(source_text, "AMEND_AI_MODEL_INPUT_MAX_CHARS", os.getenv("AMEND_AI_INPUT_MAX_CHARS", "2500"))
 

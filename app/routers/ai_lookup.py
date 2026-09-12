@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -8,6 +9,7 @@ router = APIRouter()
 
 @router.post("/ai/lookup")
 async def ai_lookup(request: Request):
+    require_ai_features()
     user = current_user(request)
     if not user:
         raise HTTPException(status_code=401)

@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 # app/services/local_llm.py
 import os
 from types import SimpleNamespace
@@ -22,6 +23,7 @@ class LocalChatClient:
         timeout_s: float | None = None,
         json_mode: bool = False,   # <--- NEW
     ):
+        require_ai_features()
         payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -65,6 +67,7 @@ class LocalChatClient:
 _CLIENT = None
 
 def get_chat_client():
+    require_ai_features()
     global _CLIENT
     backend = os.getenv("LLM_BACKEND", "ollama").lower()
     if backend == "ollama":

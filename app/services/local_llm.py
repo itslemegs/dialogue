@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 # app/services/local_llm.py
 import os
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ class LocalChatClient:
         response_format: Optional[Union[str, Dict[str, Any]]] = None,
         think: Optional[bool] = None,
     ):
+        require_ai_features()
         safe_max_tokens = min(
     int(max_tokens),
     int(os.getenv("OLLAMA_SAFE_NUM_PREDICT", "650")),
@@ -114,6 +116,7 @@ _CLIENT = None
 
 
 def get_chat_client():
+    require_ai_features()
     global _CLIENT
 
     backend = os.getenv("LLM_BACKEND", "ollama").lower()

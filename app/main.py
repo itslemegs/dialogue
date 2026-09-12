@@ -1,3 +1,4 @@
+from app.ai_features import AI_FEATURES_ENABLED, AIFeaturesDisabled, require_ai_features
 from fastapi import FastAPI, Request, Depends, Form, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -150,34 +151,45 @@ async def lifespan(app: FastAPI):
     except Exception:
         log.exception("Failed to create/check experiment_session_log table")
 
-    # Warm up Ollama
-    base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-    model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
-    keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+    if AI_FEATURES_ENABLED:
+        # Warm up Ollama
+        base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+        keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
 
-    try:
-        httpx.post(
-            f"{base}/api/chat",
-            json={
-                "model": model,
-                "messages": [],
-                "stream": False,
-                "keep_alive": keep_alive,
-            },
-            timeout=120.0,
-        ).raise_for_status()
-        log.info("Ollama warmup ok (%s)", model)
-    except Exception as e:
-        log.warning("Ollama warmup failed: %s", e)
+        try:
+            httpx.post(
+                f"{base}/api/chat",
+                json={
+                    "model": model,
+                    "messages": [],
+                    "stream": False,
+                    "keep_alive": keep_alive,
+                },
+                timeout=120.0,
+            ).raise_for_status()
+            log.info("Ollama warmup ok (%s)", model)
+        except Exception as e:
+            log.warning("Ollama warmup failed: %s", e)
 
     yield
 
 from app.services.local_translate import warm_model
 
-for lang in ("ar", "zh", "fr", "ru", "es"):
-    warm_model(lang)
+if AI_FEATURES_ENABLED:
+    for lang in ("ar", "zh", "fr", "ru", "es"):
+        warm_model(lang)
 
 app = FastAPI(title="Consensus MVP",lifespan=lifespan)
+
+
+@app.exception_handler(AIFeaturesDisabled)
+async def ai_disabled_response(request: Request, exc: AIFeaturesDisabled):
+    return JSONResponse(status_code=503, content={
+        "status": "disabled", "code": "ai_features_disabled", "detail": str(exc),
+    })
+
+
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -188,6 +200,7 @@ templates = Jinja2Templates(directory="app/templates")
 from starlette.templating import Jinja2Templates
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["getattr"] = getattr
+templates.env.globals["ai_features_enabled"] = AI_FEATURES_ENABLED
 
 # ----- helpers: MUST be above routes -----
 EMPTY_FLAGS = {"IS_ADMIN": False, "IS_PRESIDENT": False, "IS_CHAIR": False, "IS_INVITED": False, "IS_MEMBER": False}
@@ -3621,6 +3634,7 @@ def _run_draft_generation_job(
     agenda_title: str | None,
     room_title: str | None,
 ) -> None:
+    require_ai_features()
     try:
         fill = generate_draft_from_paragraphs(
             plain_text=plain_text,
@@ -3657,6 +3671,7 @@ def _run_draft_generation_save_job(
     agenda_title: str | None,
     room_title: str | None,
 ) -> None:
+    require_ai_features()
     try:
         fill = generate_draft_from_paragraphs(
             plain_text=plain_text,
@@ -3722,6 +3737,7 @@ def draft_generate(
     event_id: int,
     plain_text: str = Form(...),
 ):
+    require_ai_features()
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     with get_session() as db:
@@ -3789,6 +3805,7 @@ def draft_generate_status(
     job_id: str,
     request: Request,
 ):
+    require_ai_features()
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     with get_session() as db:
@@ -3818,6 +3835,7 @@ def draft_generate_json(
     event_id: int,
     plain_text: str = Form(...),
 ):
+    require_ai_features()
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     with get_session() as db:
@@ -3875,6 +3893,7 @@ def draft_generate_json_status(
     job_id: str,
     request: Request,
 ):
+    require_ai_features()
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     with get_session() as db:
@@ -4108,6 +4127,10 @@ def draft_detail(draft_id: int, request: Request):
         SUPPORTED,
     )
 
+    translation_disabled = not AI_FEATURES_ENABLED and lang != "en"
+    if translation_disabled:
+        lang = "en"
+
     with get_session() as db:
         d = db.get(ProposalDraft, draft_id)
 
@@ -4303,7 +4326,8 @@ def draft_detail(draft_id: int, request: Request):
         title_show=title_show,
         draft_text=draft_text,
         ui_labels=labels_for(lang),
-        supported_langs=SUPPORTED,
+        supported_langs=SUPPORTED if AI_FEATURES_ENABLED else {"en": SUPPORTED["en"]},
+        translation_disabled=translation_disabled,
         translation_status=translation_status,
         translation_error=translation_error,
         hide_draft_for_translation=hide_draft_for_translation,
@@ -4311,6 +4335,12 @@ def draft_detail(draft_id: int, request: Request):
 
 @app.get("/drafts/{draft_id}/translation-status")
 def draft_translation_status(draft_id: int, request: Request, lang: str = "en"):
+    if not AI_FEATURES_ENABLED:
+        return JSONResponse({
+            "ready": False, "status": "disabled", "lang": "en",
+            "error": "Translation is currently disabled",
+        })
+
     user = current_user(request)
 
     lang = normalize_translation_lang(lang, SUPPORTED)
@@ -4532,6 +4562,7 @@ def _run_amend_generation_job(
     agenda_label: str | None,
     draft_text: str | None,
 ) -> None:
+    require_ai_features()
     try:
         gen = generate_amend_ops_from_paragraphs(
             plain_text=plain_text,
@@ -4572,6 +4603,7 @@ def amend_generate_json(
     request: Request,
     plain_text: str = Form(...),
 ):
+    require_ai_features()
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     plain_text = (plain_text or "").strip()
@@ -4627,6 +4659,7 @@ def amend_generate_json_status(
     job_id: str,
     request: Request,
 ):
+    require_ai_features()
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     with get_session() as db:
@@ -4743,6 +4776,10 @@ def view_amendment(
     if lang not in SUPPORTED:
         lang = "en"
 
+    translation_disabled = not AI_FEATURES_ENABLED and lang != "en"
+    if translation_disabled:
+        lang = "en"
+
     with get_session() as db:
         room, draft, prop = _assert_amend_context(
             db=db,
@@ -4799,7 +4836,8 @@ def view_amendment(
         lang=lang,
         lang_meta=translate_lang_meta(lang),
         body_show=body_show,
-        supported_langs=SUPPORTED,
+        supported_langs=SUPPORTED if AI_FEATURES_ENABLED else {"en": SUPPORTED["en"]},
+        translation_disabled=translation_disabled,
     )
 
 @app.get("/amendments/{amend_id}", response_class=HTMLResponse)

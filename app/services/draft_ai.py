@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 import json
 import os
 import re
@@ -1476,6 +1477,7 @@ def generate_draft_from_paragraphs(
     agenda_title: Optional[str] = None,
     room_title: Optional[str] = None,
 ) -> DraftFill:
+    require_ai_features()
     context_text = _build_context_text(
         agenda_title=agenda_title,
         room_title=room_title,

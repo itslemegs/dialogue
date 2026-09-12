@@ -1,5 +1,6 @@
 # app/services/live_summary.py
 from __future__ import annotations
+from app.ai_features import require_ai_features
 
 import os
 import logging
@@ -279,6 +280,7 @@ def _fallback_summary_from_messages(new_items: List[Dict]) -> str:
 {chr(10).join(open_questions)}"""
 
 async def ollama_generate(prompt: str) -> str:
+    require_ai_features()
     timeout = httpx.Timeout(
         timeout=OLLAMA_TIMEOUT_S,
         connect=10.0,
@@ -518,6 +520,7 @@ async def refresh_summary_if_needed(
     max_new: int = 40,
     force: bool = False,
 ) -> LiveSummary:
+    require_ai_features()
     row = _ensure_row(db, scope)
 
     now = now_utc()

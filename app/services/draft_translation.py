@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 # app/services/draft_translation.py
 
 import hashlib
@@ -111,6 +112,7 @@ def _start_worker_once() -> None:
 
 
 def _enqueue(job: TranslationJob) -> None:
+    require_ai_features()
     _start_worker_once()
 
     key = (job.draft_id, job.lang, job.source_hash)
@@ -161,6 +163,7 @@ def _mark_failed(draft_id: int, lang: str, source_hash: str, error: str) -> None
 
 
 def _run_job(job: TranslationJob) -> None:
+    require_ai_features()
     try:
         with get_session() as db:
             draft = db.get(ProposalDraft, job.draft_id)
@@ -246,6 +249,7 @@ def get_cached_or_enqueue_draft_translation(
     lang: Lang,
     fields: Iterable[str],
 ) -> DraftTranslation:
+    require_ai_features()
     fields_tuple = tuple(fields)
     source_hash = draft_source_hash(draft, fields_tuple)
 

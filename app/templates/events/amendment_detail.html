@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if translation_disabled %}
+<p role="status" class="mb-4 rounded border bg-amber-50 p-3">Translation is currently disabled. Showing the English original.</p>
+{% endif %}
 <div class="max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-2">
     <h1 class="text-2xl font-bold">{{ amend.label }}</h1>

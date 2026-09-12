@@ -126,13 +126,14 @@ Delete room
         </button> -->
         <button type="button"
         id="btn_generate"
+  {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
         class="px-3 py-1.5 bg-indigo-600 text-white rounded"
         data-log-action="CLICK_GENERATE_DRAFT_WITH_AI"
         data-target-type="proposal_draft"
         data-target-id="{{ draft.id }}"
         data-hint="Use AI to turn your plain paragraphs into draft sections. Review the result before saving."
         data-hint-side="top">
-  Generate draft from paragraphs
+  {% if ai_features_enabled %}Generate draft from paragraphs{% else %}AI features are currently disabled{% endif %}
 </button>
         <div id="ai_status" class="text-xs text-slate-500"></div>
         <!-- <div id="lookup_status" class="text-xs text-slate-500"></div> -->
@@ -284,13 +285,14 @@ Delete room
         <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
       </div>
       <div class="p-3">
-        <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">Loading…</div>
+        <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">{% if ai_features_enabled %}Loading…{% else %}AI features are currently disabled{% endif %}</div>
         <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-5 text-slate-800"></pre>
       </div>
     </div>
   </aside>
 </div>
 
+{% if ai_features_enabled %}
 <script>
   (function () {
     const body = document.getElementById("liveSummaryBody");
@@ -323,6 +325,7 @@ Delete room
     setInterval(tick, 5000);
   })();
 </script>
+{% endif %}
 
 <script>
 (function () {

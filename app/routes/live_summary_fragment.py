@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -20,6 +21,7 @@ async def api_live_summary(
     draft_id: int | None = None,
     amendment_id: int | None = None,
 ):
+    require_ai_features()
     kind = kind.upper()
     if kind not in ("GENERAL", "PROOM", "PFLOOR"):
         raise HTTPException(400, "kind must be GENERAL|PROOM|PFLOOR")

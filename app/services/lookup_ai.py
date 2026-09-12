@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.ai_features import require_ai_features
 
 import anyio
 import json
@@ -437,6 +438,7 @@ async def _llm_write_report(req: LookupRequest, plan_item: LookupPlanItem, sourc
 # -----------------------------
 
 async def run_lookup(req: LookupRequest) -> LookupReport:
+    require_ai_features()
     plan = await build_lookup_plan(req)
     search = WebSearchClient()
 

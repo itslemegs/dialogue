@@ -1,3 +1,4 @@
+from app.ai_features import require_ai_features
 # app/services/local_translate.py
 
 import os
@@ -13,8 +14,10 @@ import threading
 from collections import OrderedDict
 from typing import Literal
 
-import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+# Heavy libraries are imported only after the master guard permits model use.
+torch = None
+AutoModelForSeq2SeqLM = None
+AutoTokenizer = None
 
 
 Lang = Literal["ar", "zh", "fr", "ru", "es"]
@@ -43,8 +46,6 @@ def _configure_torch_threads() -> None:
         pass
 
 
-_configure_torch_threads()
-
 
 def _pick_device() -> str:
     # Long-term safe default: CPU.
@@ -71,7 +72,22 @@ def _pick_device() -> str:
     return "cpu"
 
 
-_DEVICE = _pick_device()
+_DEVICE = None
+
+
+def _initialize_runtime() -> None:
+    require_ai_features()
+    global torch, AutoModelForSeq2SeqLM, AutoTokenizer, _DEVICE
+    if _DEVICE is not None:
+        return
+    import torch as torch_module
+    from transformers import AutoModelForSeq2SeqLM as model_class, AutoTokenizer as tokenizer_class
+    torch = torch_module
+    AutoModelForSeq2SeqLM = model_class
+    AutoTokenizer = tokenizer_class
+    _configure_torch_threads()
+    _DEVICE = _pick_device()
+
 
 _BATCH_SIZE = int(os.getenv("TRANSLATE_BATCH_SIZE", "4"))
 _MAX_INPUT_TOKENS = int(os.getenv("TRANSLATE_MAX_INPUT_TOKENS", "256"))
@@ -98,6 +114,8 @@ def _model_kwargs() -> dict:
 
 
 def _load_bundle(lang: Lang):
+    require_ai_features()
+    _initialize_runtime()
     model_id = MODEL_IDS[lang]
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -110,6 +128,7 @@ def _load_bundle(lang: Lang):
 
 
 def _get_bundle(lang: Lang):
+    require_ai_features()
     bundle = _BUNDLES.get(lang)
 
     if bundle is not None:
@@ -221,7 +240,6 @@ def _cache_put(lang: Lang, segment: str, translated: str) -> None:
             _SEGMENT_CACHE.popitem(last=False)
 
 
-@torch.inference_mode()
 def _translate_batch_uncached(texts: list[str], lang: Lang) -> list[str]:
     if not texts:
         return []
@@ -230,7 +248,7 @@ def _translate_batch_uncached(texts: list[str], lang: Lang) -> list[str]:
     outputs: list[str] = []
 
     # Prevent concurrent generation from multiple requests.
-    with _GENERATE_LOCK:
+    with _GENERATE_LOCK, torch.inference_mode():
         for start in range(0, len(texts), _BATCH_SIZE):
             batch = texts[start : start + _BATCH_SIZE]
 
@@ -301,6 +319,7 @@ def translate_many_en_to(texts: list[str], lang: Lang) -> list[str]:
     """
     Translate many text blocks in one controlled batched operation.
     """
+    require_ai_features()
     all_parts: list[list[tuple[str, bool]]] = []
     translatable_segments: list[str] = []
 
@@ -342,8 +361,9 @@ def translate_en_to(text: str, lang: Lang) -> str:
 
 
 def warm_model(lang: Lang) -> None:
+    require_ai_features()
     _get_bundle(lang)
 
 
 def current_translate_device() -> str:
-    return _DEVICE
+    return _DEVICE or "cpu"

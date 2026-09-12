@@ -520,13 +520,14 @@
           <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
         </div>
         <div class="p-4">
-          <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">Loading…</div>
+          <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">{% if ai_features_enabled %}Loading…{% else %}AI features are currently disabled{% endif %}</div>
           <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-6 text-slate-700 font-sans"></pre>
         </div>
       </div>
     </aside>
 
-    <script>
+    {% if ai_features_enabled %}
+<script>
       (function () {
         const body = document.getElementById("liveSummaryBody");
         const updated = document.getElementById("liveSummaryUpdated");
@@ -558,6 +559,7 @@
         setInterval(tick, 5000);
       })();
     </script>
+{% endif %}
   </aside>
 
   <!-- MIDDLE -->

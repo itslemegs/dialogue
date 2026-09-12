@@ -4,10 +4,13 @@
 
 <form method="post"
       action="{{ url_for('rooms_create', event_id=event.id, pid=proposal.id) }}"
-      class="space-x-2 mb-4">
+      class="space-x-2 mb-4"
+      data-log-action="CREATE_PROPOSAL_ROOM"
+      data-target-type="agenda_proposal"
+      data-target-id="{{ proposal.id }}">
   <input name="title" class="border px-2 py-1 rounded" placeholder="Room title" required>
   <input name="description" class="border px-2 py-1 rounded" placeholder="Short description">
-  <button class="px-3 py-1 bg-blue-600 text-white rounded">Create room</button>
+  <button class="px-3 py-1 bg-blue-600 text-white rounded" data-log-action="CLICK_CREATE_PROPOSAL_ROOM" data-target-type="agenda_proposal" data-target-id="{{ proposal.id }}">Create room</button>
 </form>
 
 <ul class="space-y-2">

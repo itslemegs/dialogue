@@ -34,12 +34,43 @@
                 </div>
               </div>
               <div class="shrink-0 w-56">
-                <form method="post" action="/events/{{ event.id }}/review-agenda/{{ p.id }}/decision" class="space-y-2">
-                  <textarea name="notes" rows="3" placeholder="Notes (optional)"
-                            class="w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"></textarea>
+                <form
+                  method="post"
+                  action="/events/{{ event.id }}/review-agenda/{{ p.id }}/decision"
+                  class="space-y-2"
+                  data-log-action="DECIDE_AGENDA"
+                  data-target-type="agenda_proposal"
+                  data-target-id="{{ p.id }}"
+                >
+                  <textarea
+                    name="notes"
+                    rows="3"
+                    placeholder="Notes (optional)"
+                    class="w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                  ></textarea>
+
                   <div class="flex gap-2">
-                    <button name="action" value="accept" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">Accept</button>
-                    <button name="action" value="reject" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700">Reject</button>
+                    <button
+                      name="action"
+                      value="accept"
+                      class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                      data-log-action="CLICK_ACCEPT_AGENDA"
+                      data-target-type="agenda_proposal"
+                      data-target-id="{{ p.id }}"
+                    >
+                      Accept
+                    </button>
+
+                    <button
+                      name="action"
+                      value="reject"
+                      class="px-3 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+                      data-log-action="CLICK_REJECT_AGENDA"
+                      data-target-type="agenda_proposal"
+                      data-target-id="{{ p.id }}"
+                    >
+                      Reject
+                    </button>
                   </div>
                 </form>
               </div>

@@ -58,7 +58,10 @@
     setInterval(pollNotifications, 5000);
     pollNotifications();
   </script>    
-  <body class="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+  <body class="min-h-screen bg-slate-50 text-slate-900 flex flex-col"
+        data-event-id="{{ event.id if event else '' }}"
+        data-phase="{{ phase if phase else '' }}"
+  >
     <nav class="sticky top-0 z-40 px-4 py-3 bg-white shadow flex justify-between">
   <!-- <body class="bg-slate-50 text-slate-900"> -->
     <!-- <nav class="px-4 py-3 bg-white shadow flex justify-between"> -->
@@ -94,15 +97,15 @@
           <a href="/login" class="mr-3 text-blue-600">Login</a>
           <a href="/register" class="text-blue-600">Register</a>
         {% endif %}
-        <button id="helpBtn" class="px-3 py-1 border rounded">?</button>
+        <!-- <button id="helpBtn" class="px-3 py-1 border rounded">?</button> -->
 
-    <div id="helpPanel" class="hidden fixed right-4 top-16 w-[360px] max-h-[80vh] overflow-auto bg-white border rounded p-3 shadow">
+    <!-- <div id="helpPanel" class="hidden fixed right-4 top-16 w-[360px] max-h-[80vh] overflow-auto bg-white border rounded p-3 shadow">
       <div class="flex gap-2">
         <input id="helpQ" class="flex-1 border rounded px-2 py-1" placeholder="Ask how to use this…" />
         <button id="helpAsk" class="px-3 py-1 border rounded">Ask</button>
       </div>
       <div id="helpOut" class="mt-3 text-sm"></div>
-    </div>
+    </div> -->
 
     <script>
     const panel = document.getElementById("helpPanel");
@@ -148,9 +151,61 @@
 </script>
       </div>
     </nav>
+    {% set path = request.url.path.rstrip("/") %}
+{% set parts = path.split("/") %}
+{% set back_url = None %}
+
+{% if path not in ["", "/", "/dashboard", "/login"] %}
+
+  {% if parts|length >= 3 and parts[1] == "events" %}
+    {% set event_id = parts[2] %}
+
+    {# /events/{event_id} #}
+    {% if parts|length <= 3 %}
+      {% set back_url = "/dashboard" %}
+
+    {# /events/{event_id}/menu #}
+    {% elif parts|length == 4 and parts[3] in ["menu", "event-menu"] %}
+      {% set back_url = "/dashboard" %}
+
+    {# /events/{event_id}/proposal-floor #}
+    {# /events/{event_id}/general-floor #}
+    {# /events/{event_id}/decision #}
+    {% elif parts|length == 4 %}
+      {% set back_url = "/events/" ~ event_id ~ "/menu" %}
+
+    {# /events/{event_id}/proposal-floor/draft/30/etc #}
+    {# Always go back to the parent menu page #}
+    {% else %}
+      {% set menu_parent = parts[3] %}
+      {% set back_url = "/events/" ~ event_id ~ "/" ~ menu_parent ~ "/" %}
+    {% endif %}
+
+  {% else %}
+    {% set back_url = "/dashboard" %}
+  {% endif %}
+
+  {% if back_url %}
+    <a
+      href="{{ back_url }}"
+      class="fixed left-4 top-10 z-50 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-md ring-1 ring-slate-200 backdrop-blur hover:bg-slate-50"
+    >
+      ← Back
+    </a>
+  {% endif %}
+
+{% endif %}
     <main class="flex-1 p-4 lg:p-6 w-full max-w-none">
     <!-- <main class="p-6 max-w-4xl mx-auto"> -->
       {% block content %}{% endblock %}
     </main>
+    <script>
+      window.addEventListener("pageshow", function (event) {
+        if (event.persisted) {
+          window.location.reload();
+        }
+      });
+    </script>
+    <script src="/static/session_log.js" defer></script>
   </body>
 </html>

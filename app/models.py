@@ -7,6 +7,56 @@ from sqlalchemy import Column, Integer, ForeignKey, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import SQLModel, Field, Relationship
 
+# app/models.py
+
+from datetime import datetime, timezone
+from typing import Optional
+
+import sqlalchemy as sa
+from sqlmodel import SQLModel, Field
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+class ExperimentSessionLog(SQLModel, table=True):
+    __tablename__ = "experiment_session_log"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+    # Experiment context
+    event_id: Optional[int] = Field(default=None, index=True)
+    user_id: Optional[int] = Field(default=None, index=True)
+    session_key: Optional[str] = Field(default=None, index=True)
+
+    # Request / browser context
+    source: str = Field(default="server", index=True)  # server, client, semantic
+    action: str = Field(index=True)
+
+    page: Optional[str] = Field(default=None)
+    route: Optional[str] = Field(default=None)
+    method: Optional[str] = Field(default=None)
+    status_code: Optional[int] = Field(default=None)
+    duration_ms: Optional[int] = Field(default=None)
+
+    # What the action was about
+    phase: Optional[str] = Field(default=None, index=True)
+    target_type: Optional[str] = Field(default=None, index=True)
+    target_id: Optional[str] = Field(default=None, index=True)
+
+    # Privacy-safe debugging / analysis info
+    ip_hash: Optional[str] = Field(default=None)
+    user_agent: Optional[str] = Field(default=None)
+    request_id: Optional[str] = Field(default=None, index=True)
+
+    details_json: Optional[str] = Field(
+        default=None,
+        sa_column=sa.Column(sa.Text, nullable=True),
+    )
+
 
 # ----------------------------
 # Roles & Users

@@ -1,0 +1,20 @@
+python-dotenv==1.1.1
+uvicorn[standard]
+fastapi[all]
+sqlmodel[asyncio]
+psycopg[binary]
+asyncpg
+passlib[bcrypt]
+alembic
+greenlet
+
+# Local translation stack
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+torchaudio
+transformers
+sentencepiece
+sacremoses
+protobuf
+bcrypt==4.0.1

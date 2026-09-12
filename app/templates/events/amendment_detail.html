@@ -7,9 +7,21 @@
 
   <div class="flex flex-wrap gap-2 mb-4">
     {% for code, meta in supported_langs.items() %}
-      <a href="{{ request.url.include_query_params(lang=code) }}"
-         class="px-2.5 py-1 rounded-full text-sm border
-                {{ 'bg-slate-900 text-white border-slate-900' if lang==code else 'bg-white hover:bg-slate-50' }}">
+      <a
+        href="{{ request.url.include_query_params(lang=code) }}"
+        class="px-2.5 py-1 rounded-full text-sm border
+                {{ 'bg-slate-900 text-white border-slate-900' if lang==code else 'bg-white hover:bg-slate-50' }}"
+        data-log-action="CLICK_TRANSLATION_LANGUAGE"
+        data-target-type="amendment"
+        data-target-id="{{ amend.id }}"
+        data-translation-lang="{{ code }}"
+        data-current-lang="{{ lang }}"
+        data-event-id="{{ event.id }}"
+        data-proposal-id="{{ proposal.id }}"
+        data-room-id="{{ room.id }}"
+        data-draft-id="{{ draft.id }}"
+        data-amendment-id="{{ amend.id }}"
+      >
         {{ meta.label }}
       </a>
     {% endfor %}

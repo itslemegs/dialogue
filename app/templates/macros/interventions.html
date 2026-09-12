@@ -61,21 +61,42 @@
         <div class="mt-2 whitespace-pre-wrap leading-relaxed">{{ it.body }}</div>
 
         <div class="mt-2 flex items-center gap-4 text-sm">
-          {% if (not IS_PRESIDENT or not IS_CHAIR or not IS_ADMIN) and not can_speak %}
-            <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/register" class="inline ror-form">
-              <input type="hidden" name="kind" value="ROR">
-              <input type="hidden" name="relates_to_id" value="{{ it.id }}">
-              <button class="text-fuchsia-700 hover:underline">Request Right of Reply</button>
-            </form>
-          {% endif %}
-          {% if IS_PRESIDENT or IS_CHAIR %}
-            <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/invite_ror" class="inline ml-2 js-ajax-invite ror-invite">
-              <input type="hidden" name="relates_to_id" value="{{ it.id }}">
-              <input type="hidden" name="kind" value="ROR">
-              <input name="to_handle" placeholder="@handle" class="border px-2 py-1 rounded text-sm" required>
-              <button class="ml-1 px-2 py-1 rounded text-sm bg-amber-600 text-white">Invite RoR</button>
-            </form>
-          {% endif %}
+            {% if not (IS_PRESIDENT or IS_CHAIR or IS_ADMIN) and not can_speak %}
+              <form method="post"
+                    action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/register"
+                    class="inline ror-form">
+                <input type="hidden" name="kind" value="ROR">
+                <input type="hidden" name="relates_to_id" value="{{ it.id }}">
+          
+                <button class="text-fuchsia-700 hover:underline"
+                        data-hint="Ask to reply directly to this intervention. The chair will decide when to recognize you."
+                        data-hint-side="top">
+                  Request Right of Reply
+                </button>
+              </form>
+            {% endif %}
+          
+            {% if IS_PRESIDENT or IS_CHAIR %}
+              <form method="post"
+                    action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/invite_ror"
+                    class="inline ml-2 js-ajax-invite ror-invite">
+                <input type="hidden" name="relates_to_id" value="{{ it.id }}">
+                <input type="hidden" name="kind" value="ROR">
+          
+                <input name="to_handle"
+                       placeholder="@handle"
+                       class="border px-2 py-1 rounded text-sm"
+                       data-hint="Type the member handle you want to invite, for example alex (without the @)."
+                       data-hint-side="top"
+                       required>
+          
+                <button class="ml-1 px-2 py-1 rounded text-sm bg-amber-600 text-white"
+                        data-hint="Invite this member to give a Right of Reply to this intervention."
+                        data-hint-side="top">
+                  Invite RoR
+                </button>
+              </form>
+            {% endif %}
 
           <span class="text-slate-400 text-xs">#{{ it.local_no or it.id }}</span>
           {% if it.relates_to_id %}

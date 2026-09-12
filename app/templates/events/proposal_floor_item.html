@@ -10,18 +10,838 @@
 {% set KIND = (mode == 'AMENDMENT') and 'amendment' or 'draft' %}
 {% set ITEM_ID = (mode == 'AMENDMENT') and amendment.id or draft.id %}
 
-<div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start h-[calc(100vh-2rem)]">
+
+<style>
+  /* Proposal Floor visual polish — behavior-safe: keeps existing IDs/actions/scripts intact. */
+  .pf-page {
+    height: calc(100vh - 2rem);
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 28px;
+    background:
+      radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.12), transparent 30rem),
+      linear-gradient(135deg, #f8fafc 0%, #ffffff 42%, #eef2ff 100%);
+  }
+
+  .pf-card {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 18px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+    backdrop-filter: blur(10px);
+  }
+
+  .pf-card-soft {
+    background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.9));
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  }
+
+  .pf-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, .55) transparent;
+  }
+
+  .pf-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .pf-scroll::-webkit-scrollbar-track { background: transparent; }
+  .pf-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, .45);
+    border-radius: 999px;
+  }
+
+  .pf-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .pf-panel-title {
+    font-size: .95rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -.01em;
+  }
+
+  .pf-muted { color: #64748b; }
+  .pf-divider { border-color: rgba(226,232,240,.9); }
+
+  .pf-layout,
+  .pf-main-chat,
+  .pf-sidebar {
+    min-height: 0;
+  }
+
+  .pf-sidebar {
+    overscroll-behavior: contain;
+  }
+
+  .pf-main-chat {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .pf-thread-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Chat-like proposal floor discussion area */
+
+  /* This is the proposal-floor version of #threads-container */
+  #interventions {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+    padding: .75rem;
+  }
+
+  /* Reset injected fragment/list spacing */
+  #interventions > ul,
+  #interventions > ol {
+    margin: 0 !important;
+    padding: 0 !important;
+    list-style: none !important;
+  }
+
+  /* Main chat cards */
+  #interventions > li {
+    background: rgba(255, 255, 255, .72);
+    border: 1px solid rgba(226, 232, 240, .75);
+    border-radius: 16px;
+    margin-bottom: .75rem;
+    transition: background .18s ease, transform .18s ease;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #interventions > li:hover {
+    background: rgba(248, 250, 252, .95);
+  }
+
+  /* Keep injected content inside the chat width */
+  #interventions,
+  #interventions > *,
+  #interventions > li,
+  #interventions article,
+  #interventions div {
+    max-width: 100%;
+  }
+
+  /* Message wrapping */
+  #interventions li,
+  #interventions article,
+  #interventions p,
+  #interventions pre,
+  #interventions code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #interventions pre,
+  #interventions code,
+  #interventions p {
+    white-space: pre-wrap;
+  }
+
+  /* Do NOT force every span to pre-wrap because it affects buttons like View replies */
+  #interventions span {
+    overflow-wrap: anywhere;
+  }
+
+  /* Media safety */
+  #interventions img,
+  #interventions video,
+  #interventions iframe {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Compact View n replies button */
+  #interventions .js-toggle-replies {
+    width: auto !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: .25rem;
+
+    margin-top: .35rem !important;
+    margin-bottom: .15rem !important;
+    padding: .2rem .55rem !important;
+
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    font-size: .75rem !important;
+    line-height: 1rem !important;
+    box-shadow: none !important;
+
+    background: rgba(248, 250, 252, .8) !important;
+    border: 1px solid rgba(226, 232, 240, .9) !important;
+    color: #475569;
+  }
+
+  /* Prevent View n replies text from becoming tall */
+  #interventions .js-toggle-replies span {
+    white-space: nowrap !important;
+  }
+
+  /* Smaller chevron */
+  #interventions .js-toggle-replies [data-chevron] {
+    width: .75rem;
+    height: .75rem;
+  }
+
+  /* Compact nested replies */
+  #interventions [id^="replies-"] {
+    margin-top: .35rem !important;
+    padding-top: .25rem !important;
+    padding-left: .75rem !important;
+    border-left: 2px solid rgba(226, 232, 240, .9);
+  }
+
+  #interventions [id^="replies-"] > * {
+    margin-top: .35rem !important;
+  }
+
+  .pf-document-body h4 {
+    margin-top: 1rem;
+    margin-bottom: .35rem;
+    font-size: .78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #475569;
+  }
+
+  .pf-document-body .whitespace-pre-wrap {
+    font-size: .9rem;
+    line-height: 1.65;
+    color: #334155;
+    background: rgba(248,250,252,.75);
+    border: 1px solid rgba(226,232,240,.9);
+    border-radius: 14px;
+    padding: .75rem;
+  }
+
+  .pf-vote-section {
+    border-top: 1px solid rgba(226,232,240,.9);
+    padding-top: 1rem;
+  }
+
+  .pf-amendment-card {
+    border-radius: 16px;
+    border: 1px solid rgba(226,232,240,.95);
+    background: rgba(255,255,255,.78);
+    box-shadow: 0 10px 24px rgba(15,23,42,.04);
+  }
+
+  #queue-brief span,
+  #reply-chip,
+  #admin-now {
+    border: 1px solid rgba(226, 232, 240, .95);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+  }
+
+  #composer-box textarea,
+  input[name="message"],
+  input[name="to_handle"] {
+    border-color: #cbd5e1;
+    border-radius: 14px;
+    background: rgba(255,255,255,.95);
+    box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+  }
+
+  #composer-box textarea:focus,
+  input[name="message"]:focus,
+  input[name="to_handle"]:focus {
+    outline: none;
+    border-color: #818cf8;
+    box-shadow: 0 0 0 4px rgba(129, 140, 248, .18);
+  }
+
+  button,
+  a[class*="bg-"] {
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease, background-color .15s ease;
+  }
+
+  button:hover:not(:disabled),
+  a[class*="bg-"]:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(15,23,42,.10);
+  }
+
+  button:disabled {
+    opacity: .65;
+    cursor: not-allowed;
+  }
+
+  #admin-nextup,
+  details table {
+    background: rgba(255,255,255,.72);
+  }
+
+  #table-nextup tr,
+  #speaker-history tr {
+    transition: background .15s ease;
+  }
+
+  #table-nextup tr:hover,
+  #speaker-history tr:hover {
+    background: #f8fafc;
+  }
+
+  #notif-box > div {
+    border-radius: 16px;
+    border: 1px solid rgba(226, 232, 240, .95);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, .12);
+  }
+
+  /* Right panel: fit the full height; only inner dense areas scroll when needed. */
+  .pf-right-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .pf-right-speakers {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .pf-speaker-actions {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: .15rem;
+    margin-right: -.15rem;
+  }
+
+  .pf-right-composer,
+  .pf-live-summary {
+    flex: 0 0 auto;
+  }
+
+  .pf-live-summary pre {
+    max-height: clamp(76px, 12vh, 140px);
+    overflow-y: auto;
+  }
+
+  #admin-nextup {
+    max-height: clamp(130px, 20vh, 240px);
+    overflow: auto;
+  }
+
+  details > div {
+    max-height: clamp(110px, 16vh, 200px);
+    overflow: auto;
+  }
+
+
+
+  /* Role-aware right panel balance
+     - Members: compact queue box, live summary takes the leftover space.
+     - Chair/President: larger queue/control area; only dense queue tables scroll. */
+  .pf-right-member .pf-right-speakers {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .pf-right-member .pf-speaker-actions {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+    padding-right: 0;
+    margin-right: 0;
+  }
+
+  .pf-right-member #queue-brief {
+    margin-top: .75rem;
+  }
+
+  .pf-right-member #current-speaker-line:empty {
+    display: none;
+  }
+
+  .pf-right-member .pf-live-summary {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .pf-right-member .pf-live-summary .pf-card {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pf-right-member .pf-live-summary .pf-card > .p-3 {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pf-right-member .pf-live-summary pre {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .pf-right-admin .pf-right-speakers {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .pf-right-admin .pf-speaker-actions {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    align-content: normal;
+    padding-right: 0;
+    margin-right: 0;
+  }
+
+  .pf-right-admin .pf-speaker-actions > form {
+    flex: 0 0 auto;
+    width: 100% !important;
+  }
+
+  .pf-right-admin .pf-speaker-actions > form button {
+    width: 100% !important;
+  }
+
+  .pf-right-admin .pf-speaker-actions > form[action*="/floor/take_now"] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pf-right-admin .pf-speaker-actions > form[action*="/floor/take_now"] input {
+    width: 100%;
+  }
+
+  .pf-right-admin #admin-queue-ui {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .pf-right-admin #admin-queue-ui > .flex {
+    flex: 0 0 auto;
+  }
+
+  .pf-right-admin #admin-now {
+    flex: 0 0 auto;
+  }
+
+  .pf-right-admin #admin-nextup {
+    flex: 1 1 220px;
+    min-height: clamp(180px, 28vh, 360px);
+    max-height: none;
+    overflow: auto;
+  }
+
+  .pf-right-admin details {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  .pf-right-admin details > div {
+    max-height: clamp(72px, 10vh, 150px);
+    overflow: auto;
+  }
+
+  .pf-right-admin .pf-right-composer {
+    flex: 0 0 auto;
+  }
+
+  .pf-right-admin #composer-box textarea {
+    min-height: 72px;
+    max-height: 112px;
+  }
+
+  .pf-right-admin .pf-live-summary pre {
+    max-height: clamp(52px, 7vh, 88px);
+  }
+
+
+  @media (min-width: 768px) {
+    .pf-right-panel { padding-bottom: .25rem; }
+  }
+
+  @media (max-width: 767px) {
+    .pf-page {
+      height: auto;
+      min-height: calc(100vh - 2rem);
+      overflow: visible;
+    }
+
+    .pf-main-chat {
+      height: min(75vh, 720px);
+    }
+
+    .pf-right-panel {
+      height: auto;
+      overflow: visible;
+    }
+
+    .pf-right-admin .pf-speaker-actions,
+    .pf-right-member .pf-speaker-actions,
+    .pf-right-admin #admin-queue-ui {
+      overflow: visible;
+      display: flex;
+      flex-wrap: wrap;
+      flex-direction: row;
+    }
+
+    .pf-right-admin #admin-nextup,
+    .pf-right-admin details > div,
+    .pf-right-member .pf-live-summary pre {
+      max-height: none;
+    }
+  }
+
+  /* Admin/right-panel correction:
+     Chair/President view should prioritize the speaker queue.
+     The whole right column stays visually fitted; only dense table bodies scroll. */
+  @media (min-width: 768px) {
+    .pf-right-admin.pf-right-panel {
+      display: grid !important;
+      grid-template-rows: minmax(0, 1fr) auto auto;
+      gap: .75rem;
+      overflow: hidden;
+    }
+
+    .pf-right-admin .pf-right-speakers {
+      height: 100%;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .pf-right-admin .pf-speaker-actions {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: .5rem;
+      overflow: hidden;
+      padding-right: 0;
+      margin-right: 0;
+    }
+
+    .pf-right-admin .pf-speaker-actions > form,
+    .pf-right-admin .pf-speaker-actions > #admin-queue-ui {
+      width: 100% !important;
+    }
+
+    .pf-right-admin #admin-queue-ui {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-top: 1px solid rgba(226,232,240,.85);
+      padding-top: .65rem;
+      margin-top: .25rem;
+    }
+
+    .pf-right-admin #admin-nextup {
+      flex: 1 1 auto;
+      min-height: clamp(260px, 38vh, 520px);
+      max-height: none;
+      overflow: auto;
+    }
+
+    .pf-right-admin details {
+      flex: 0 0 auto;
+      margin-top: .5rem;
+    }
+
+    .pf-right-admin details > div {
+      max-height: clamp(88px, 12vh, 150px);
+      overflow: auto;
+    }
+
+    .pf-right-admin .pf-right-composer {
+      padding: .85rem;
+    }
+
+    .pf-right-admin #recognized-banner {
+      margin-bottom: .4rem;
+    }
+
+    .pf-right-admin #composer-box {
+      gap: .45rem;
+    }
+
+    .pf-right-admin #composer-box textarea {
+      min-height: 54px;
+      max-height: 74px;
+      rows: 2;
+    }
+
+    .pf-right-admin #composer-locked {
+      font-size: .78rem;
+      line-height: 1.15rem;
+    }
+
+    .pf-right-admin .pf-live-summary {
+      max-height: 96px;
+      overflow: hidden;
+    }
+
+    .pf-right-admin .pf-live-summary .pf-card {
+      max-height: 96px;
+      overflow: hidden;
+    }
+
+    .pf-right-admin .pf-live-summary .pf-card > .px-3 {
+      padding-top: .4rem;
+      padding-bottom: .4rem;
+    }
+
+    .pf-right-admin .pf-live-summary .pf-card > .p-3 {
+      padding: .45rem .75rem;
+    }
+
+    .pf-right-admin #liveSummaryStatus {
+      margin-bottom: .15rem;
+      font-size: .68rem;
+    }
+
+    .pf-right-admin .pf-live-summary pre {
+      max-height: 34px;
+      overflow-y: auto;
+      font-size: .75rem;
+      line-height: 1.05rem;
+    }
+  }
+
+
+  /* Roomy admin layout:
+     Chair/President pages are allowed to grow vertically, so the queue and
+     live summary are not crushed into the same fixed-height right column.
+     Member pages keep the compact chat-app layout above. */
+  @media (min-width: 768px) {
+    .pf-page.pf-page-admin {
+      height: auto;
+      min-height: calc(100vh - 2rem);
+      overflow: visible;
+    }
+
+    .pf-page-admin .pf-layout {
+      height: auto;
+      min-height: calc(100vh - 4rem);
+      align-items: start;
+    }
+
+    /* Keep the document and discussion usable while the roomier admin right side scrolls with the page. */
+    .pf-page-admin .pf-sidebar,
+    .pf-page-admin .pf-main-chat {
+      height: calc(100vh - 4rem);
+      position: sticky;
+      top: 1rem;
+    }
+
+    .pf-page-admin .pf-right-admin.pf-right-panel {
+      height: auto;
+      min-height: calc(100vh - 4rem);
+      overflow: visible;
+      display: flex !important;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-right-speakers {
+      flex: 0 0 auto;
+      height: auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-speaker-actions {
+      flex: 0 0 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      flex-wrap: nowrap;
+      align-items: stretch;
+      gap: .55rem;
+      overflow: visible;
+      padding-right: 0;
+      margin-right: 0;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-speaker-actions > form {
+      width: 100% !important;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-speaker-actions > form button {
+      width: 100% !important;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-speaker-actions > form[action*="/floor/take_now"] {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .pf-page-admin .pf-right-admin #admin-queue-ui {
+      flex: 0 0 auto;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+      border-top: 1px solid rgba(226,232,240,.85);
+      padding-top: .75rem;
+      margin-top: .35rem;
+    }
+
+    .pf-page-admin .pf-right-admin #admin-nextup {
+      flex: 0 0 auto;
+      min-height: 0;
+      max-height: none;
+      overflow-x: auto;
+      overflow-y: visible;
+    }
+
+    .pf-page-admin .pf-right-admin details {
+      flex: 0 0 auto;
+      margin-top: .65rem;
+    }
+
+    .pf-page-admin .pf-right-admin details > div {
+      max-height: clamp(160px, 24vh, 320px);
+      overflow: auto;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-right-composer {
+      flex: 0 0 auto;
+      padding: 1rem;
+    }
+
+    .pf-page-admin .pf-right-admin #composer-box textarea {
+      min-height: 84px;
+      max-height: 150px;
+    }
+
+    .pf-page-admin .pf-right-admin #composer-locked {
+      font-size: .875rem;
+      line-height: 1.35rem;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-live-summary {
+      flex: 0 0 auto;
+      max-height: none;
+      overflow: visible;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-live-summary .pf-card {
+      max-height: none;
+      overflow: hidden;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-live-summary .pf-card > .px-3 {
+      padding-top: .75rem;
+      padding-bottom: .75rem;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-live-summary .pf-card > .p-3 {
+      padding: .85rem 1rem;
+    }
+
+    .pf-page-admin .pf-right-admin #liveSummaryStatus {
+      margin-bottom: .4rem;
+      font-size: .75rem;
+    }
+
+    .pf-page-admin .pf-right-admin .pf-live-summary pre {
+      max-height: clamp(140px, 20vh, 260px);
+      overflow-y: auto;
+      font-size: .875rem;
+      line-height: 1.5rem;
+    }
+  }
+
+    /* Friendly hover/focus hints */
+  [data-hint] {
+    position: relative;
+  }
+
+  .pf-hint-tooltip {
+    position: fixed;
+    z-index: 9999;
+    max-width: min(280px, calc(100vw - 2rem));
+    padding: .6rem .75rem;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, .96);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 18px 45px rgba(15,23,42,.22);
+    font-size: .78rem;
+    line-height: 1.35;
+    text-align: left;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px) scale(.98);
+    transition: opacity .12s ease, transform .12s ease;
+  }
+
+  .pf-hint-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pf-hint-tooltip {
+      transition: none;
+    }
+  }
+
+</style>
+
+
+<div class="pf-page {% if IS_PRESIDENT or IS_CHAIR %}pf-page-admin{% else %}pf-page-member{% endif %} -mx-2 md:-mx-4 px-2 md:px-4 py-3 md:py-4">
+  <div class="pf-layout grid grid-cols-1 md:grid-cols-12 gap-4 xl:gap-5 items-stretch max-w-[1600px] mx-auto h-full min-h-0">
   <!-- LEFT: Document -->
-  <aside class="md:col-span-3 flex flex-col space-y-4 overflow-y-auto pb-28">
-    <section class="bg-white border rounded p-4">
-      <div class="text-xs uppercase tracking-wide text-slate-500">
+  <aside class="pf-sidebar md:col-span-3 flex flex-col gap-4 overflow-y-auto pf-scroll md:h-full min-h-0 pr-1">
+    <section class="pf-card p-4">
+      <div class="pf-kicker">
         {{ 'Amendment' if mode == 'AMENDMENT' else 'Tabled Draft' }}
       </div>
       {% if mode == 'AMENDMENT' %}
-        <h2 class="text-xl font-bold mt-1">{{ amendment.label }}</h2>
+        <h2 class="text-xl font-extrabold tracking-tight text-slate-950 mt-3 break-words">{{ amendment.label }}</h2>
         <div class="text-sm text-slate-500">On draft: {{ draft.l_number or '(unassigned)' }}</div>
       {% else %}
-        <h2 class="text-xl font-bold mt-1">{{ draft.l_number or '(unassigned)' }} — {{ draft.title or '(Untitled draft)' }}</h2>
+        <h2 class="text-xl font-extrabold tracking-tight text-slate-950 mt-3 break-words">{{ draft.l_number or '(unassigned)' }} — {{ draft.title or '(Untitled draft)' }}</h2>
       {% endif %}
       <div class="mt-2 text-xs text-slate-500">
         Agenda: {{ proposal.title }}
@@ -29,20 +849,32 @@
 
       {% if mode == 'DRAFT' %}
       <div class="mt-3">
-        <a class="px-3 py-1.5 rounded bg-indigo-600 text-white" href="/drafts/{{ draft.id }}">View tabled draft / propose amendment</a>
+        <a class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm"
+   href="/drafts/{{ draft.id }}"
+   data-hint="Open the full tabled draft document in a separate page."
+   data-hint-side="right">View tabled draft</a>
       </div>
       {% endif %}
 
       {% if IS_PRESIDENT or IS_CHAIR %}
       {% if mode == 'DRAFT' %}
-      <form class="mt-3" method="post" action="/events/{{ event.id }}/proposal-floor/draft/{{ draft.id }}/invite_sponsors">
-        <button class="px-3 py-1.5 rounded bg-fuchsia-700 text-white">Invite sponsors to introduce</button>
+      <form
+        class="mt-3"
+        method="post"
+        action="/events/{{ event.id }}/proposal-floor/draft/{{ draft.id }}/invite_sponsors"
+        data-log-action="PFLOOR_INVITE_SPONSORS"
+        data-target-type="draft"
+        data-target-id="{{ draft.id }}"
+      >
+      <button class="px-3.5 py-2 rounded-xl bg-fuchsia-700 hover:bg-fuchsia-800 text-white font-semibold shadow-sm"
+      data-hint="Ask the draft sponsors to introduce this proposal on the floor."
+      data-hint-side="right">Invite sponsors to introduce</button>
       </form>
       {% endif %}
       {% endif %}
 
       <!-- Document body -->
-      <div class="mt-4 space-y-3 prose max-w-none">
+      <div class="pf-document-body mt-4 space-y-3 prose max-w-none">
         {% if mode == 'AMENDMENT' %}
           <div class="whitespace-pre-wrap">{{ amendment.body_markdown }}</div>
         {% else %}
@@ -61,7 +893,7 @@
 
       <!-- Early voting (consensus) -->
        {% set early_done = 0 %}
-        <section class="mt-5 border-t pt-4">
+        <section class="pf-vote-section mt-5">
         <h3 class="font-semibold">Early voting (consensus check)</h3>
         <p class="text-xs text-slate-500">
             Adopted by consensus if no “No” votes. (Abstentions not counted.)
@@ -71,17 +903,41 @@
 
         <div class="mt-2 flex flex-wrap gap-2">
             {% if can_vote %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote">
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            data-log-action="CAST_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
                 <input type="hidden" name="choice" value="YES">
-                <button class="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm">Yes</button>
+                <button class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm text-sm"
+        data-log-action="CLICK_CAST_EARLY_VOTE_YES"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Vote Yes in the consensus check. If there are no No votes, the item may pass by consensus."
+        data-hint-side="right">Yes</button>
             </form>
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote">
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            data-log-action="CAST_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
                 <input type="hidden" name="choice" value="NO">
-                <button class="px-3 py-1.5 rounded bg-rose-600 text-white text-sm">No</button>
+                <button class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm text-sm"
+        data-log-action="CLICK_CAST_EARLY_VOTE_NO"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Vote No in the consensus check. A No vote prevents adoption by consensus."
+        data-hint-side="right">No</button>
             </form>
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote">
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            data-log-action="CAST_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
                 <input type="hidden" name="choice" value="ABSTAIN">
-                <button class="px-3 py-1.5 rounded bg-slate-400 text-white text-sm">Abstain</button>
+                <button class="px-3.5 py-2 rounded-xl bg-slate-400 hover:bg-slate-500 text-white font-semibold shadow-sm text-sm"
+        data-log-action="CLICK_CAST_EARLY_VOTE_ABSTAIN"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Abstain from the consensus check. Abstentions are recorded but not counted as Yes or No."
+        data-hint-side="right">Abstain</button>
             </form>
             {% else %}
             <p class="text-xs text-slate-400">
@@ -98,11 +954,18 @@
             {% if IS_PRESIDENT or IS_CHAIR %}
             {% if early_vote.is_open %}
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/close">
-                <button class="px-3 py-1.5 rounded bg-slate-700 text-white text-xs">Close</button>
+              <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm text-xs"
+              data-hint="Close the early consensus check and calculate whether consensus was reached."
+              data-hint-side="right">Close</button>
             </form>
             {% else %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/open">
-                <button class="px-3 py-1.5 rounded bg-slate-800 text-white text-xs">Open</button>
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/open"
+            data-log-action="OPEN_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+            <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm text-xs"
+            data-hint="Open the early consensus check so members can vote Yes, No, or Abstain."
+            data-hint-side="right">Open</button>
             </form>
             {% endif %}
             {% endif %}
@@ -138,7 +1001,7 @@
         </section>
 
       {% if amendment_cards and amendment_cards|length > 0 %}
-      <section class="mt-5 border-t pt-4">
+      <section class="pf-vote-section mt-5">
         <h3 class="font-semibold">Amendments</h3>
         <p class="text-xs text-slate-500">
           Adopted by consensus if no “No” votes. (Abstentions not counted.)
@@ -147,70 +1010,54 @@
         <div class="mt-3 space-y-4">
           {% for card in amendment_cards %}
             {% set am = card.am %}
-            {% set st = card.vote_state %}
-            {% set HAS_VOTED = card.HAS_VOTED %}
+            {% set v = card.vote_summary %}
 
-            <div class="border rounded p-3">
+            <div class="pf-amendment-card p-3">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <div class="font-semibold">{{ am.label }}</div>
                   <div class="text-xs text-slate-500">#{{ am.am_no }}</div>
                 </div>
                 <span class="text-xs text-slate-500">
-                  {{ 'open' if st.is_open else 'closed' }}
+                  {{ v.kind or 'No vote yet' }}
+                  {% if v.exists %}
+                    — {{ 'open' if v.is_open else 'closed' }}
+                  {% endif %}
                 </span>
               </div>
 
               <div class="mt-2 text-sm whitespace-pre-wrap">{{ am.body_markdown }}</div>
 
               <div class="mt-3 flex flex-wrap gap-2 items-center">
-                {% if st.is_open and not HAS_VOTED %}
-                  <form method="post" action="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}/vote">
-                    <input type="hidden" name="choice" value="YES">
-                    <button class="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm">Yes</button>
-                  </form>
-                  <form method="post" action="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}/vote">
-                    <input type="hidden" name="choice" value="NO">
-                    <button class="px-3 py-1.5 rounded bg-rose-600 text-white text-sm">No</button>
-                  </form>
-                  <form method="post" action="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}/vote">
-                    <input type="hidden" name="choice" value="ABSTAIN">
-                    <button class="px-3 py-1.5 rounded bg-slate-400 text-white text-sm">Abstain</button>
-                  </form>
-                {% else %}
-                  <p class="text-xs text-slate-400">
-                    {% if not st.is_open %}
-                      Voting is closed.
-                    {% elif HAS_VOTED %}
-                      You have already voted.
-                    {% endif %}
-                  </p>
-                {% endif %}
-
-                {% if IS_PRESIDENT or IS_CHAIR %}
-                  {% if st.is_open %}
-                    <form method="post" action="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}/vote/close">
-                      <button class="px-3 py-1.5 rounded bg-slate-700 text-white text-xs">Close</button>
-                    </form>
-                  {% else %}
-                    <form method="post" action="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}/vote/open">
-                      <button class="px-3 py-1.5 rounded bg-slate-800 text-white text-xs">Open</button>
-                    </form>
-                  {% endif %}
-                {% endif %}
+                <a
+  class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm text-sm"
+  href="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}"
+  data-hint="Open this amendment's discussion and voting page."
+  data-hint-side="right"
+>
+  View amendment floor / vote
+</a>
               </div>
 
               <div class="mt-2 text-sm text-slate-700">
-                <strong>{{ st.yes }}</strong> Yes •
-                <strong>{{ st.no }}</strong> No •
-                <strong>{{ st.abstain }}</strong> Abstain
-                {% if not st.is_open %}
+                {% if v.exists %}
+                  <strong>{{ v.yes }}</strong> Yes •
+                  <strong>{{ v.no }}</strong> No •
+                  <strong>{{ v.abstain }}</strong> Abstain
+              
                   <span class="text-xs text-slate-500">• Result:</span>
-                  {% if st.yes > st.no %}
-                    <span class="text-emerald-700 font-medium">Adopted</span>
+              
+                  {% if 'Adopted' in v.result %}
+                    <span class="text-emerald-700 font-medium">{{ v.result }}</span>
+                  {% elif 'Rejected' in v.result %}
+                    <span class="text-rose-700 font-medium">{{ v.result }}</span>
+                  {% elif v.result == 'Voting open' %}
+                    <span class="text-blue-700 font-medium">{{ v.result }}</span>
                   {% else %}
-                    <span class="text-slate-600">Rejected</span>
+                    <span class="text-slate-600">{{ v.result }}</span>
                   {% endif %}
+                {% else %}
+                  <span class="text-slate-500">No vote has been opened for this amendment yet.</span>
                 {% endif %}
               </div>
             </div>
@@ -222,7 +1069,7 @@
       <!-- Formal voting -->
       {% set formal_locked = HAS_FORMAL_VOTED or (formal_vote and not formal_vote.is_open) %}
       {% if not early_done %}
-      <section class="mt-5 border-t pt-4">
+      <section class="pf-vote-section mt-5">
         <h3 class="font-semibold">Formal voting</h3>
         <p class="text-xs text-slate-500">
           Simple majority of Yes vs No. Ties rejected. Abstentions are not counted.
@@ -231,31 +1078,55 @@
 
           {% if (not formal_locked) and (formal_vote.is_open) %}
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote">
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          data-log-action="CAST_FORMAL_VOTE"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
             <input type="hidden" name="choice" value="YES">
             <button
-              class="px-3 py-1.5 rounded bg-emerald-600 text-white {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
-            >
-              Yes
-            </button>
+  class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
+  data-log-action="CLICK_CAST_FORMAL_VOTE_YES"
+  data-target-type="{{ KIND }}"
+  data-target-id="{{ ITEM_ID }}"
+  data-hint="Vote Yes in the formal vote. Formal voting uses Yes versus No majority."
+  data-hint-side="right"
+>
+  Yes
+</button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote">
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          data-log-action="CAST_FORMAL_VOTE"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
             <input type="hidden" name="choice" value="NO">
             <button
-              class="px-3 py-1.5 rounded bg-rose-600 text-white {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
-            >
-              No
-            </button>
+  class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
+  data-log-action="CLICK_CAST_FORMAL_VOTE_NO"
+  data-target-type="{{ KIND }}"
+  data-target-id="{{ ITEM_ID }}"
+  data-hint="Vote No in the formal vote. If No votes are greater than or equal to Yes votes, the item is rejected."
+  data-hint-side="right"
+>
+  No
+</button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote">
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          data-log-action="CAST_FORMAL_VOTE"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
             <input type="hidden" name="choice" value="ABSTAIN">
             <button
-              class="px-3 py-1.5 rounded bg-slate-500 text-white {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
-            >
-              Abstain
-            </button>
+  class="px-3.5 py-2 rounded-xl bg-slate-500 hover:bg-slate-600 text-white font-semibold shadow-sm {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
+  data-log-action="CLICK_CAST_FORMAL_VOTE_ABSTAIN"
+  data-target-type="{{ KIND }}"
+  data-target-id="{{ ITEM_ID }}"
+  data-hint="Abstain from the formal vote. Abstentions are recorded but not counted in Yes versus No."
+  data-hint-side="right"
+>
+  Abstain
+</button>
           </form>
 
           {% else %}
@@ -273,11 +1144,18 @@
           {% if IS_PRESIDENT or IS_CHAIR %}
             {% if formal_vote.is_open %}
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/close">
-              <button class="px-3 py-1.5 rounded bg-slate-700 text-white">Close</button>
+              <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm"
+        data-hint="Close the formal vote and calculate the final Yes versus No result."
+        data-hint-side="right">Close</button>
             </form>
             {% else %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/open">
-              <button class="px-3 py-1.5 rounded bg-slate-800 text-white">Open</button>
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/open"
+            data-log-action="OPEN_FORMAL_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+            <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm"
+            data-hint="Open formal voting for this draft or amendment."
+            data-hint-side="right">Open</button>
             </form>
             {% endif %}
           {% endif %}
@@ -309,10 +1187,18 @@
       {% endif %}
 
       {% if (IS_PRESIDENT or IS_CHAIR) and (early_done or formal_locked) %}
-      <section class="mt-5 border-t pt-4">
+      <section class="pf-vote-section mt-5">
         {% if IS_PRESIDENT or IS_CHAIR %}
-          <form class="mt-3" method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/close_discussion">
-            <button class="px-3 py-1.5 rounded bg-black text-white">Close discussion</button>
+          <form class="mt-3" method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/close_discussion"
+          data-log-action="CLOSE_PFLOOR_DISCUSSION"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
+          <button class="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-black text-white font-semibold shadow-sm"
+          data-log-action="CLICK_CLOSE_PFLOOR_DISCUSSION"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}"
+          data-hint="End the proposal floor discussion after voting has finished."
+          data-hint-side="right">Close discussion</button>
           </form>
         {% endif %}
       </section>
@@ -321,89 +1207,202 @@
   </aside>
 
   <!-- MIDDLE: Interventions (optional thread area for intros/general comments) -->
-  <main class="md:col-span-6 flex flex-col overflow-y-auto pb-28">
-    <section class="bg-white border rounded p-4">
-      <h3 class="font-semibold">Floor discussion</h3>
-      <div class="text-slate-500 text-sm">
+  <main class="pf-main-chat md:col-span-6 flex flex-col gap-4 min-w-0 px-0 md:px-1">
+    <section class="pf-card p-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="pf-kicker mb-2">Discussion</div>
+          <h3 class="text-2xl font-extrabold tracking-tight text-slate-950">Proposal Floor</h3>
+          <div class="text-slate-500 text-sm mt-1">
         {% if mode == 'AMENDMENT' %}
           Discussing amendment {{ amendment.label }}
         {% else %}
           Discussing draft {{ draft.l_number or '(unassigned)' }}
         {% endif %}
+          </div>
+        </div>
+        <div class="hidden sm:flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 text-xl">💬</div>
       </div>
     </section>
 
-    <section class="bg-white border rounded-md">
+    <section class="pf-card pf-thread-shell">
       <div id="interventions"
-       data-list-url="/events/{{ event.id }}/proposal-floor/{{ 'draft' if mode=='DRAFT' else 'amendment' }}/{{ (draft.id if mode=='DRAFT' else amendment.id) }}/interventions/fragment"
-       data-head-url="/events/{{ event.id }}/proposal-floor/{{ 'draft' if mode=='DRAFT' else 'amendment' }}/{{ (draft.id if mode=='DRAFT' else amendment.id) }}/interventions/head">
-            <div class="p-4 text-slate-500">Loading discussion…</div>
-        </div>
+     class="pf-scroll"
+     data-list-url="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions/fragment"
+     data-head-url="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions/head">
+  <div class="p-8 text-center text-slate-500"><div class="text-3xl mb-2">💬</div><div class="font-medium text-slate-700">Loading discussion…</div></div>
+</div>
     </section>
   </main>
 
   <!-- RIGHT: Speakers / controls -->
-  <aside class="md:col-span-3 flex flex-col space-y-4 overflow-y-auto pb-28">
-    <section class="bg-white border rounded p-4 w-full max-w-full">
-      <div class="flex items-center justify-between">
-        <h3 class="font-semibold">Speakers</h3>
-        <span id="floor-open-badge" class="px-2 py-1 rounded bg-slate-200 text-slate-600 text-sm truncate max-w-[50%]">Loading...</span>
+  <aside class="pf-right-panel {% if IS_PRESIDENT or IS_CHAIR %}pf-right-admin{% else %}pf-right-member{% endif %} md:col-span-3 flex flex-col gap-4 md:h-full min-h-0 pl-1">
+    <section class="pf-card p-4 w-full max-w-full pf-right-speakers">
+      <div class="flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <div class="pf-kicker mb-2">Queue</div>
+          <h3 class="pf-panel-title">Speakers</h3>
+        </div>
+        <span id="floor-open-badge" class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold truncate max-w-[50%]">Loading...</span>
       </div>
 
       <!-- Queue brief -->
-      <div id="queue-brief" class="mt-3 text-sm flex flex-wrap gap-3 text-slate-700 w-full max-w-full">
-        <span id="qb-now"    class="px-2 py-1 rounded bg-slate-100 truncate"></span>
-        <span id="qb-ahead"  class="px-2 py-1 rounded bg-slate-100 truncate"></span>
-        <span id="qb-left"   class="px-2 py-1 rounded bg-slate-100 truncate"></span>
+      <div id="queue-brief" class="mt-4 text-sm flex flex-wrap gap-2 text-slate-700 w-full max-w-full shrink-0">
+        <span id="qb-now"    class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
+        <span id="qb-ahead"  class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
+        <span id="qb-left"   class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
       </div>
 
       <!-- Request / Withdraw -->
-      <div class="mt-3 flex flex-wrap gap-2 items-center w-full max-w-full">
-        <form id="btn-request-floor" method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/register" class="hidden w-full sm:w-auto">
+      <div class="pf-speaker-actions pf-scroll mt-3 flex flex-wrap gap-2 items-center w-full max-w-full">
+        <form id="btn-request-floor"
+              method="post"
+              action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/register"
+              class="hidden w-full sm:w-auto"
+              data-log-action="PFLOOR_REGISTER_SPEAKER"
+              data-target-type="{{ KIND }}"
+              data-target-id="{{ ITEM_ID }}">
           <input type="hidden" name="kind_req" value="GENERAL">
-          <button class="px-3 py-1.5 bg-blue-600 text-white rounded w-full sm:w-auto">Request the floor</button>
+          <button class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+        data-log-action="CLICK_PFLOOR_REGISTER_SPEAKER"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Join the speaker queue. The chair will recognize you when it is your turn."
+        data-hint-side="left">Request the floor</button>
         </form>
 
-        <form id="btn-withdraw" method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/withdraw" class="hidden w-full sm:w-auto">
-          <button class="px-3 py-1.5 bg-slate-700 text-white rounded w-full sm:w-auto">Withdraw request</button>
+        <form
+          id="btn-withdraw"
+          method="post"
+          action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/withdraw"
+          class="hidden w-full sm:w-auto"
+          data-log-action="PFLOOR_WITHDRAW_REQUEST"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}"
+        >
+        <button
+        class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+        data-log-action="CLICK_PFLOOR_WITHDRAW_REQUEST"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Remove yourself from the speaker queue before you are called."
+        data-hint-side="left"
+      >
+        Withdraw request
+      </button>
         </form>
 
         {% if IS_PRESIDENT or IS_CHAIR %}
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/toggle" class="w-full sm:w-auto">
-            <button class="px-3 py-1.5 {{ 'bg-amber-600' if pfloor.is_open else 'bg-emerald-700' }} text-white rounded w-full sm:w-auto">
-              {{ 'Close list' if pfloor.is_open else 'Open list' }}
-            </button>
+        <form
+            method="post"
+            action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/toggle"
+            class="w-full sm:w-auto"
+            data-log-action="PFLOOR_TOGGLE_SPEAKER_LIST"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}"
+          >
+          <button class="px-3 py-1.5 {{ 'bg-amber-600' if pfloor.is_open else 'bg-emerald-700' }} text-white rounded w-full sm:w-auto"
+          data-hint="{{ 'Stop new speaker requests. Existing queued speakers stay in the queue.' if pfloor.is_open else 'Allow members to request the floor and join the speaker queue.' }}"
+          data-hint-side="left">
+    {{ 'Close list' if pfloor.is_open else 'Open list' }}
+  </button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/call_next" id="form-call-next" style="display:none" class="w-full sm:w-auto">
-            <button id="btn-call-next" class="px-3 py-1.5 bg-indigo-600 text-white rounded w-full sm:w-auto">Call next speaker</button>
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/call_next" id="form-call-next" style="display:none" class="w-full sm:w-auto"
+                data-log-action="PFLOOR_CALL_NEXT"
+                data-target-type="{{ KIND }}"
+                data-target-id="{{ ITEM_ID }}">
+                <button id="btn-call-next"
+                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+                data-log-action="CLICK_PFLOOR_CALL_NEXT"
+                data-target-type="{{ KIND }}"
+                data-target-id="{{ ITEM_ID }}"
+                data-hint="Recognize the next queued speaker and give them the floor."
+                data-hint-side="left">Call next speaker</button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/finish_current" id="form-finish-current" style="display:none" class="w-full sm:w-auto">
-            <button id="btn-finish-current" class="px-3 py-1.5 bg-rose-600 text-white rounded w-full sm:w-auto">Finish current</button>
+          <form
+            method="post"
+            action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/finish_current"
+            id="form-finish-current"
+            style="display:none"
+            class="w-full sm:w-auto"
+            data-log-action="PFLOOR_FINISH_CURRENT"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}"
+          >
+          <button
+          id="btn-finish-current"
+          class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+          data-log-action="CLICK_PFLOOR_FINISH_CURRENT"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}"
+          data-hint="End the current speaker’s turn so the next person can be called."
+          data-hint-side="left"
+        >
+          Finish current
+        </button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/take_now" class="flex items-center gap-2 w-full max-w-full">
-            <input name="message" class="flex-1 min-w-0 border px-2 py-1 rounded text-sm" placeholder="Announcement to everyone">
-            <button class="px-3 py-1.5 bg-black text-white rounded w-full sm:w-auto">Announcement</button>
+          <form
+            method="post"
+            action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/take_now"
+            class="flex items-center gap-2 w-full max-w-full"
+            data-log-action="PFLOOR_ANNOUNCEMENT"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}"
+          >
+            <input name="message"
+       class="flex-1 min-w-0 border px-3 py-2 rounded-xl text-sm"
+       placeholder="Announcement to everyone"
+       data-hint="Write a short message that will be posted as an announcement."
+       data-hint-side="left">
+
+<button class="px-3.5 py-2 bg-slate-950 hover:bg-black text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+        data-hint="Send this announcement to everyone on the proposal floor."
+        data-hint-side="left">Announcement</button>
           </form>
 
 
       <!-- Admin queue UI -->
           <div class="mt-4 space-y-3 w-full max-w-full" id="admin-queue-ui">
-            <div id="admin-now" class="text-sm px-2 py-1 inline-block rounded bg-emerald-100 text-emerald-700 max-w-full truncate"></div>
+            <div id="admin-now" class="text-sm px-2.5 py-1 inline-block rounded-full bg-emerald-100 text-emerald-700 max-w-full truncate font-semibold"></div>
             <div class="flex gap-2 text-xs">
-              <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="ALL">All</button>
-              <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="QUEUED">Queued</button>
-              <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="DONE">Done</button>
-              <button type="button" class="ml-auto px-2 py-1 rounded bg-slate-100" id="toggle-compact">Compact</button>
+              <button type="button"
+        class="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
+        data-filter="ALL"
+        data-hint="Show all speaker requests."
+        data-hint-side="top">All</button>
+
+<button type="button"
+        class="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
+        data-filter="QUEUED"
+        data-hint="Show only members still waiting to speak."
+        data-hint-side="top">Queued</button>
+
+<button type="button"
+        class="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
+        data-filter="DONE"
+        data-hint="Show completed or withdrawn speaker requests."
+        data-hint-side="top">Done</button>
+
+<button type="button"
+        class="ml-auto px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
+        id="toggle-compact"
+        data-hint="Switch the queue table to a denser view."
+        data-hint-side="top">Compact</button>
             </div>
-            <div id="admin-nextup" class="border rounded w-full overflow-x-auto">
-              <div class="px-3 py-2 text-xs text-slate-500 border-b">Next up</div>
+            <div id="admin-nextup" class="border border-slate-200 rounded-2xl w-full overflow-x-auto">
+              <div class="px-3 py-2 text-xs font-semibold text-slate-500 border-b bg-slate-50/70">Next up</div>
               <table class="w-full min-w-full text-sm table-auto" id="table-nextup">
                 <tbody class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words"></tbody>
               </table>
-              <button type="button" class="w-full text-sm px-3 py-2 text-blue-700 hover:underline" id="btn-more" hidden>Show more…</button>
+              <button type="button"
+        class="w-full text-sm px-3 py-2 text-blue-700 hover:underline"
+        id="btn-more"
+        data-hint="Reveal more people in the speaker queue."
+        data-hint-side="top"
+        hidden>Show more…</button>
             </div>
 
             <details class="mt-4">
@@ -428,7 +1427,7 @@
     </section>
 
     <!-- Speaking field (privileged can always post) -->
-    <section class="bg-white border rounded p-4">
+    <section class="pf-card p-4 pf-right-composer">
         <div id="recognized-banner" class="mb-2 text-sm text-emerald-700 hidden">
             🔔 You've been recognized: you have the floor.
         </div>
@@ -437,17 +1436,30 @@
         <form id="composer-box"
                 method="post"
                 action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions"
-                class="space-y-2 hidden">
+                class="space-y-2 hidden"
+                data-log-action="POST_PFLOOR_INTERVENTION"
+                data-target-type="{{ KIND }}"
+                data-target-id="{{ ITEM_ID }}">
             <div class="flex items-center gap-2">
             <input type="hidden" name="relates_to_id" id="relates_to_id">
             <span id="reply-chip" class="hidden text-xs px-2 py-1 rounded bg-slate-100 text-slate-700"></span>
             </div>
 
-            <textarea name="body" rows="3" placeholder="Share your view…" class="border p-2 rounded w-full" required></textarea>
+            <textarea name="body" rows="3" placeholder="Share your view…" class="border p-3 rounded-2xl w-full" required></textarea>
 
             <div class="flex items-center gap-2">
-            <button class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
-            <button type="button" class="text-slate-600 text-sm" onclick="clearReply()">Clear reply</button>
+              <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm"
+              data-log-action="CLICK_POST_PFLOOR_INTERVENTION"
+              data-target-type="{{ KIND }}"
+              data-target-id="{{ ITEM_ID }}"
+              data-hint="Publish your intervention to the proposal floor discussion."
+              data-hint-side="top">Post</button>
+      
+      <button type="button"
+              class="text-slate-600 text-sm"
+              onclick="clearReply()"
+              data-hint="Remove the selected reply target and post as a general intervention."
+              data-hint-side="top">Clear reply</button>
             </div>
         </form>
 
@@ -455,15 +1467,15 @@
             The floor is reserved for the current speaker. You can <strong>request the floor</strong> above.
         </div>
     </section>
-    <aside class="md:col-span-12 lg:col-span-2 lg:sticky lg:top-4 pb-28">
-      <div class="bg-white border rounded-lg shadow-sm">
-        <div class="px-3 py-2 border-b flex items-center justify-between">
-          <div class="text-sm font-semibold">Live summary</div>
+    <aside class="pf-live-summary shrink-0">
+      <div class="pf-card overflow-hidden">
+        <div class="px-4 py-3 border-b pf-divider flex items-center justify-between bg-slate-50/70">
+          <div class="pf-panel-title flex items-center gap-2"><span>✦</span><span>Live summary</span></div>
           <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
         </div>
         <div class="p-3">
           <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">Loading…</div>
-          <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-5 text-slate-800"></pre>
+          <pre id="liveSummaryBody" class="pf-scroll text-sm whitespace-pre-wrap leading-6 text-slate-700 font-sans"></pre>
         </div>
       </div>
     </aside>
@@ -520,6 +1532,7 @@
       })();
     </script>
   </aside>
+  </div>
 </div>
 
 <!-- Mini now-speaking chip -->
@@ -563,10 +1576,10 @@
       if (badge){
         if (data.is_open){
           badge.textContent = 'Open';
-          badge.className = 'px-2 py-1 rounded bg-emerald-100 text-emerald-700';
+          badge.className = 'px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold truncate max-w-[50%]';
         } else {
           badge.textContent = 'Closed';
-          badge.className = 'px-2 py-1 rounded bg-slate-200 text-slate-600';
+          badge.className = 'px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold truncate max-w-[50%]';
         }
       }
 
@@ -944,6 +1957,12 @@
         // Focus composer
         const ta = document.querySelector('#composer-box textarea[name="body"]');
         if (ta) ta.focus();
+        if (window.floorLog) {
+          window.floorLog("PFLOOR_REPLY_TARGET_SELECTED", {
+            target_intervention_id: targetId || null,
+            target_label: label || null
+          });
+        }
       });
     });
   }
@@ -952,8 +1971,17 @@
   window.clearReply = function() {
     const inp = document.getElementById('relates_to_id');
     const chip = document.getElementById('reply-chip');
+
+    const oldValue = inp ? inp.value : "";
+
     if (inp) inp.value = '';
     if (chip) chip.classList.add('hidden');
+
+    if (window.floorLog) {
+      window.floorLog("PFLOOR_REPLY_TARGET_CLEARED", {
+        previous_target_intervention_id: oldValue || null
+      });
+    }
   };
 
   // Kick everything off
@@ -961,119 +1989,512 @@
 </script>
 
 <script>
-    document.addEventListener('click', (e) => {
-      // future: could handle delegated clicks if you add buttons
-    });
-    document.addEventListener('submit', async (e) => {
-      const f = e.target;
-      if (!f.classList.contains('js-ajax-invite')) return;
-      e.preventDefault();
-      const url = f.action + (f.action.includes('?') ? '&' : '?') + 'ajax=1';
-      const formData = new FormData(f);
-      const btn = f.querySelector('button');
-      const old = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Sending…';
-      try{
-        const res = await fetch(url, { method: 'POST', body: formData, credentials: 'include', headers: { 'Accept': 'application/json' } });
-        const data = await res.json();
-        if (data.ok) {
-          btn.textContent = 'Invited ✓';
-          // optional toast:
-          toast('Invitation sent.');
-          if (typeof refreshFloor === 'function') refreshFloor();
-          setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
-          f.reset();
-        } else {
-          btn.textContent = 'Error';
-          setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
-        }
-      } catch {
-        btn.textContent = 'Error';
-        setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
-      }
-    });
-    
-    function toast(msg){
-      let t = document.getElementById('toast');
-      if (!t) {
-        t = document.createElement('div');
-        t.id = 'toast';
-        t.className = 'fixed bottom-4 right-4 bg-black text-white text-sm px-3 py-2 rounded';
-        document.body.appendChild(t);
-      }
-      t.textContent = msg;
-      t.style.opacity = 1;
-      setTimeout(() => { t.style.opacity = 0; }, 2000);
+  window.FLOOR_INVITE_TYPES = ["INVITE_ROR", "INVITE_ROR_PFLOOR"];
+  
+  window.floorLog = function(action, details = {}) {
+    if (!window.sessionLog || typeof window.sessionLog.send !== "function") {
+      return;
     }
+  
+    window.sessionLog.send(action, Object.assign({
+      event_id: "{{ event.id }}",
+      phase: "proposal_floor",
+      target_type: "{{ KIND }}",
+      target_id: "{{ ITEM_ID }}",
+      kind: "{{ KIND }}",
+      item_id: "{{ ITEM_ID }}",
+      mode: "{{ mode }}",
+      proposal_id: "{{ proposal.id }}",
+      draft_id: "{{ draft.id }}",
+      amendment_id: "{% if mode == 'AMENDMENT' %}{{ amendment.id }}{% endif %}",
+      page_kind: "proposal_floor_item"
+    }, details || {}));
+  };
+  </script>
+
+<script>
+  document.addEventListener('submit', async (e) => {
+    const f = e.target;
+    if (!f.classList.contains('js-ajax-invite')) return;
+  
+    e.preventDefault();
+  
+    const url = f.action + (f.action.includes('?') ? '&' : '?') + 'ajax=1';
+    const formData = new FormData(f);
+    const btn = f.querySelector('button');
+    const old = btn ? btn.textContent : "";
+  
+    const toHandle = String(formData.get("to_handle") || "").trim().replace(/^@/, "");
+    const rorKind = String(formData.get("kind") || formData.get("ror_kind") || "ROR").trim();
+    const targetInterventionId = String(
+      formData.get("relates_to_id") ||
+      formData.get("target_intervention_id") ||
+      ""
+    ).trim();
+  
+    if (window.floorLog) {
+      window.floorLog("ROR_INVITE_REQUESTED", {
+        invite_scope: window.floorLogBase?.phase || null,
+        ror_kind: rorKind,
+        target_intervention_id: targetInterventionId || null,
+        to_handle: toHandle || null,
+        action_url: f.action
+      });
+    }
+  
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+    }
+  
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json'
+        }
+      });
+  
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (_) {
+        data = null;
+      }
+  
+      if (res.ok && data && data.ok) {
+        if (window.floorLog) {
+          window.floorLog("ROR_INVITE_CREATED_CLIENT", {
+            invite_id: data.invite_id || null,
+            invite_status: data.status || null,
+            ror_kind: rorKind,
+            target_intervention_id: targetInterventionId || null,
+            to_handle: toHandle || null
+          });
+        }
+  
+        if (btn) btn.textContent = 'Invited ✓';
+        if (typeof toast === 'function') toast('Invitation sent.');
+        if (typeof refreshFloor === 'function') refreshFloor();
+  
+        setTimeout(() => {
+          if (btn) {
+            btn.textContent = old;
+            btn.disabled = false;
+          }
+        }, 1200);
+  
+        f.reset();
+      } else {
+        if (window.floorLog) {
+          window.floorLog("ROR_INVITE_CREATE_FAILED", {
+            status_code: res.status,
+            ror_kind: rorKind,
+            target_intervention_id: targetInterventionId || null,
+            to_handle: toHandle || null,
+            error: data?.detail || data?.error || "Unknown error"
+          });
+        }
+  
+        if (btn) {
+          btn.textContent = 'Error';
+          setTimeout(() => {
+            btn.textContent = old;
+            btn.disabled = false;
+          }, 1200);
+        }
+      }
+    } catch (err) {
+      if (window.floorLog) {
+        window.floorLog("ROR_INVITE_CREATE_FAILED", {
+          ror_kind: rorKind,
+          target_intervention_id: targetInterventionId || null,
+          to_handle: toHandle || null,
+          error: err?.message || String(err)
+        });
+      }
+  
+      if (btn) {
+        btn.textContent = 'Error';
+        setTimeout(() => {
+          btn.textContent = old;
+          btn.disabled = false;
+        }, 1200);
+      }
+    }
+  });
+  
+  function toast(msg){
+    let t = document.getElementById('toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      t.className = 'fixed bottom-4 right-4 bg-slate-950 text-white text-sm px-4 py-3 rounded-2xl shadow-lg';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.opacity = 1;
+    setTimeout(() => { t.style.opacity = 0; }, 2000);
+  }
   </script>
 
 <script>
   let inviteHandlerAttached = false;
-
+  window.__shownRorInviteIds = window.__shownRorInviteIds || new Set();
+  
   async function pullNotifications(){
-    try{
-      const res = await fetch('/notifications/pull', { credentials: 'include' });
-      if(!res.ok) return;
+    try {
+      const res = await fetch('/notifications/pull', {
+        credentials: 'include'
+      });
+  
+      if (!res.ok) return;
+  
       const items = await res.json();
-
+  
       const box = document.getElementById('notif-box');
-      if(!box) return;
-
-      // Now show BOTH general-floor and proposal-floor RoR invites
+      if (!box) return;
+  
+      const allowedTypes = window.FLOOR_INVITE_TYPES || ["INVITE_ROR"];
+  
       const invites = items.filter(n =>
-        (n.type === 'INVITE_ROR' || n.type === 'INVITE_ROR_PFLOOR') &&
-        n.payload && n.payload.invite_id
-        );
-
-        box.innerHTML = invites.map(n => `
-        <div class="border rounded p-3 bg-white shadow">
-            <div class="text-sm">${n.message}</div>
-            <div class="mt-2 flex gap-2">
-            <button class="px-2 py-1 rounded bg-emerald-600 text-white text-sm js-invite-act"
-                    data-act="accept"
-                    data-iid="${n.payload.invite_id}">Accept</button>
-            <button class="px-2 py-1 rounded bg-rose-600 text-white text-sm js-invite-act"
-                    data-act="decline"
-                    data-iid="${n.payload.invite_id}">Decline</button>
+        allowedTypes.includes(n.type) &&
+        n.payload &&
+        n.payload.invite_id
+      );
+  
+      invites.forEach(n => {
+        const p = n.payload || {};
+        const inviteId = String(p.invite_id || "");
+  
+        if (!window.__shownRorInviteIds.has(inviteId)) {
+          window.__shownRorInviteIds.add(inviteId);
+  
+          if (window.floorLog) {
+            window.floorLog("ROR_INVITE_NOTIFICATION_SHOWN", {
+              notification_id: n.id || null,
+              notification_type: n.type || null,
+              invite_id: p.invite_id || null,
+              ror_kind: p.kind || null,
+              target_intervention_id: p.target_intervention_id || null,
+              question_id: p.question_id || null,
+              proposal_id: p.proposal_id || null,
+              pfloor: p.pfloor || null
+            });
+          }
+        }
+      });
+  
+      if (!invites.length) {
+        box.innerHTML = '';
+      } else {
+        box.innerHTML = invites.map(n => {
+          const p = n.payload || {};
+  
+          return `
+            <div class="pf-card p-3 bg-white shadow">
+              <div class="text-sm">${n.message}</div>
+  
+              <div class="mt-2 flex gap-2">
+                <button
+  class="px-2 py-1 rounded bg-emerald-600 text-white text-sm js-invite-act"
+  data-act="accept"
+  data-iid="${p.invite_id || ''}"
+  data-notification-id="${n.id || ''}"
+  data-notification-type="${n.type || ''}"
+  data-ror-kind="${p.kind || ''}"
+  data-target-intervention-id="${p.target_intervention_id || ''}"
+  data-hint="Accept this Right of Reply invitation and enter the speaker queue."
+  data-hint-side="left"
+>
+  Accept
+</button>
+  
+                <button
+  class="px-2 py-1 rounded bg-rose-600 text-white text-sm js-invite-act"
+  data-act="decline"
+  data-iid="${p.invite_id || ''}"
+  data-notification-id="${n.id || ''}"
+  data-notification-type="${n.type || ''}"
+  data-ror-kind="${p.kind || ''}"
+  data-target-intervention-id="${p.target_intervention_id || ''}"
+  data-hint="Decline this invitation. You will not be added to the queue."
+  data-hint-side="left"
+>
+  Decline
+</button>
+              </div>
+  
+              <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
             </div>
-            <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
-        </div>
-        `).join('');
-
-      // Bind once (delegated)
-      if (!inviteHandlerAttached){
+          `;
+        }).join('');
+      }
+  
+      if (!inviteHandlerAttached) {
         inviteHandlerAttached = true;
+  
         box.addEventListener('click', async (e) => {
           const btn = e.target.closest('.js-invite-act');
-          if(!btn) return;
+          if (!btn) return;
+  
           const iid = btn.dataset.iid;
           const act = btn.dataset.act;
+  
+          if (!iid || !act) return;
+  
           btn.disabled = true;
-
-          try{
+  
+          if (window.floorLog) {
+            window.floorLog("ROR_INVITE_RESPONSE_CLICKED", {
+              invite_id: iid,
+              response: act.toUpperCase(),
+              notification_id: btn.dataset.notificationId || null,
+              notification_type: btn.dataset.notificationType || null,
+              ror_kind: btn.dataset.rorKind || null,
+              target_intervention_id: btn.dataset.targetInterventionId || null
+            });
+          }
+  
+          try {
             const res = await fetch(`/invites/${iid}/${act}?ajax=1`, {
               method: 'POST',
               credentials: 'include'
             });
-            if (res.ok){
+  
+            if (res.ok) {
               btn.textContent = act === 'accept' ? 'Accepted ✓' : 'Declined ✓';
+  
+              if (window.floorLog) {
+                window.floorLog(
+                  act === "accept" ? "ROR_INVITE_ACCEPTED_CLIENT" : "ROR_INVITE_DECLINED_CLIENT",
+                  {
+                    invite_id: iid,
+                    response: act.toUpperCase(),
+                    notification_id: btn.dataset.notificationId || null,
+                    notification_type: btn.dataset.notificationType || null,
+                    ror_kind: btn.dataset.rorKind || null,
+                    target_intervention_id: btn.dataset.targetInterventionId || null
+                  }
+                );
+              }
+  
               setTimeout(pullNotifications, 600);
-              // Refresh queue after accept
-              if (act === 'accept' && typeof refreshFloor === 'function') refreshFloor();
+  
+              if (act === 'accept' && typeof refreshFloor === 'function') {
+                refreshFloor();
+              }
             } else {
               btn.textContent = 'Error';
+  
+              if (window.floorLog) {
+                window.floorLog("ROR_INVITE_RESPONSE_FAILED", {
+                  invite_id: iid,
+                  response: act.toUpperCase(),
+                  status_code: res.status,
+                  notification_id: btn.dataset.notificationId || null,
+                  notification_type: btn.dataset.notificationType || null
+                });
+              }
             }
-          } catch {
+          } catch (err) {
             btn.textContent = 'Error';
+  
+            if (window.floorLog) {
+              window.floorLog("ROR_INVITE_RESPONSE_FAILED", {
+                invite_id: iid,
+                response: act.toUpperCase(),
+                error: err?.message || String(err),
+                notification_id: btn.dataset.notificationId || null,
+                notification_type: btn.dataset.notificationType || null
+              });
+            }
           } finally {
-            setTimeout(() => { btn.disabled = false; }, 800);
+            setTimeout(() => {
+              btn.disabled = false;
+            }, 800);
           }
         });
       }
-    } catch(e){}
+    } catch(e) {}
   }
-
+  
   setInterval(pullNotifications, 5000);
   pullNotifications();
-</script>
+  </script>
+
+<script>
+  (() => {
+    if (window.__pfloorReplyToggleBound) return;
+    window.__pfloorReplyToggleBound = true;
+  
+    document.addEventListener("click", (event) => {
+      const btn = event.target.closest(".js-toggle-replies");
+      if (!btn) return;
+  
+      event.preventDefault();
+  
+      const targetId = btn.dataset.target;
+      if (!targetId) return;
+  
+      const replies = document.getElementById(targetId);
+      if (!replies) {
+        console.warn("Replies container not found:", targetId);
+        return;
+      }
+  
+      const isOpening = replies.classList.contains("hidden");
+  
+      replies.classList.toggle("hidden", !isOpening);
+      btn.setAttribute("aria-expanded", isOpening ? "true" : "false");
+  
+      const closedText = btn.querySelector("[data-closed]");
+      const openText = btn.querySelector("[data-open]");
+      const chevron = btn.querySelector("[data-chevron]");
+  
+      if (closedText) closedText.classList.toggle("hidden", isOpening);
+      if (openText) openText.classList.toggle("hidden", !isOpening);
+      if (chevron) chevron.classList.toggle("rotate-180", isOpening);
+    });
+  })();
+  </script>
+  <script>
+    (function proposalFriendlyHints() {
+      if (window.__proposalFriendlyHintsBound) return;
+      window.__proposalFriendlyHintsBound = true;
+  
+      const HINT_SELECTOR = "[data-hint]";
+      const PAD = 10;
+      const OFFSET = 10;
+  
+      let activeEl = null;
+      let tooltip = null;
+      let hideTimer = null;
+  
+      function ensureTooltip() {
+        if (tooltip) return tooltip;
+  
+        tooltip = document.createElement("div");
+        tooltip.id = "pf-friendly-hint";
+        tooltip.className = "pf-hint-tooltip";
+        tooltip.setAttribute("role", "tooltip");
+        document.body.appendChild(tooltip);
+  
+        return tooltip;
+      }
+  
+      function showFor(el) {
+        const text = (el.getAttribute("data-hint") || "").trim();
+        if (!text) return;
+  
+        clearTimeout(hideTimer);
+  
+        activeEl = el;
+  
+        const t = ensureTooltip();
+        t.textContent = text;
+        el.setAttribute("aria-describedby", t.id);
+  
+        t.classList.add("is-visible");
+  
+        requestAnimationFrame(() => {
+          positionTooltip(el);
+        });
+      }
+  
+      function hide() {
+        if (!tooltip) return;
+  
+        const old = activeEl;
+        activeEl = null;
+  
+        if (old && old.getAttribute("aria-describedby") === tooltip.id) {
+          old.removeAttribute("aria-describedby");
+        }
+  
+        tooltip.classList.remove("is-visible");
+      }
+  
+      function positionTooltip(el) {
+        if (!tooltip || !el) return;
+  
+        const side = el.getAttribute("data-hint-side") || "top";
+        const r = el.getBoundingClientRect();
+        const tr = tooltip.getBoundingClientRect();
+  
+        const centerX = r.left + r.width / 2;
+        const centerY = r.top + r.height / 2;
+  
+        let top;
+        let left;
+  
+        if (side === "bottom") {
+          top = r.bottom + OFFSET;
+          left = centerX - tr.width / 2;
+        } else if (side === "left") {
+          top = centerY - tr.height / 2;
+          left = r.left - tr.width - OFFSET;
+        } else if (side === "right") {
+          top = centerY - tr.height / 2;
+          left = r.right + OFFSET;
+        } else {
+          top = r.top - tr.height - OFFSET;
+          left = centerX - tr.width / 2;
+        }
+  
+        if (top < PAD) {
+          top = r.bottom + OFFSET;
+        }
+  
+        if (top + tr.height > window.innerHeight - PAD) {
+          top = Math.max(PAD, r.top - tr.height - OFFSET);
+        }
+  
+        left = Math.max(PAD, Math.min(left, window.innerWidth - tr.width - PAD));
+  
+        tooltip.style.top = `${Math.round(top)}px`;
+        tooltip.style.left = `${Math.round(left)}px`;
+      }
+  
+      document.addEventListener("pointerover", (e) => {
+        const el = e.target.closest(HINT_SELECTOR);
+        if (!el) return;
+        showFor(el);
+      });
+  
+      document.addEventListener("pointerout", (e) => {
+        const el = e.target.closest(HINT_SELECTOR);
+        if (!el || el !== activeEl) return;
+        if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+  
+        hideTimer = setTimeout(hide, 80);
+      });
+  
+      document.addEventListener("focusin", (e) => {
+        const el = e.target.closest(HINT_SELECTOR);
+        if (!el) return;
+        showFor(el);
+      });
+  
+      document.addEventListener("focusout", (e) => {
+        const el = e.target.closest(HINT_SELECTOR);
+        if (!el || el !== activeEl) return;
+        hide();
+      });
+  
+      window.addEventListener("scroll", () => {
+        if (activeEl) positionTooltip(activeEl);
+      }, true);
+  
+      window.addEventListener("resize", () => {
+        if (activeEl) positionTooltip(activeEl);
+      });
+  
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") hide();
+      });
+    })();
+  </script>
 {% endblock %}

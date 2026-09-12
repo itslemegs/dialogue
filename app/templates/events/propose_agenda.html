@@ -19,7 +19,7 @@
     </div>
   {% endif %}
 
-  <form method="post" action="/events/{{ event.id }}/propose-agenda" class="bg-white border rounded-2xl p-6 space-y-4">
+  <form method="post" action="/events/{{ event.id }}/propose-agenda" data-log-action="SUBMIT_AGENDA_PROPOSAL" data-target-type="event" data-target-id="{{ event.id }}" class="bg-white border rounded-2xl p-6 space-y-4">
     <div>
       <label for="title" class="block text-sm font-medium text-slate-700">Agenda title <span class="text-rose-500">*</span></label>
       <input id="title" name="title" required maxlength="160"
@@ -58,6 +58,9 @@
 
     <div class="pt-2">
       <button type="submit"
+              data-log-action="CLICK_SUBMIT_AGENDA_PROPOSAL"
+              data-target-type="event"
+              data-target-id="{{ event.id }}"
               class="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
         Submit proposal
       </button>

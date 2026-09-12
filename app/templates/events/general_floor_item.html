@@ -9,26 +9,502 @@
 {% set IS_PRESIDENT = flags.IS_PRESIDENT %}
 {% set IS_MEMBER = flags.IS_MEMBER %}
 
-<div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-start h-[calc(100vh-2rem)]">
+
+<style>
+  /* General Floor visual polish — behavior-safe: keeps all existing IDs/actions intact. */
+  .gf-page {
+    height: calc(100vh - 2rem);
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 28px;
+    background:
+      radial-gradient(circle at top left, rgba(99, 102, 241, 0.14), transparent 34rem),
+      radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.12), transparent 30rem),
+      linear-gradient(135deg, #f8fafc 0%, #ffffff 42%, #eef2ff 100%);
+  }
+
+  .gf-card {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 18px;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+    backdrop-filter: blur(10px);
+  }
+
+  .gf-card-soft {
+    background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.9));
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 18px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+  }
+
+  .gf-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, .55) transparent;
+  }
+
+  .gf-scroll::-webkit-scrollbar { width: 8px; }
+  .gf-scroll::-webkit-scrollbar-track { background: transparent; }
+  .gf-scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, .45);
+    border-radius: 999px;
+  }
+
+  .gf-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .gf-panel-title {
+    font-size: .95rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -.01em;
+  }
+
+  .gf-muted { color: #64748b; }
+
+  .gf-divider { border-color: rgba(226,232,240,.9); }
+
+  #queue-brief span,
+  #reply-chip,
+  #admin-now {
+    border: 1px solid rgba(226, 232, 240, .95);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.85);
+  }
+
+  #threads-container > li {
+    background: rgba(255, 255, 255, .72);
+    transition: background .18s ease, transform .18s ease;
+  }
+
+  #threads-container > li:hover {
+    background: rgba(248, 250, 252, .95);
+  }
+
+  #composer-box textarea,
+  input[name="message"],
+  input[name="to_handle"] {
+    border-color: #cbd5e1;
+    border-radius: 14px;
+    background: rgba(255,255,255,.95);
+    box-shadow: inset 0 1px 2px rgba(15,23,42,.04);
+  }
+
+  #composer-box textarea:focus,
+  input[name="message"]:focus,
+  input[name="to_handle"]:focus {
+    outline: none;
+    border-color: #818cf8;
+    box-shadow: 0 0 0 4px rgba(129, 140, 248, .18);
+  }
+
+  button {
+    transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease, background-color .15s ease;
+  }
+
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(15,23,42,.10);
+  }
+
+  button:disabled {
+    opacity: .65;
+    cursor: not-allowed;
+  }
+
+  #admin-nextup,
+  details table {
+    background: rgba(255,255,255,.72);
+  }
+
+  #table-nextup tr,
+  #speaker-history tr {
+    transition: background .15s ease;
+  }
+
+  #table-nextup tr:hover,
+  #speaker-history tr:hover {
+    background: #f8fafc;
+  }
+
+  #notif-box > div {
+    border-radius: 16px;
+    border: 1px solid rgba(226, 232, 240, .95);
+    box-shadow: 0 18px 45px rgba(15, 23, 42, .12);
+  }
+
+
+  /* Chat-like layout: the page is fixed height, only the message/thread area scrolls. */
+  .gf-layout,
+  .gf-main-chat,
+  .gf-sidebar {
+    min-height: 0;
+  }
+
+  .gf-main-chat {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .gf-thread-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #threads-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+  }
+
+  #threads-container,
+  #threads-container > li,
+  #threads-container article,
+  #threads-container div {
+    max-width: 100%;
+  }
+
+  #threads-container > li {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #threads-container pre,
+  #threads-container code,
+  #threads-container p,
+  #threads-container span {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  #threads-container img,
+  #threads-container video,
+  #threads-container iframe {
+    max-width: 100%;
+    height: auto;
+  }
+
+
+
+  /* Right panel: no full-sidebar scrolling. It fits the page height like a fixed chat side panel. */
+  .gf-right-panel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .gf-right-speakers {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .gf-speaker-actions {
+    flex: 1 1 auto;
+    min-height: 0;
+    align-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: .15rem;
+    margin-right: -.15rem;
+  }
+
+  .gf-right-composer {
+    flex: 0 0 auto;
+  }
+
+  /* Keep long admin tables from making the whole right panel look cut. */
+  #admin-nextup {
+    max-height: clamp(150px, 24vh, 260px);
+    overflow: auto;
+  }
+
+  details > div {
+    max-height: clamp(130px, 20vh, 220px);
+    overflow: auto;
+  }
+
+  @media (min-width: 768px) {
+    .gf-right-panel {
+      padding-bottom: .25rem;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .gf-page {
+      height: auto;
+      min-height: calc(100vh - 2rem);
+      overflow: visible;
+    }
+
+    .gf-main-chat {
+      height: min(75vh, 720px);
+    }
+  }
+
+    /* Role-aware General Floor right panel
+     - Members: compact queue box, no weird empty vertical space.
+     - Chair/President: roomy queue/control layout, similar to Proposal Floor. */
+
+     .gf-right-member .gf-right-speakers {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .gf-right-member .gf-speaker-actions {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+    padding-right: 0;
+    margin-right: 0;
+  }
+
+  .gf-right-member #queue-brief {
+    margin-top: .75rem;
+  }
+
+  .gf-right-member #current-speaker-line:empty {
+    display: none;
+  }
+
+  .gf-right-member .gf-right-composer {
+    flex: 0 0 auto;
+  }
+
+  .gf-right-admin .gf-right-speakers {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .gf-right-admin .gf-speaker-actions {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    align-content: normal;
+    gap: .55rem;
+    padding-right: 0;
+    margin-right: 0;
+  }
+
+  .gf-right-admin .gf-speaker-actions > form,
+  .gf-right-admin .gf-speaker-actions > #admin-queue-ui {
+    width: 100% !important;
+  }
+
+  .gf-right-admin .gf-speaker-actions > form button {
+    width: 100% !important;
+  }
+
+  .gf-right-admin .gf-speaker-actions > form[action*="/floor/take_now"] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .gf-right-admin .gf-speaker-actions > form[action*="/floor/take_now"] input {
+    width: 100%;
+  }
+
+  .gf-right-admin #admin-queue-ui {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-top: 1px solid rgba(226,232,240,.85);
+    padding-top: .75rem;
+    margin-top: .35rem;
+  }
+
+  .gf-right-admin #admin-queue-ui > .flex,
+  .gf-right-admin #admin-now {
+    flex: 0 0 auto;
+  }
+
+  .gf-right-admin #admin-nextup {
+    flex: 1 1 auto;
+    min-height: clamp(220px, 34vh, 480px);
+    max-height: none;
+    overflow: auto;
+  }
+
+  .gf-right-admin details {
+    flex: 0 0 auto;
+    min-height: 0;
+    margin-top: .65rem;
+  }
+
+  .gf-right-admin details > div {
+    max-height: clamp(120px, 18vh, 240px);
+    overflow: auto;
+  }
+
+  .gf-right-admin .gf-right-composer {
+    flex: 0 0 auto;
+  }
+
+  .gf-right-admin #composer-box textarea {
+    min-height: 72px;
+    max-height: 130px;
+  }
+
+  @media (min-width: 768px) {
+    .gf-page.gf-page-admin {
+      height: auto;
+      min-height: calc(100vh - 2rem);
+      overflow: visible;
+    }
+
+    .gf-page-admin .gf-layout {
+      height: auto;
+      min-height: calc(100vh - 4rem);
+      align-items: start;
+    }
+
+    .gf-page-admin .gf-sidebar,
+    .gf-page-admin .gf-main-chat {
+      height: calc(100vh - 4rem);
+      position: sticky;
+      top: 1rem;
+    }
+
+    .gf-page-admin .gf-right-admin.gf-right-panel {
+      height: auto;
+      min-height: calc(100vh - 4rem);
+      overflow: visible;
+      display: flex !important;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .gf-page-admin .gf-right-admin .gf-right-speakers {
+      flex: 0 0 auto;
+      height: auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .gf-page-admin .gf-right-admin .gf-speaker-actions {
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+
+    .gf-page-admin .gf-right-admin #admin-queue-ui {
+      flex: 0 0 auto;
+      overflow: visible;
+    }
+
+    .gf-page-admin .gf-right-admin #admin-nextup {
+      flex: 0 0 auto;
+      min-height: 0;
+      max-height: none;
+      overflow-x: auto;
+      overflow-y: visible;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .gf-right-panel {
+      height: auto;
+      overflow: visible;
+    }
+
+    .gf-right-admin .gf-speaker-actions,
+    .gf-right-member .gf-speaker-actions,
+    .gf-right-admin #admin-queue-ui {
+      overflow: visible;
+      display: flex;
+      flex-wrap: wrap;
+      flex-direction: row;
+    }
+
+    .gf-right-admin #admin-nextup,
+    .gf-right-admin details > div {
+      max-height: none;
+    }
+  }
+    /* Friendly hover/focus hints */
+  [data-hint] {
+    position: relative;
+  }
+
+  .gf-hint-tooltip {
+    position: fixed;
+    z-index: 9999;
+    max-width: min(280px, calc(100vw - 2rem));
+    padding: .6rem .75rem;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, .96);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 18px 45px rgba(15,23,42,.22);
+    font-size: .78rem;
+    line-height: 1.35;
+    text-align: left;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px) scale(.98);
+    transition: opacity .12s ease, transform .12s ease;
+  }
+
+  .gf-hint-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gf-hint-tooltip {
+      transition: none;
+    }
+  }
+</style>
+
+<div class="gf-page {% if IS_PRESIDENT or IS_CHAIR %}gf-page-admin{% else %}gf-page-member{% endif %} -mx-2 md:-mx-4 px-2 md:px-4 py-3 md:py-4">
+  <div class="gf-layout grid grid-cols-1 md:grid-cols-12 gap-4 xl:gap-5 items-stretch max-w-[1600px] mx-auto h-full min-h-0">
   <!-- LEFT -->
-  <aside class="md:col-span-3 flex flex-col space-y-4 overflow-y-auto">
+  <aside class="gf-sidebar md:col-span-3 flex flex-col gap-4 overflow-y-auto gf-scroll md:h-full md:max-h-none pr-1">
     <!-- Agenda Item -->
-    <section class="bg-white border rounded p-4">
-        <h2 class="text-xl font-bold mb-2">Agenda</h2>
-        <p class="text-lg break-words">{{ item.title }}</p>
+    <section class="gf-card p-4">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <span class="gf-kicker">Agenda</span>
+        </div>
+        <h2 class="text-xl font-extrabold tracking-tight text-slate-950 break-words">{{ item.title }}</h2>
   
-        <div class="mt-2 text-xs text-slate-500">
+        <div class="mt-3 text-xs text-slate-500 leading-relaxed">
           Proposed {{ item.created_at.strftime('%Y-%m-%d %H:%M UTC') }}
           • Proposer:
           {% if item.proposer %}{{ item.proposer.handle }}{% else %}<em>Anonymous</em>{% endif %}
-          {% if item.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ p.source_url }}">source</a>{% endif %}
+          {% if item.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ item.source_url }}">source</a>{% endif %}
         </div>
   
-        <div class="mt-3 whitespace-pre-wrap text-slate-800">{{ item.background }}</div>
+        <div class="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700 bg-slate-50/80 border border-slate-200 rounded-2xl p-3">{{ item.background }}</div>
   
         {% if points and points|length %}
         <div class="mt-4">
-          <span class="text-sm font-semibold">Decision points</span>
+          <span class="text-sm font-bold text-slate-800">Decision points</span>
           <ol class="list-decimal ml-6 space-y-1 mt-1">
             {% for pt in points %}<li>{{ pt }}</li>{% endfor %}
           </ol>
@@ -38,14 +514,14 @@
 
     <!-- Summary (TBD) -->
     <aside class="md:col-span-12 lg:col-span-2 lg:sticky lg:top-4 pb-28">
-      <div class="bg-white border rounded-lg shadow-sm">
-        <div class="px-3 py-2 border-b flex items-center justify-between">
-          <div class="text-sm font-semibold">Live summary</div>
+      <div class="gf-card overflow-hidden">
+        <div class="px-4 py-3 border-b gf-divider flex items-center justify-between bg-slate-50/70">
+          <div class="gf-panel-title flex items-center gap-2"><span>✦</span><span>Live summary</span></div>
           <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
         </div>
-        <div class="p-3">
+        <div class="p-4">
           <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">Loading…</div>
-          <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-5 text-slate-800"></pre>
+          <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-6 text-slate-700 font-sans"></pre>
         </div>
       </div>
     </aside>
@@ -85,101 +561,236 @@
   </aside>
 
   <!-- MIDDLE -->
-  <main class="md:col-span-6 flex flex-col overflow-y-auto">
+  <main class="gf-main-chat md:col-span-6 flex flex-col gap-4 min-w-0 px-0 md:px-1">
     <!-- Interventions header -->
-    <section class="bg-white border rounded p-4">
-      <h3 class="font-semibold">General Floor</h3>
-      <div class="text-slate-500 text-sm">Discussing this agenda item</div>
+    <section class="gf-card p-4">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="gf-kicker mb-2">Discussion</div>
+          <h3 class="text-2xl font-extrabold tracking-tight text-slate-950">General Floor</h3>
+          <div class="text-slate-500 text-sm mt-1">Discussing this agenda item</div>
+        </div>
+        <div class="hidden sm:flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 text-xl">💬</div>
+      </div>
     </section>
 
     <!-- Interventions list only -->
-    <section class="bg-white border rounded-md">
+    <section class="gf-card gf-thread-shell">
       <ul id="threads-container"
-          class="divide-y divide-slate-200"
+          class="divide-y divide-slate-200/80 gf-scroll"
           data-last-child-id="{{ last_child_id }}"
           data-last-any-id="{{ last_any_id }}">
         {% for R in threads %}
           {{ render_node(R, user_map, q, can_speak, user) }}
         {% else %}
-          <li class="p-4 text-slate-500">No interventions yet. Be the first to post.</li>
+          <li class="p-8 text-center text-slate-500"><div class="text-3xl mb-2">🗣️</div><div class="font-medium text-slate-700">No interventions yet.</div><div class="text-sm">Be the first to post.</div></li>
         {% endfor %}
       </ul>
     </section>
   </main>
 
   <!-- RIGHT -->
-  <aside class="md:col-span-3 flex flex-col space-y-4 overflow-y-auto">
+  <aside class="gf-right-panel {% if IS_PRESIDENT or IS_CHAIR %}gf-right-admin{% else %}gf-right-member{% endif %} md:col-span-3 flex flex-col gap-4 md:h-full min-h-0 pl-1">
     <!-- Speakers -->
-    <section class="bg-white border rounded p-4 w-full max-w-full">
-      <div class="flex items-center justify-between">
-        <h3 class="font-semibold">Speakers</h3>
-        <span id="floor-open-badge" class="px-2 py-1 rounded bg-slate-200 text-slate-600 text-sm truncate max-w-[50%]">Loading...</span>
+    <section class="gf-card p-4 w-full max-w-full gf-right-speakers">
+      <div class="flex items-center justify-between gap-3 shrink-0">
+        <div>
+          <div class="gf-kicker mb-2">Queue</div>
+          <h3 class="gf-panel-title">Speakers</h3>
+        </div>
+        <span id="floor-open-badge" class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold truncate max-w-[50%]">Loading...</span>
       </div>
 
       <!-- Queue brief -->
-      <div id="queue-brief" class="mt-3 text-sm flex flex-wrap gap-3 text-slate-700 w-full max-w-full">
-        <span id="qb-now"    class="px-2 py-1 rounded bg-slate-100 truncate"></span>
-        <span id="qb-ahead"  class="px-2 py-1 rounded bg-slate-100 truncate"></span>
-        <span id="qb-left"   class="px-2 py-1 rounded bg-slate-100 truncate"></span>
+      <div id="queue-brief" class="mt-4 text-sm flex flex-wrap gap-2 text-slate-700 w-full max-w-full shrink-0">
+        <span id="qb-now"    class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
+        <span id="qb-ahead"  class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
+        <span id="qb-left"   class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
       </div>
 
       <!-- Request / Withdraw -->
-      <div class="mt-3 flex flex-wrap gap-2 items-center w-full max-w-full">
-        <form id="btn-request-floor" method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/register" class="hidden w-full sm:w-auto">
+      <div class="gf-speaker-actions gf-scroll mt-3 flex flex-wrap gap-2 items-center w-full max-w-full">
+        <form id="btn-request-floor"
+              method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/register"
+              class="hidden w-full sm:w-auto"
+              data-log-action="GENERAL_FLOOR_REGISTER_SPEAKER"
+              data-target-type="agenda_proposal"
+              data-target-id="{{ proposal.id }}">
           <input type="hidden" name="kind" value="GENERAL">
-          <button class="px-3 py-1.5 bg-blue-600 text-white rounded w-full sm:w-auto">Request the floor</button>
+          <button class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+                  data-hint="Join the speaker queue. The chair will recognize you when it is your turn."
+                  data-hint-side="left"
+                  data-log-action="CLICK_GENERAL_FLOOR_REGISTER_SPEAKER"
+                  data-target-type="agenda_proposal"
+                  data-target-id="{{ proposal.id }}">Request the floor</button>
         </form>
 
-        <form id="btn-withdraw" method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/withdraw" class="hidden w-full sm:w-auto">
-          <button class="px-3 py-1.5 bg-slate-700 text-white rounded w-full sm:w-auto">Withdraw request</button>
+        <form
+          id="btn-withdraw"
+          method="post"
+          action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/withdraw"
+          class="hidden w-full sm:w-auto"
+          data-log-action="GENERAL_FLOOR_WITHDRAW_REQUEST"
+          data-target-type="agenda_proposal"
+          data-target-id="{{ proposal.id }}"
+        >
+        <button
+            class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+            data-hint="Remove yourself from the speaker queue before you are called."
+            data-hint-side="left"
+            data-log-action="CLICK_GENERAL_FLOOR_WITHDRAW_REQUEST"
+            data-target-type="agenda_proposal"
+            data-target-id="{{ proposal.id }}"
+          >
+            Withdraw request
+          </button>
         </form>
 
         {% if IS_PRESIDENT or IS_CHAIR %}
-          <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/invite_ror"
-                class="inline ml-2 js-ajax-invite w-full max-w-full">
+          <form
+            method="post"
+            action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/invite_ror"
+            class="inline ml-2 js-ajax-invite w-full max-w-full"
+            data-log-action="GENERAL_ROR_INVITE_SUBMIT"
+            data-target-type="agenda_proposal"
+            data-target-id="{{ proposal.id }}"
+          >
             <input type="hidden" name="relates_to_id" value="">
             <input type="hidden" name="kind" value="ROR_ALL">
-            <input name="to_handle" placeholder="@handle" class="border px-2 py-1 rounded text-sm" required>
-            <button class="ml-1 px-2 py-1 rounded text-sm bg-fuchsia-700 text-white whitespace-nowrap">Invite RoR (to all)</button>
+            <input name="to_handle"
+              placeholder="@handle"
+              class="border px-3 py-2 rounded-xl text-sm min-w-0 flex-1"
+              data-hint="Type the member handle you want to invite, for example alex (without the @)."
+              data-hint-side="left"
+              required>
+              <button
+              class="ml-1 px-3 py-2 rounded-xl text-sm bg-fuchsia-700 hover:bg-fuchsia-800 text-white whitespace-nowrap font-semibold shadow-sm"
+              data-hint="Invite this member to give a Right of Reply to the whole discussion."
+              data-hint-side="left"
+              data-log-action="CLICK_GENERAL_ROR_INVITE_TO_ALL"
+              data-target-type="agenda_proposal"
+              data-target-id="{{ proposal.id }}"
+            >
+              Invite RoR (to all)
+            </button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/toggle" class="w-full sm:w-auto">
-            <button class="px-3 py-1.5 {{ 'bg-amber-600' if floor.is_open else 'bg-emerald-700' }} text-white rounded w-full sm:w-auto">
+          <form
+              method="post"
+              action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/toggle"
+              class="w-full sm:w-auto"
+              data-log-action="GENERAL_FLOOR_TOGGLE_SPEAKER_LIST"
+              data-target-type="agenda_proposal"
+              data-target-id="{{ proposal.id }}"
+            >
+            <button class="px-3.5 py-2 {{ 'bg-amber-600 hover:bg-amber-700' if floor.is_open else 'bg-emerald-700 hover:bg-emerald-800' }} text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+        data-hint="{{ 'Stop new speaker requests. Existing queued speakers stay in the queue.' if floor.is_open else 'Allow members to request the floor and join the speaker queue.' }}"
+        data-hint-side="left">
               {{ 'Close list' if floor.is_open else 'Open list' }}
             </button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/call_next" id="form-call-next" style="display:none" class="w-full sm:w-auto">
-            <button id="btn-call-next" class="px-3 py-1.5 bg-indigo-600 text-white rounded w-full sm:w-auto">Call next speaker</button>
+          <form method="post"
+                action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/call_next"
+                id="form-call-next"
+                style="display:none"
+                class="w-full sm:w-auto"
+                data-log-action="GENERAL_FLOOR_CALL_NEXT"
+                data-target-type="agenda_proposal"
+                data-target-id="{{ proposal.id }}">
+                <button id="btn-call-next"
+                class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+                data-hint="Recognize the next queued speaker and give them the floor."
+                data-hint-side="left"
+                    data-log-action="CLICK_GENERAL_FLOOR_CALL_NEXT"
+                    data-target-type="agenda_proposal"
+                    data-target-id="{{ proposal.id }}">Call next speaker</button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/finish_current" id="form-finish-current" style="display:none" class="w-full sm:w-auto">
-            <button id="btn-finish-current" class="px-3 py-1.5 bg-rose-600 text-white rounded w-full sm:w-auto">Finish current</button>
+          <form
+            method="post"
+            action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/finish_current"
+            id="form-finish-current"
+            style="display:none"
+            class="w-full sm:w-auto"
+            data-log-action="GENERAL_FLOOR_FINISH_CURRENT"
+            data-target-type="agenda_proposal"
+            data-target-id="{{ proposal.id }}"
+          >
+          <button
+          id="btn-finish-current"
+          class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+          data-hint="End the current speaker turn so the next person can be called."
+          data-hint-side="left"
+              data-log-action="CLICK_GENERAL_FLOOR_FINISH_CURRENT"
+              data-target-type="agenda_proposal"
+              data-target-id="{{ proposal.id }}"
+            >
+              Finish current
+            </button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/take_now" class="flex items-center gap-2 w-full max-w-full">
-            <input name="message" class="flex-1 min-w-0 border px-2 py-1 rounded text-sm" placeholder="Announcement to everyone">
-            <button class="px-3 py-1.5 bg-black text-white rounded w-full sm:w-auto">Announcement</button>
+          <form
+            method="post"
+            action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/take_now"
+            class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full max-w-full"
+            data-log-action="GENERAL_FLOOR_ANNOUNCEMENT"
+            data-target-type="agenda_proposal"
+            data-target-id="{{ proposal.id }}"
+          >
+          <input name="message"
+          class="flex-1 min-w-0 border px-3 py-2 rounded-xl text-sm"
+          placeholder="Announcement to everyone"
+          data-hint="Write a short message that will be posted as an announcement."
+          data-hint-side="left">
+   
+   <button class="px-3.5 py-2 bg-slate-950 hover:bg-slate-800 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
+           data-hint="Send this announcement to everyone on the general floor."
+           data-hint-side="left">Announcement</button>
           </form>
 
           <!-- Admin queue UI -->
-          <div class="mt-4 space-y-3 w-full max-w-full" id="admin-queue-ui">
-            <div id="admin-now" class="text-sm px-2 py-1 inline-block rounded bg-emerald-100 text-emerald-700 max-w-full truncate"></div>
+          <div class="mt-5 space-y-3 w-full max-w-full" id="admin-queue-ui">
+            <div id="admin-now" class="text-sm px-3 py-2 inline-block rounded-xl bg-emerald-50 text-emerald-700 max-w-full truncate font-semibold"></div>
             <div class="flex gap-2 text-xs">
-              <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="ALL">All</button>
-              <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="QUEUED">Queued</button>
-              <button type="button" class="px-2 py-1 rounded bg-slate-100" data-filter="DONE">Done</button>
-              <button type="button" class="ml-auto px-2 py-1 rounded bg-slate-100" id="toggle-compact">Compact</button>
+              <button type="button"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
+        data-filter="ALL"
+        data-hint="Show all speaker requests."
+        data-hint-side="top">All</button>
+
+<button type="button"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
+        data-filter="QUEUED"
+        data-hint="Show only members still waiting to speak."
+        data-hint-side="top">Queued</button>
+
+<button type="button"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
+        data-filter="DONE"
+        data-hint="Show completed or withdrawn speaker requests."
+        data-hint-side="top">Done</button>
+
+<button type="button"
+        class="ml-auto px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
+        id="toggle-compact"
+        data-hint="Switch the queue table to a denser view."
+        data-hint-side="top">Compact</button>
             </div>
-            <div id="admin-nextup" class="border rounded w-full overflow-x-auto">
-              <div class="px-3 py-2 text-xs text-slate-500 border-b">Next up</div>
+            <div id="admin-nextup" class="border border-slate-200 rounded-2xl w-full overflow-x-auto">
+              <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b bg-slate-50/80">Next up</div>
               <table class="w-full min-w-full text-sm table-auto" id="table-nextup">
                 <tbody class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words"></tbody>
               </table>
-              <button type="button" class="w-full text-sm px-3 py-2 text-blue-700 hover:underline" id="btn-more" hidden>Show more…</button>
+              <button type="button"
+        class="w-full text-sm px-3 py-2 text-blue-700 hover:bg-blue-50 font-medium"
+        id="btn-more"
+        data-hint="Reveal more people in the speaker queue."
+        data-hint-side="top"
+        hidden>Show more…</button>
             </div>
 
-            <details class="mt-4">
+            <details class="mt-4 rounded-2xl bg-slate-50/70 border border-slate-200 p-3">
               <summary class="text-sm text-slate-500 cursor-pointer">History (DONE / WITHDRAWN)</summary>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-full text-sm mt-2 table-auto">
@@ -197,10 +808,10 @@
         {% endif %}
       </div>
 
-      <div id="current-speaker-line" class="mt-3 text-sm text-slate-700"></div>
+      <div id="current-speaker-line" class="mt-3 text-sm text-slate-700 font-medium shrink-0"></div>
 
       {% if floor.current_speaker_request_id %}
-      <div class="mt-3 text-sm text-slate-700">
+      <div class="mt-3 text-sm text-slate-700 shrink-0">
         Current speaker request ID: <span class="font-mono">{{ floor.current_speaker_request_id }}</span>
         • Time limit: {{ floor.speaking_time_sec }}s
       </div>
@@ -208,12 +819,18 @@
     </section>
 
     <!-- Speaking field -->
-    <section class="bg-white border rounded p-4">
-      <div id="recognized-banner" class="mb-2 text-sm text-emerald-700 hidden">
+    <section class="gf-card p-4 gf-right-composer">
+      <div id="recognized-banner" class="mb-3 text-sm text-emerald-700 hidden rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
         🔔 You've been recognized: you have the floor.
       </div>
 
-      <form id="composer-box" method="post" action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/interventions" class="space-y-2 hidden">
+      <form id="composer-box"
+            method="post"
+            action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/interventions"
+            class="space-y-2 hidden"
+            data-log-action="POST_GENERAL_FLOOR_INTERVENTION"
+            data-target-type="agenda_proposal"
+            data-target-id="{{ proposal.id }}">
         <div class="flex items-center gap-2">
           <!-- <select name="point_key" class="border p-2 rounded" required>
             {% for p in points %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
@@ -222,33 +839,134 @@
           <span id="reply-chip" class="hidden text-xs px-2 py-1 rounded bg-slate-100 text-slate-700"></span>
         </div>
 
-        <textarea name="body" rows="3" placeholder="Share your view…" class="border p-2 rounded w-full" required></textarea>
+        <textarea name="body" rows="3" placeholder="Share your view…" class="border p-3 rounded-2xl w-full min-h-28 resize-y" required></textarea>
 
         <div class="flex items-center gap-2">
-          <button class="px-4 py-2 bg-blue-600 text-white rounded">Post</button>
-          <button type="button" class="text-slate-600 text-sm" onclick="clearReply()">Clear reply</button>
+          <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm"
+        data-log-action="CLICK_POST_GENERAL_FLOOR_INTERVENTION"
+        data-target-type="agenda_proposal"
+        data-target-id="{{ proposal.id }}"
+        data-hint="Publish your intervention to the discussion thread."
+        data-hint-side="top">Post</button>
+
+<button type="button"
+        class="text-slate-600 text-sm"
+        onclick="clearReply()"
+        data-hint="Remove the selected reply target and post as a general intervention."
+        data-hint-side="top">Clear reply</button>
         </div>
 
-        <div class="text-xs text-emerald-700 mt-1">
+        <div class="text-xs text-emerald-700 mt-1 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
           You have the floor (time limit {{ floor.speaking_time_sec }}s).
         </div>
       </form>
 
-      <div id="composer-locked" class="text-sm text-slate-600">
+      <div id="composer-locked" class="text-sm text-slate-600 rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
         The floor is reserved for the current speaker. You can <strong>request the floor</strong> above.
       </div>
     </section>
   </aside>
+  </div>
 </div>
 
 <!-- Mini now-speaking chip -->
 <div id="now-playing"
-     class="hidden lg:flex items-center gap-3 fixed bottom-4 left-4 z-40 bg-black/80 text-white rounded-full px-4 py-2 shadow-lg backdrop-blur">
+     class="hidden lg:flex items-center gap-3 fixed bottom-4 left-4 z-40 bg-slate-950/85 text-white rounded-full px-4 py-2 shadow-2xl backdrop-blur border border-white/10">
   <div class="animate-pulse w-2 h-2 rounded-full bg-emerald-400"></div>
   <div id="np-text" class="text-sm">Now speaking: —</div>
 </div>
 
 <script defer src="/static/js/interventions-replies-toggle.js"></script>
+
+<script>
+  // General floor logging helper + reply target helpers
+  window.FLOOR_INVITE_TYPES = ["INVITE_ROR"];
+
+  window.floorLog = window.floorLog || function(action, details = {}) {
+    if (!window.sessionLog || typeof window.sessionLog.send !== "function") {
+      return;
+    }
+
+    window.sessionLog.send(action, Object.assign({
+      event_id: "{{ event.id }}",
+      phase: "general_floor",
+      target_type: "agenda_proposal",
+      target_id: "{{ proposal.id }}",
+      proposal_id: "{{ proposal.id }}",
+      agenda_proposal_id: "{{ item.proposal_id }}",
+      question_id: "{{ item.id }}",
+      page_kind: "general_floor_item"
+    }, details || {}));
+  };
+
+  window.wireReplyLinks = function() {
+    document.querySelectorAll("[data-reply-to]").forEach(el => {
+      if (el.__replyWired) return;
+      el.__replyWired = true;
+
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+
+        const targetId = el.getAttribute("data-reply-to");
+        const label = el.getAttribute("data-reply-label") || ("#" + targetId);
+
+        const inp = document.getElementById("relates_to_id");
+        const chip = document.getElementById("reply-chip");
+
+        if (inp) {
+          inp.value = targetId || "";
+        }
+
+        if (chip) {
+          chip.textContent = "Replying to " + label;
+          chip.classList.remove("hidden");
+        }
+
+        const ta = document.querySelector('#composer-box textarea[name="body"]');
+        if (ta) {
+          ta.focus();
+        }
+
+        if (window.floorLog) {
+          window.floorLog("GENERAL_REPLY_TARGET_SELECTED", {
+            target_intervention_id: targetId || null,
+            target_label: label || null
+          });
+        }
+      });
+    });
+  };
+
+  window.clearReply = function() {
+    const inp = document.getElementById("relates_to_id");
+    const chip = document.getElementById("reply-chip");
+
+    const oldValue = inp ? inp.value : "";
+
+    if (inp) {
+      inp.value = "";
+    }
+
+    if (chip) {
+      chip.textContent = "";
+      chip.classList.add("hidden");
+    }
+
+    if (window.floorLog) {
+      window.floorLog("GENERAL_REPLY_TARGET_CLEARED", {
+        previous_target_intervention_id: oldValue || null
+      });
+    }
+  };
+
+  // Wire the server-rendered threads on first page load.
+  document.addEventListener("DOMContentLoaded", () => {
+    window.wireReplyLinks();
+  });
+
+  // In case this script runs after DOMContentLoaded.
+  window.wireReplyLinks();
+</script>
 
 <script>
     const CURRENT_USER_ID = {{ user.id }};
@@ -264,10 +982,10 @@
         if (badge){
           if (data.is_open){
             badge.textContent = 'Open';
-            badge.className = 'px-2 py-1 rounded bg-emerald-100 text-emerald-700';
+            badge.className = 'px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold';
           } else {
             badge.textContent = 'Closed';
-            badge.className = 'px-2 py-1 rounded bg-slate-200 text-slate-600';
+            badge.className = 'px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold';
           }
         }
   
@@ -573,35 +1291,116 @@
   </script>
   
   <script>
-    document.addEventListener('click', (e) => {
-      // future: could handle delegated clicks if you add buttons
-    });
     document.addEventListener('submit', async (e) => {
       const f = e.target;
       if (!f.classList.contains('js-ajax-invite')) return;
+    
       e.preventDefault();
+    
       const url = f.action + (f.action.includes('?') ? '&' : '?') + 'ajax=1';
       const formData = new FormData(f);
       const btn = f.querySelector('button');
-      const old = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Sending…';
-      try{
-        const res = await fetch(url, { method: 'POST', body: formData, credentials: 'include', headers: { 'Accept': 'application/json' } });
-        const data = await res.json();
-        if (data.ok) {
-          btn.textContent = 'Invited ✓';
-          // optional toast:
-          toast('Invitation sent.');
+      const old = btn ? btn.textContent : "";
+    
+      const toHandle = String(formData.get("to_handle") || "").trim().replace(/^@/, "");
+      const rorKind = String(formData.get("kind") || formData.get("ror_kind") || "ROR").trim();
+      const targetInterventionId = String(
+        formData.get("relates_to_id") ||
+        formData.get("target_intervention_id") ||
+        ""
+      ).trim();
+    
+      if (window.floorLog) {
+        window.floorLog("ROR_INVITE_REQUESTED", {
+          invite_scope: window.floorLogBase?.phase || null,
+          ror_kind: rorKind,
+          target_intervention_id: targetInterventionId || null,
+          to_handle: toHandle || null,
+          action_url: f.action
+        });
+      }
+    
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Sending…';
+      }
+    
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+    
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {
+          data = null;
+        }
+    
+        if (res.ok && data && data.ok) {
+          if (window.floorLog) {
+            window.floorLog("ROR_INVITE_CREATED_CLIENT", {
+              invite_id: data.invite_id || null,
+              invite_status: data.status || null,
+              ror_kind: rorKind,
+              target_intervention_id: targetInterventionId || null,
+              to_handle: toHandle || null
+            });
+          }
+    
+          if (btn) btn.textContent = 'Invited ✓';
+          if (typeof toast === 'function') toast('Invitation sent.');
           if (typeof refreshFloor === 'function') refreshFloor();
-          setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+    
+          setTimeout(() => {
+            if (btn) {
+              btn.textContent = old;
+              btn.disabled = false;
+            }
+          }, 1200);
+    
           f.reset();
         } else {
-          btn.textContent = 'Error';
-          setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+          if (window.floorLog) {
+            window.floorLog("ROR_INVITE_CREATE_FAILED", {
+              status_code: res.status,
+              ror_kind: rorKind,
+              target_intervention_id: targetInterventionId || null,
+              to_handle: toHandle || null,
+              error: data?.detail || data?.error || "Unknown error"
+            });
+          }
+    
+          if (btn) {
+            btn.textContent = 'Error';
+            setTimeout(() => {
+              btn.textContent = old;
+              btn.disabled = false;
+            }, 1200);
+          }
         }
-      } catch {
-        btn.textContent = 'Error';
-        setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+      } catch (err) {
+        if (window.floorLog) {
+          window.floorLog("ROR_INVITE_CREATE_FAILED", {
+            ror_kind: rorKind,
+            target_intervention_id: targetInterventionId || null,
+            to_handle: toHandle || null,
+            error: err?.message || String(err)
+          });
+        }
+    
+        if (btn) {
+          btn.textContent = 'Error';
+          setTimeout(() => {
+            btn.textContent = old;
+            btn.disabled = false;
+          }, 1200);
+        }
       }
     });
     
@@ -610,14 +1409,14 @@
       if (!t) {
         t = document.createElement('div');
         t.id = 'toast';
-        t.className = 'fixed bottom-4 right-4 bg-black text-white text-sm px-3 py-2 rounded';
+        t.className = 'fixed bottom-4 right-4 bg-slate-950 text-white text-sm px-4 py-3 rounded-2xl shadow-2xl border border-white/10';
         document.body.appendChild(t);
       }
       t.textContent = msg;
       t.style.opacity = 1;
       setTimeout(() => { t.style.opacity = 0; }, 2000);
     }
-  </script>
+    </script>
   
   <script>
     async function maybeRefreshThreads(){
@@ -644,6 +1443,11 @@
           el.innerHTML = html;
           el.dataset.lastChildId = String(incChild);
           el.dataset.lastAnyId   = String(incAny);
+
+          if (typeof window.wireReplyLinks === "function") {
+            window.wireReplyLinks();
+          }
+
           window.scrollTo({ top, left: 0, behavior: 'instant' });
         }
       }catch(e){}
@@ -654,77 +1458,212 @@
   
   <!-- near the end of body in question_show.html (outside macros) -->
   <div id="notif-box" class="fixed bottom-4 right-4 w-80 space-y-2 z-50"></div>
+
+  <script>
+    window.FLOOR_INVITE_TYPES = ["INVITE_ROR"];
+    
+    window.floorLog = function(action, details = {}) {
+      if (!window.sessionLog || typeof window.sessionLog.send !== "function") {
+        return;
+      }
+    
+      window.sessionLog.send(action, Object.assign({
+        event_id: "{{ event.id }}",
+        phase: "general_floor",
+        target_type: "agenda_proposal",
+        target_id: "{{ proposal.id }}",
+        proposal_id: "{{ proposal.id }}",
+        agenda_proposal_id: "{{ item.proposal_id }}",
+        question_id: "{{ item.id }}",
+        page_kind: "general_floor_item"
+      }, details || {}));
+    };
+    </script>
   
   <script>
     let inviteHandlerAttached = false;
+    window.__shownRorInviteIds = window.__shownRorInviteIds || new Set();
     
     async function pullNotifications(){
-      try{
-        const res = await fetch('/notifications/pull', { credentials: 'include' });
-        if(!res.ok) return;
+      try {
+        const res = await fetch('/notifications/pull', {
+          credentials: 'include'
+        });
+    
+        if (!res.ok) return;
+    
         const items = await res.json();
     
         const box = document.getElementById('notif-box');
-        if(!box) return;
+        if (!box) return;
     
-        // Only render INVITE_ROR here; others are handled by base poller
-        const invites = items.filter(n => n.type === 'INVITE_ROR' && n.payload && n.payload.invite_id);
+        const allowedTypes = window.FLOOR_INVITE_TYPES || ["INVITE_ROR"];
     
-        if (!invites.length){
+        const invites = items.filter(n =>
+          allowedTypes.includes(n.type) &&
+          n.payload &&
+          n.payload.invite_id
+        );
+    
+        invites.forEach(n => {
+          const p = n.payload || {};
+          const inviteId = String(p.invite_id || "");
+    
+          if (!window.__shownRorInviteIds.has(inviteId)) {
+            window.__shownRorInviteIds.add(inviteId);
+    
+            if (window.floorLog) {
+              window.floorLog("ROR_INVITE_NOTIFICATION_SHOWN", {
+                notification_id: n.id || null,
+                notification_type: n.type || null,
+                invite_id: p.invite_id || null,
+                ror_kind: p.kind || null,
+                target_intervention_id: p.target_intervention_id || null,
+                question_id: p.question_id || null,
+                proposal_id: p.proposal_id || null,
+                pfloor: p.pfloor || null
+              });
+            }
+          }
+        });
+    
+        if (!invites.length) {
           box.innerHTML = '';
         } else {
-          box.innerHTML = invites.map(n => `
-            <div class="border rounded p-3 bg-white shadow">
-              <div class="text-sm">${n.message}</div>
-              <div class="mt-2 flex gap-2">
-                <button class="px-2 py-1 rounded bg-emerald-600 text-white text-sm js-invite-act"
-                        data-act="accept" data-iid="${n.payload.invite_id}">Accept</button>
-                <button class="px-2 py-1 rounded bg-rose-600 text-white text-sm js-invite-act"
-                        data-act="decline" data-iid="${n.payload.invite_id}">Decline</button>
+          box.innerHTML = invites.map(n => {
+            const p = n.payload || {};
+    
+            return `
+              <div class="border border-slate-200 rounded-2xl p-3 bg-white/95 shadow-2xl backdrop-blur">
+                <div class="text-sm">${n.message}</div>
+    
+                <div class="mt-2 flex gap-2">
+                  <button
+                    class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold js-invite-act"
+                    data-act="accept"
+                    data-iid="${p.invite_id || ''}"
+                    data-notification-id="${n.id || ''}"
+                    data-notification-type="${n.type || ''}"
+                    data-ror-kind="${p.kind || ''}"
+                    data-target-intervention-id="${p.target_intervention_id || ''}"
+                    data-hint="Accept this Right of Reply invitation and enter the speaker queue."
+                    data-hint-side="left"
+                  >
+                    Accept
+                  </button>
+    
+                  <button
+                    class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold js-invite-act"
+                    data-act="decline"
+                    data-iid="${p.invite_id || ''}"
+                    data-notification-id="${n.id || ''}"
+                    data-notification-type="${n.type || ''}"
+                    data-ror-kind="${p.kind || ''}"
+                    data-target-intervention-id="${p.target_intervention_id || ''}"
+                    data-hint="Decline this invitation. You will not be added to the queue."
+                    data-hint-side="left"
+                  >
+                    Decline
+                  </button>
+                </div>
+    
+                <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
               </div>
-              <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
-            </div>
-          `).join('');
+            `;
+          }).join('');
         }
     
-        // Bind once (delegated)
-        if (!inviteHandlerAttached){
+        if (!inviteHandlerAttached) {
           inviteHandlerAttached = true;
+    
           box.addEventListener('click', async (e) => {
             const btn = e.target.closest('.js-invite-act');
-            if(!btn) return;
+            if (!btn) return;
+    
             const iid = btn.dataset.iid;
             const act = btn.dataset.act;
+    
+            if (!iid || !act) return;
+    
             btn.disabled = true;
     
-            try{
+            if (window.floorLog) {
+              window.floorLog("ROR_INVITE_RESPONSE_CLICKED", {
+                invite_id: iid,
+                response: act.toUpperCase(),
+                notification_id: btn.dataset.notificationId || null,
+                notification_type: btn.dataset.notificationType || null,
+                ror_kind: btn.dataset.rorKind || null,
+                target_intervention_id: btn.dataset.targetInterventionId || null
+              });
+            }
+    
+            try {
               const res = await fetch(`/invites/${iid}/${act}?ajax=1`, {
                 method: 'POST',
                 credentials: 'include'
               });
-              if (res.ok){
+    
+              if (res.ok) {
                 btn.textContent = act === 'accept' ? 'Accepted ✓' : 'Declined ✓';
-                // Clear this invite card after a short delay
+    
+                if (window.floorLog) {
+                  window.floorLog(
+                    act === "accept" ? "ROR_INVITE_ACCEPTED_CLIENT" : "ROR_INVITE_DECLINED_CLIENT",
+                    {
+                      invite_id: iid,
+                      response: act.toUpperCase(),
+                      notification_id: btn.dataset.notificationId || null,
+                      notification_type: btn.dataset.notificationType || null,
+                      ror_kind: btn.dataset.rorKind || null,
+                      target_intervention_id: btn.dataset.targetInterventionId || null
+                    }
+                  );
+                }
+    
                 setTimeout(pullNotifications, 600);
-                // If accepted, refresh the floor view for both chair and user
-                if (act === 'accept' && typeof refreshFloor === 'function') refreshFloor();
+    
+                if (act === 'accept' && typeof refreshFloor === 'function') {
+                  refreshFloor();
+                }
               } else {
                 btn.textContent = 'Error';
+    
+                if (window.floorLog) {
+                  window.floorLog("ROR_INVITE_RESPONSE_FAILED", {
+                    invite_id: iid,
+                    response: act.toUpperCase(),
+                    status_code: res.status,
+                    notification_id: btn.dataset.notificationId || null,
+                    notification_type: btn.dataset.notificationType || null
+                  });
+                }
               }
-            } catch {
+            } catch (err) {
               btn.textContent = 'Error';
+    
+              if (window.floorLog) {
+                window.floorLog("ROR_INVITE_RESPONSE_FAILED", {
+                  invite_id: iid,
+                  response: act.toUpperCase(),
+                  error: err?.message || String(err),
+                  notification_id: btn.dataset.notificationId || null,
+                  notification_type: btn.dataset.notificationType || null
+                });
+              }
             } finally {
-              setTimeout(() => { btn.disabled = false; }, 800);
+              setTimeout(() => {
+                btn.disabled = false;
+              }, 800);
             }
           });
         }
-      } catch(e){}
+      } catch(e) {}
     }
     
-    // Poll alongside other updaters
     setInterval(pullNotifications, 5000);
     pullNotifications();
-  </script>
+    </script>
   
   <script>
     (function wirePrivilegedTakeFloor() {
@@ -780,5 +1719,141 @@
       });
     })();
   </script>
+
+<script>
+  (function friendlyHints() {
+    const HINT_SELECTOR = "[data-hint]";
+    const PAD = 10;
+    const OFFSET = 10;
+
+    let activeEl = null;
+    let tooltip = null;
+    let hideTimer = null;
+
+    function ensureTooltip() {
+      if (tooltip) return tooltip;
+
+      tooltip = document.createElement("div");
+      tooltip.id = "gf-friendly-hint";
+      tooltip.className = "gf-hint-tooltip";
+      tooltip.setAttribute("role", "tooltip");
+      document.body.appendChild(tooltip);
+
+      return tooltip;
+    }
+
+    function showFor(el) {
+      const text = (el.getAttribute("data-hint") || "").trim();
+      if (!text) return;
+
+      clearTimeout(hideTimer);
+
+      activeEl = el;
+
+      const t = ensureTooltip();
+      t.textContent = text;
+      el.setAttribute("aria-describedby", t.id);
+
+      t.classList.add("is-visible");
+
+      requestAnimationFrame(() => {
+        positionTooltip(el);
+      });
+    }
+
+    function hide() {
+      if (!tooltip) return;
+
+      const old = activeEl;
+      activeEl = null;
+
+      if (old && old.getAttribute("aria-describedby") === tooltip.id) {
+        old.removeAttribute("aria-describedby");
+      }
+
+      tooltip.classList.remove("is-visible");
+    }
+
+    function positionTooltip(el) {
+      if (!tooltip || !el) return;
+
+      const side = el.getAttribute("data-hint-side") || "top";
+      const r = el.getBoundingClientRect();
+      const tr = tooltip.getBoundingClientRect();
+
+      const centerX = r.left + r.width / 2;
+      const centerY = r.top + r.height / 2;
+
+      let top;
+      let left;
+
+      if (side === "bottom") {
+        top = r.bottom + OFFSET;
+        left = centerX - tr.width / 2;
+      } else if (side === "left") {
+        top = centerY - tr.height / 2;
+        left = r.left - tr.width - OFFSET;
+      } else if (side === "right") {
+        top = centerY - tr.height / 2;
+        left = r.right + OFFSET;
+      } else {
+        top = r.top - tr.height - OFFSET;
+        left = centerX - tr.width / 2;
+      }
+
+      // Auto-flip vertically if it would go off-screen
+      if (top < PAD) {
+        top = r.bottom + OFFSET;
+      }
+
+      if (top + tr.height > window.innerHeight - PAD) {
+        top = Math.max(PAD, r.top - tr.height - OFFSET);
+      }
+
+      left = Math.max(PAD, Math.min(left, window.innerWidth - tr.width - PAD));
+
+      tooltip.style.top = `${Math.round(top)}px`;
+      tooltip.style.left = `${Math.round(left)}px`;
+    }
+
+    document.addEventListener("pointerover", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el) return;
+      showFor(el);
+    });
+
+    document.addEventListener("pointerout", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el || el !== activeEl) return;
+      if (e.relatedTarget && el.contains(e.relatedTarget)) return;
+
+      hideTimer = setTimeout(hide, 80);
+    });
+
+    document.addEventListener("focusin", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el) return;
+      showFor(el);
+    });
+
+    document.addEventListener("focusout", (e) => {
+      const el = e.target.closest(HINT_SELECTOR);
+      if (!el || el !== activeEl) return;
+      hide();
+    });
+
+    window.addEventListener("scroll", () => {
+      if (activeEl) positionTooltip(activeEl);
+    }, true);
+
+    window.addEventListener("resize", () => {
+      if (activeEl) positionTooltip(activeEl);
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hide();
+    });
+  })();
+</script>
 
 {% endblock %}

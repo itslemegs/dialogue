@@ -15,7 +15,7 @@ load_dotenv(PROJECT_ROOT / ".env", override=True)
 class LocalChatClient:
     def __init__(self):
         self.base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-        self.model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+        self.model = os.getenv("OLLAMA_MODEL", "qwen2.5:0.5b")
         self.default_timeout_s = float(os.getenv("OLLAMA_TIMEOUT_S", "180"))
         self.keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "0")
 

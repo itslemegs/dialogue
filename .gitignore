@@ -31,3 +31,11 @@ __pycache__/
 
 # Local archives / backups
 *.tar.gz
+
+# Environment secrets
+.env
+
+# Temporary/manual backup files
+*.bak
+*.bak.*
+*.backup

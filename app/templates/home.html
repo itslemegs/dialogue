@@ -2,15 +2,16 @@
 {% block content %}
 <style>
   .wide-spacing {
-    letter-spacing: 3px; /* increases spacing between characters */
+    letter-spacing: 3px;
   }
 </style>
+
 <section class="fixed inset-0 w-screen h-screen overflow-hidden">
   <!-- Background image -->
   <div class="absolute inset-0 bg-cover bg-center"
        style="background-image: url('/static/img/home-bg.jpg');"></div>
 
-  <!-- (Optional) purple tint overlay -->
+  <!-- Purple tint overlay -->
   <div class="absolute inset-0 bg-indigo-600/60 mix-blend-multiply"></div>
 
   <!-- Content -->
@@ -20,14 +21,43 @@
                  text-6xl md:text-7xl lg:text-8xl">
         d¡alogüe.
       </h1>
-      <p class="mt-3 wide-spacing text-white text-lg font-semibold">UN-style consensus prototype</p>
 
-      <a href="/dashboard"
-         class="mt-10 inline-block rounded-full border-2 border-white px-8 py-3
-                text-white text-lg font-semibold
-                hover:bg-white hover:text-indigo-700 transition">
-        Go to Dashboard
-      </a>
+      <p class="mt-3 wide-spacing text-white text-lg font-semibold">
+        UN-style consensus prototype
+      </p>
+
+      <div class="mt-10 flex flex-col items-center gap-4">
+        <a href="/dashboard"
+           class="inline-block rounded-full border-2 border-white px-8 py-3
+                  text-white text-lg font-semibold
+                  hover:bg-white hover:text-indigo-700 transition">
+          Go to Dashboard
+        </a>
+
+        <div class="flex flex-col items-center gap-2">
+          <p class="text-white/90 text-sm font-medium">
+            Download User Manual
+          </p>
+
+          <div class="flex flex-col sm:flex-row gap-3">
+            <a href="/static/manuals/user_manual_en.pdf"
+               download
+               class="inline-block rounded-full bg-white/15 border border-white/70 px-6 py-2
+                      text-white text-sm font-semibold backdrop-blur
+                      hover:bg-white hover:text-indigo-700 transition">
+              English PDF
+            </a>
+
+            <a href="/static/manuals/user_manual_ja.pdf"
+               download
+               class="inline-block rounded-full bg-white/15 border border-white/70 px-6 py-2
+                      text-white text-sm font-semibold backdrop-blur
+                      hover:bg-white hover:text-indigo-700 transition">
+              日本語 PDF
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </section>

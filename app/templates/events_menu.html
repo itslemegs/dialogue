@@ -229,7 +229,7 @@
           const lockTime = new Date(start.getTime() - D90);
           locksAt = lockTime;
   
-          if (now > lockTime) {
+          if (now < lockTime) {
             locked = false;
             hint = `Locks on ${fmt(lockTime)}`;
           } else {
@@ -246,7 +246,7 @@
           opensAt = windowOpen;
           locksAt = windowClose;
   
-          if (now <= windowOpen) {
+          if (now >= windowOpen) {
             locked = true;
             hint = `Opens on ${fmt(windowOpen)}`;
           } else if (now >= windowClose) {

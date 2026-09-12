@@ -48,6 +48,7 @@ from app.models import (
     AmendmentVoteState,
     EventAccessGrant,
     EventAccessMode,
+    ExperimentSessionLog,
 )
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -55,6 +56,8 @@ from threading import Lock
 from typing import Any
 import json
 from sqlalchemy.orm import selectinload
+
+from app.services.session_log import log_event
 
 import os
 import logging
@@ -86,8 +89,68 @@ def _now_utc():
 # VISIBLE_AFTER = timedelta(days=3)
 VISIBLE_AFTER = timedelta(hours=0)
 
+async def ensure_experiment_session_log_table():
+    """
+    Create experiment_session_log table if it does not exist.
+
+    This app uses AsyncEngine, so DDL must run through:
+    async engine.begin() + conn.run_sync().
+    """
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(
+                lambda sync_conn: ExperimentSessionLog.__table__.create(
+                    bind=sync_conn,
+                    checkfirst=True,
+                )
+            )
+
+        log.info("experiment_session_log table checked/created")
+    except Exception:
+        log.exception("Failed to create/check experiment_session_log table")
+
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+#     model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+#     keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+
+#     try:
+#         httpx.post(
+#             f"{base}/api/chat",
+#             json={
+#                 "model": model,
+#                 "messages": [],
+#                 "stream": False,
+#                 "keep_alive": keep_alive,
+#             },
+#             timeout=120.0,
+#         ).raise_for_status()
+#         log.info("Ollama warmup ok (%s)", model)
+#     except Exception as e:
+#         log.warning("Ollama warmup failed: %s", e)
+
+#     yield
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Make sure normal DB setup runs at startup
+    init_db()
+
+    # Make sure the experiment session log table exists
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(
+                lambda sync_conn: ExperimentSessionLog.__table__.create(
+                    bind=sync_conn,
+                    checkfirst=True,
+                )
+            )
+        log.info("experiment_session_log table checked/created")
+    except Exception:
+        log.exception("Failed to create/check experiment_session_log table")
+
+    # Warm up Ollama
     base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
     model = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
     keep_alive = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
@@ -118,7 +181,8 @@ app = FastAPI(title="Consensus MVP",lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
-init_db()
+# init_db()
+
 
 # wherever you initialize templates
 from starlette.templating import Jinja2Templates
@@ -137,6 +201,169 @@ from sqlalchemy.orm import selectinload
 
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
+
+# app/main.py
+
+import re
+import time
+from app.services.session_log import add_session_log, get_or_make_session_key, get_request_id
+
+
+SESSION_LOG_SKIP_PREFIXES = (
+    "/static",
+    "/favicon.ico",
+    "/api/session-log/client",
+    "/notifications/pull",
+    "/api/live_summary",
+)
+
+SESSION_LOG_SKIP_CONTAINS = (
+    "/generate-json/status/",
+    "/translation-status",
+)
+
+
+def _session_log_should_skip(path: str) -> bool:
+    return (
+        any(path.startswith(prefix) for prefix in SESSION_LOG_SKIP_PREFIXES)
+        or any(part in path for part in SESSION_LOG_SKIP_CONTAINS)
+    )
+
+
+def _event_id_from_path(path: str) -> int | None:
+    match = re.search(r"/events/(\d+)", path)
+    if not match:
+        return None
+
+    try:
+        return int(match.group(1))
+    except Exception:
+        return None
+
+def _log_user_id_from_request(request: Request) -> int | None:
+    """
+    Best-effort user id for generic server/client logs.
+    This should never crash the app.
+    """
+    try:
+        return unsign_cookie(request.cookies.get("session"))
+    except Exception:
+        return None
+
+
+@app.middleware("http")
+async def experiment_session_log_middleware(request: Request, call_next):
+    path = request.url.path
+    should_skip = _session_log_should_skip(path)
+
+    session_key = get_or_make_session_key(request)
+    request_id = get_request_id(request)
+
+    start = time.perf_counter()
+    status_code = 500
+    exception_name = None
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+    except Exception as exc:
+        exception_name = type(exc).__name__
+        raise
+    finally:
+        duration_ms = int((time.perf_counter() - start) * 1000)
+
+        if not should_skip:
+            try:
+                route_obj = request.scope.get("route")
+                route_path = getattr(route_obj, "path", None)
+
+                with get_session() as db:
+                    add_session_log(
+                        db,
+                        request=request,
+                        user_id=_log_user_id_from_request(request),
+                        event_id=_event_id_from_path(path),
+                        source="server",
+                        action="HTTP_REQUEST",
+                        page=path,
+                        route=route_path,
+                        method=request.method,
+                        status_code=status_code,
+                        duration_ms=duration_ms,
+                        details={
+                            "query_keys": list(request.query_params.keys()),
+                            "exception": exception_name,
+                        },
+                    )
+                    db.commit()
+            except Exception:
+                # Never break the experiment because logging failed.
+                pass
+
+    response.set_cookie(
+        "exp_session_key",
+        session_key,
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 180,
+    )
+    response.headers["X-Request-ID"] = request_id
+
+    return response
+
+from app.routes.session_log import router as session_log_router
+
+app.include_router(session_log_router)
+
+def slog(
+    request: Request,
+    *,
+    user=None,
+    event_id: int | None = None,
+    phase: str | None = None,
+    action: str,
+    target_type: str | None = None,
+    target_id: int | str | None = None,
+    details: dict | None = None,
+):
+    """
+    Safe semantic experiment logger.
+
+    Use this AFTER the real action has already been committed.
+    It opens a separate DB session so logging cannot break the experiment flow.
+    """
+    try:
+        with get_session() as log_db:
+            log_event(
+                log_db,
+                request=request,
+                user=user,
+                event_id=event_id,
+                source="semantic",
+                phase=phase,
+                action=action,
+                target_type=target_type,
+                target_id=target_id,
+                details=details or {},
+            )
+    except Exception:
+        # Logging should never crash the experiment.
+        log.warning("Semantic session logging failed for action=%s", action, exc_info=True)
+
+@app.middleware("http")
+async def prevent_stale_html_cache(request: Request, call_next):
+    response = await call_next(request)
+
+    path = request.url.path
+    content_type = response.headers.get("content-type", "")
+
+    # Do not apply this to static files.
+    if not path.startswith("/static") and "text/html" in content_type:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+    return response
 
 def _is_event_member(user) -> bool:
     if not user:
@@ -217,8 +444,7 @@ def event_unlock_get(request: Request, event_id: int):
         if event.access_mode == EventAccessMode.open or _user_has_event_access(db=s, user=user, event=event):
             return RedirectResponse(f"/events/{event.id}/menu", status_code=303)
 
-        return templates.TemplateResponse(
-            "events/unlock_event.html",
+        return templates.TemplateResponse(request, "events/unlock_event.html",
             {
                 "request": request,
                 "user": user,
@@ -292,6 +518,11 @@ def role_flags(user):
 
 # app/main.py
 PUBLIC_PATHS = {"/login", "/logout", "/health"}
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+    
 def _is_public(path: str) -> bool:
     return (
         path in PUBLIC_PATHS
@@ -325,7 +556,7 @@ def render(template_name: str, request: Request, **context):
     flags = effective_flags(user) if user is not None else EMPTY_FLAGS
     base_ctx = {"request": request, "user": user, "flags": flags}
     base_ctx.update(context)
-    return templates.TemplateResponse(template_name, base_ctx)
+    return templates.TemplateResponse(request, template_name, base_ctx)
 
 # --- routes ---
 # Home
@@ -1622,8 +1853,7 @@ def events_index(request: Request):
                 "stages": evt.stages_json,
             })
 
-    return templates.TemplateResponse(
-        "events/index.html",
+    return templates.TemplateResponse(request, "events/index.html",
         {
             "request": request,
             "user": user,
@@ -1663,8 +1893,7 @@ def event_menu(request: Request, event_id: int):
             ],
         }
 
-    return templates.TemplateResponse(
-        "events_menu.html",
+    return templates.TemplateResponse(request, "events_menu.html",
         {
             "request": request,
             "user": user,
@@ -1785,8 +2014,7 @@ def propose_agenda_get(request: Request, event_id: int):
             .order_by(AgendaProposal.created_at.desc())
         ).all()
 
-        return templates.TemplateResponse(
-            "events/propose_agenda.html",
+        return templates.TemplateResponse(request, "events/propose_agenda.html",
             {
                 "request": request,
                 "user": user,
@@ -1840,6 +2068,22 @@ def propose_agenda_post(
         )
         session.add(proposal)
         session.commit()
+        session.refresh(proposal)
+
+        slog(
+            request,
+            user=user,
+            event_id=event.id,
+            phase="agenda_setting",
+            action="AGENDA_PROPOSED",
+            target_type="agenda_proposal",
+            target_id=proposal.id,
+            details={
+                "title": proposal.title,
+                "submitted_anonymously": bool(submit_anonymously),
+                "has_source_url": bool(url),
+            },
+        )
 
     return RedirectResponse(f"/events/{event_id}/propose-agenda?ok=1", status_code=303)
 
@@ -1888,8 +2132,7 @@ def review_agenda_get(event_id: int, request: Request):
             .limit(50)
         ).all()
 
-        return templates.TemplateResponse(
-            "events/review_agenda.html",
+        return templates.TemplateResponse(request, "events/review_agenda.html",
             {
                 "request": request,
                 "user": user,
@@ -1965,6 +2208,21 @@ def review_agenda_decide(
         s.add(p)
         s.commit()
 
+        slog(
+            request,
+            user=user,
+            event_id=event.id,
+            phase="agenda_review",
+            action=f"AGENDA_{action.upper()}",
+            target_type="agenda_proposal",
+            target_id=p.id,
+            details={
+                "proposal_title": p.title,
+                "new_status": str(p.status),
+                "has_notes": bool((notes or "").strip()),
+            },
+        )
+
     return RedirectResponse(f"/events/{event_id}/review-agenda?ok=1", status_code=303)
 
 @app.get("/events/{event_id}/view-agenda", response_class=HTMLResponse)
@@ -1983,8 +2241,7 @@ def view_agenda_get(event_id: int, request: Request):
             .order_by(AgendaProposal.created_at.asc())
         ).all()
 
-        return templates.TemplateResponse(
-            "events/view_agenda.html",
+        return templates.TemplateResponse(request, "events/view_agenda.html",
             {
                 "request": request,
                 "user": user,
@@ -2011,8 +2268,7 @@ def general_floor_index(event_id: int, request: Request):
             .order_by(AgendaProposal.created_at.asc())
         ).all()
 
-        return templates.TemplateResponse(
-            "events/general_floor.html",
+        return templates.TemplateResponse(request, "events/general_floor.html",
             {
                 "request": request,
                 "user": user,
@@ -2120,14 +2376,22 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
 
         # view-model for the template
         item = {
-            "id": q.id,              # keep question id for floor-related actions
+            "id": q.id,  # question id for floor-related actions/live summary
             "proposal_id": prop.id,
+
+            # display fields should match the General Floor list page
             "title": prop.title,
-            "created_at": q.created_at,
+            "background": prop.background,
+            "source_url": prop.source_url,
+            "created_at": prop.created_at,
+
+            # avoid DetachedInstanceError after db session closes
+            "proposer": {
+                "handle": prop.proposer.handle
+            } if prop.proposer else None,
         }
 
-    return templates.TemplateResponse(
-        "events/general_floor_item.html",
+    return templates.TemplateResponse(request, "events/general_floor_item.html",
         {
             "request": request,
             "user": user,
@@ -2186,8 +2450,7 @@ def interventions_fragment(event_id: int, pid: int, request: Request):
         if flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"):
             can_speak = True
 
-    return templates.TemplateResponse(
-        "partials/interventions_list.html",
+    return templates.TemplateResponse(request, "partials/interventions_list.html",
         {
             "request": request,
             "user": user,
@@ -2345,6 +2608,24 @@ def post_intervention_for_agenda(
         db.commit()
         mark_dirty(db, Scope(kind="GENERAL", question_id=qid))
 
+        slog(
+            request,
+            user=user,
+            event_id=event.id,
+            phase="general_floor",
+            action="GENERAL_INTERVENTION_POSTED",
+            target_type="intervention",
+            target_id=it.id,
+            details={
+                "agenda_proposal_id": prop.id,
+                "question_id": qid,
+                "local_no": it.local_no,
+                "is_reply": rel_id is not None,
+                "relates_to_id": rel_id,
+                "body_chars": len(body or ""),
+            },
+        )
+
     # back to the agenda item page
     return RedirectResponse(url=f"/events/{event_id}/general-floor/{pid}", status_code=302)
 
@@ -2419,6 +2700,24 @@ def floor_register_for_agenda(
         )
         db.add(req)
         db.commit()
+        db.refresh(req)
+
+        slog(
+            request,
+            user=user,
+            event_id=event.id,
+            phase="general_floor",
+            action="GENERAL_FLOOR_SPEAKER_REGISTERED",
+            target_type="speaker_request",
+            target_id=req.id,
+            details={
+                "agenda_proposal_id": prop.id,
+                "question_id": qid,
+                "kind": kind,
+                "position": req.position,
+                "target_intervention_id": target_id,
+            },
+        )
 
     return RedirectResponse(url=f"/events/{event_id}/general-floor/{pid}", status_code=302)
 
@@ -2909,8 +3208,7 @@ def proposal_discussion_index(event_id: int, request: Request):
             ).all()
         )
 
-    return templates.TemplateResponse(
-        "proposal_discussion/index.html",
+    return templates.TemplateResponse(request, "proposal_discussion/index.html",
         {
             "request": request,
             "user": user,
@@ -2939,8 +3237,7 @@ def rooms_index(event_id: int, pid: int, request: Request):
             .order_by(ProposalRoom.created_at.desc())
         ).all()
 
-    return templates.TemplateResponse(
-        "rooms/index.html",
+    return templates.TemplateResponse(request, "rooms/index.html",
         {
             "request": request,
             "user": user,
@@ -2989,6 +3286,23 @@ def rooms_create(
         )
         db.add(draft)
         db.commit()
+        db.refresh(draft)
+
+        slog(
+            request,
+            user=user,
+            event_id=event.id,
+            phase="proposal_discussion",
+            action="PROPOSAL_ROOM_CREATED",
+            target_type="proposal_room",
+            target_id=room.id,
+            details={
+                "agenda_proposal_id": pid,
+                "room_title": room.title,
+                "draft_id": draft.id,
+                "has_description": bool(description and description.strip()),
+            },
+        )
 
     return RedirectResponse(
         url=f"/events/{event_id}/proposal-discussion/{pid}/rooms/{room.id}",
@@ -3084,8 +3398,7 @@ def rooms_show(event_id: int, pid: int, rid: int, request: Request):
         except Exception:
             cos_list = []
 
-    return templates.TemplateResponse(
-        "rooms/show.html",
+    return templates.TemplateResponse(request, "rooms/show.html",
         {
             "request": request,
             "user": user,
@@ -3145,7 +3458,26 @@ def room_post_message(
         db.add(msg)
         try:
             db.commit()
+            db.refresh(msg)
             mark_dirty(db, Scope(kind="PROOM", room_id=msg.room_id))
+
+            slog(
+                request,
+                user=user,
+                event_id=event_id,
+                phase="proposal_discussion",
+                action="PROPOSAL_ROOM_MESSAGE_POSTED",
+                target_type="proposal_message",
+                target_id=msg.id,
+                details={
+                    "agenda_proposal_id": pid,
+                    "room_id": room_id,
+                    "local_no": msg.local_no,
+                    "is_reply": parent is not None,
+                    "parent_id": parent,
+                    "body_chars": len(body or ""),
+                },
+            )
         except IntegrityError as e:
             db.rollback()
             raise HTTPException(409, f"DB error: {str(e.orig)}")
@@ -3645,6 +3977,23 @@ def draft_submit(pid: int, rid: int, request: Request, event_id: int):
 
         db.add(draft)
         db.commit()
+
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_discussion",
+            action="DRAFT_SUBMITTED",
+            target_type="proposal_draft",
+            target_id=draft.id,
+            details={
+                "agenda_proposal_id": pid,
+                "room_id": rid,
+                "l_number": draft.l_number,
+                "title": draft.title,
+                "sponsor_id": draft.sponsor_id,
+            },
+        )
     return RedirectResponse(url=f"/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}?submitted=1", status_code=303)
 
 def add_revision_suffix(symbol: str, rev: int) -> str:
@@ -3910,6 +4259,31 @@ def draft_detail(draft_id: int, request: Request):
                 translation_status = row.status.lower()
                 translation_error = row.error
                 hide_draft_for_translation = True
+
+    if lang != "en":
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=d.event_id,
+                    source="semantic",
+                    phase="translation",
+                    action="DRAFT_TRANSLATION_VIEWED",
+                    target_type="proposal_draft",
+                    target_id=d.id,
+                    details={
+                        "draft_id": d.id,
+                        "draft_symbol": d.l_number,
+                        "from_lang": "en",
+                        "to_lang": lang,
+                        "translation_status": translation_status,
+                        "translation_ready": not hide_draft_for_translation,
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log DRAFT_TRANSLATION_VIEWED", exc_info=True)
 
     return render(
         "events/draft_detail.html",
@@ -4327,6 +4701,24 @@ def submit_amendment(
 
         amend_id = am.id
 
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_discussion",
+            action="AMENDMENT_SUBMITTED",
+            target_type="amendment",
+            target_id=am.id,
+            details={
+                "agenda_proposal_id": pid,
+                "room_id": rid,
+                "draft_id": draft.id,
+                "am_no": am.am_no,
+                "label": am.label,
+                "body_chars": len(body_markdown or ""),
+            },
+        )
+
     return RedirectResponse(
         f"/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}/drafts/{draft_id}/amendments/{amend_id}",
         status_code=303,
@@ -4368,6 +4760,33 @@ def view_amendment(
 
     body_en = amend.body_markdown or ""
     body_show = body_en if lang == "en" else translate_text(body_en, lang)
+
+    if lang != "en":
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="translation",
+                    action="AMENDMENT_TRANSLATION_VIEWED",
+                    target_type="amendment",
+                    target_id=amend.id,
+                    details={
+                        "proposal_id": pid,
+                        "room_id": rid,
+                        "draft_id": draft.id,
+                        "draft_symbol": draft.l_number,
+                        "amendment_id": amend.id,
+                        "amendment_label": amend.label,
+                        "from_lang": "en",
+                        "to_lang": lang,
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log AMENDMENT_TRANSLATION_VIEWED", exc_info=True)
 
     return render(
         "events/amendment_detail.html",
@@ -4573,8 +4992,7 @@ def proposal_floor_index(event_id: int, request: Request):
                     }
                 )
 
-    return templates.TemplateResponse(
-        "events/proposal_floor.html",
+    return templates.TemplateResponse(request, "events/proposal_floor.html",
         {
             "request": request,
             "user": user,
@@ -4775,47 +5193,89 @@ def _cast_amendment_vote(db, amendment_id: int, user_id: int, choice: str):
     db.add(st)
     db.commit()
 
-@app.post("/events/proposal-floor/amendment/{amend_id}/vote")
-def amendment_vote(amend_id: int, request: Request, choice: str = Form(...)):
+@app.post("/events/{event_id}/proposal-floor/amendment/{amend_id}/vote")
+def amendment_vote(event_id: int, amend_id: int, request: Request, choice: str = Form(...)):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+
+    choice = (choice or "").upper()
+    if choice not in ("YES", "NO", "ABSTAIN"):
+        raise HTTPException(400, "choice must be YES, NO, or ABSTAIN")
+
     with get_session() as db:
-        a = db.get(Amendment, amend_id) or (_ for _ in ()).throw(HTTPException(404))
-        _cast_amendment_vote(db, amendment_id=a.id, user_id=user.id, choice=choice)
+        _require_event_access(db=db, user=user, event_id=event_id)
 
-    # back to where user was (draft page)
-    return RedirectResponse(request.headers.get("referer", f"/events/proposal-floor/amendment/{amend_id}"), status_code=303)
+        am, d, prop = _get_event_amendment_or_404(db, event_id, amend_id)
 
-@app.post("/events/proposal-floor/amendment/{amend_id}/vote/open")
-def amendment_vote_open(amend_id: int, request: Request):
+        if prop.status != ProposalStatus.accepted:
+            raise HTTPException(404, "Agenda item not accepted")
+
+        _cast_amendment_vote(
+            db,
+            amendment_id=am.id,
+            user_id=user.id,
+            choice=choice,
+        )
+
+    return RedirectResponse(
+        f"/events/{event_id}/proposal-floor/amendment/{amend_id}",
+        status_code=303,
+    )
+
+
+@app.post("/events/{event_id}/proposal-floor/amendment/{amend_id}/vote/open")
+def amendment_vote_open(event_id: int, amend_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+
     f = effective_flags(user)
     if not (f.get("IS_CHAIR") or f.get("IS_PRESIDENT")):
         raise HTTPException(403)
 
     with get_session() as db:
-        db.get(Amendment, amend_id) or (_ for _ in ()).throw(HTTPException(404))
-        st = _get_or_create_amend_vote_state(db, amend_id)
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        am, d, prop = _get_event_amendment_or_404(db, event_id, amend_id)
+
+        if prop.status != ProposalStatus.accepted:
+            raise HTTPException(404, "Agenda item not accepted")
+
+        st = _get_or_create_amend_vote_state(db, am.id)
         st.is_open = True
+
         db.add(st)
         db.commit()
 
-    return RedirectResponse(request.headers.get("referer", f"/events/proposal-floor/amendment/{amend_id}"), status_code=303)
+    return RedirectResponse(
+        f"/events/{event_id}/proposal-floor/amendment/{amend_id}",
+        status_code=303,
+    )
 
-@app.post("/events/proposal-floor/amendment/{amend_id}/vote/close")
-def amendment_vote_close(amend_id: int, request: Request):
+
+@app.post("/events/{event_id}/proposal-floor/amendment/{amend_id}/vote/close")
+def amendment_vote_close(event_id: int, amend_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+
     f = effective_flags(user)
     if not (f.get("IS_CHAIR") or f.get("IS_PRESIDENT")):
         raise HTTPException(403)
 
     with get_session() as db:
-        db.get(Amendment, amend_id) or (_ for _ in ()).throw(HTTPException(404))
-        st = _get_or_create_amend_vote_state(db, amend_id)
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        am, d, prop = _get_event_amendment_or_404(db, event_id, amend_id)
+
+        if prop.status != ProposalStatus.accepted:
+            raise HTTPException(404, "Agenda item not accepted")
+
+        st = _get_or_create_amend_vote_state(db, am.id)
         st.is_open = False
+
         db.add(st)
         db.commit()
 
-    return RedirectResponse(request.headers.get("referer", f"/events/proposal-floor/amendment/{amend_id}"), status_code=303)
+    return RedirectResponse(
+        f"/events/{event_id}/proposal-floor/amendment/{amend_id}",
+        status_code=303,
+    )
 
 @app.get("/events/{event_id}/proposal-floor/draft/{draft_id}", response_class=HTMLResponse)
 def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
@@ -4835,6 +5295,12 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
             draft_id=d.id,
             amendment_id=None,
         )
+
+        if not st.is_open:
+            return RedirectResponse(
+                f"/events/{event_id}/view-draft?closed=1",
+                status_code=303,
+            )
 
         early_vote = _get_early_vote(db, st)
         has_early_voted = _has_user_early_voted(db, st, user.id) if early_vote else False
@@ -4860,19 +5326,81 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
         ).all()
 
         amendment_cards = []
+
         for am in ams:
-            vst = _get_or_create_amend_vote_state(db, am.id)
-            has_voted = _has_user_voted_amendment(db, am.id, user.id)
+            ast = _pfloor_get_or_create_state(
+                db,
+                event_id=event.id,
+                proposal_id=d.proposal_id,
+                draft_id=None,
+                amendment_id=am.id,
+            )
+
+            early = _get_early_vote(db, ast)
+            formal = _get_formal_vote(db, ast)
+
+            # Prefer formal vote if it exists, otherwise show early vote.
+            active_vote = formal or early
+
+            vote_summary = {
+                "exists": active_vote is not None,
+                "kind": None,
+                "is_open": False,
+                "yes": 0,
+                "no": 0,
+                "abstain": 0,
+                "result": "No vote yet",
+            }
+
+            if formal:
+                vote_summary.update(
+                    {
+                        "kind": "Formal vote",
+                        "is_open": formal.is_open,
+                        "yes": formal.yes,
+                        "no": formal.no,
+                        "abstain": formal.abstain,
+                    }
+                )
+
+                if formal.is_open:
+                    vote_summary["result"] = "Voting open"
+                elif formal.yes > formal.no:
+                    vote_summary["result"] = "Adopted"
+                else:
+                    vote_summary["result"] = "Rejected"
+
+            elif early:
+                vote_summary.update(
+                    {
+                        "kind": "Early vote",
+                        "is_open": early.is_open,
+                        "yes": early.yes,
+                        "no": early.no,
+                        "abstain": early.abstain,
+                    }
+                )
+
+                if early.is_open:
+                    vote_summary["result"] = "Voting open"
+                elif early.no == 0 and early.yes > 0:
+                    vote_summary["result"] = "Adopted by consensus"
+                elif early.yes == 0 and early.no > 0:
+                    vote_summary["result"] = "Rejected by consensus"
+                else:
+                    vote_summary["result"] = "No consensus"
+
             amendment_cards.append(
                 {
                     "am": am,
-                    "vote_state": vst,
-                    "HAS_VOTED": has_voted,
+                    "pfloor": ast,
+                    "early_vote": early,
+                    "formal_vote": formal,
+                    "vote_summary": vote_summary,
                 }
             )
 
-    return templates.TemplateResponse(
-        "events/proposal_floor_item.html",
+    return templates.TemplateResponse(request, "events/proposal_floor_item.html",
         {
             "request": request,
             "user": user,
@@ -4914,6 +5442,12 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
             amendment_id=am.id,
         )
 
+        if not st.is_open:
+            return RedirectResponse(
+                f"/events/{event_id}/proposal-floor/draft/{d.id}?amendment_closed={am.id}",
+                status_code=303,
+            )
+
         early_vote = _get_early_vote(db, st)
         has_early_voted = _has_user_early_voted(db, st, user.id) if early_vote else False
 
@@ -4931,8 +5465,7 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
         user_map = {u.id: u for u in users}
         speakers = _pfloor_load_speakers(db, st)
 
-    return templates.TemplateResponse(
-        "events/proposal_floor_item.html",
+    return templates.TemplateResponse(request, "events/proposal_floor_item.html",
         {
             "request": request,
             "user": user,
@@ -4955,30 +5488,78 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
         },
     )
 
-# GET: fragment list
-@app.get("/events/proposal-floor/{kind}/{item_id}/interventions/fragment",
-         response_class=HTMLResponse)
-def pfloor_interventions_fragment(kind: str, item_id: int, request: Request):
+###############
+
+from sqlalchemy import func, and_
+
+
+def _resolve_pfloor_target_or_404(db, event_id: int, kind: str, item_id: int):
+    kind = (kind or "").lower()
+
+    if kind == "draft":
+        draft = db.get(ProposalDraft, item_id)
+        if not draft or draft.event_id != event_id:
+            raise HTTPException(404)
+
+        scope = dict(
+            event_id=draft.event_id,
+            proposal_id=draft.proposal_id,
+            draft_id=draft.id,
+            amendment_id=None,
+        )
+        return draft, scope
+
+    if kind == "amendment":
+        amend = db.get(Amendment, item_id)
+        if not amend:
+            raise HTTPException(404)
+
+        draft = db.get(ProposalDraft, amend.draft_id)
+        if not draft or draft.event_id != event_id:
+            raise HTTPException(404)
+
+        scope = dict(
+            event_id=draft.event_id,
+            proposal_id=draft.proposal_id,
+            draft_id=None,
+            amendment_id=amend.id,
+        )
+        return draft, scope
+
+    raise HTTPException(400, "kind must be draft|amendment")
+
+
+def _pfi_parent_matches_scope(parent: ProposalIntervention, scope: dict) -> bool:
+    return (
+        parent.event_id == scope["event_id"]
+        and parent.proposal_id == scope["proposal_id"]
+        and parent.draft_id == scope["draft_id"]
+        and parent.amendment_id == scope["amendment_id"]
+    )
+
+
+@app.get(
+    "/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions/fragment",
+    response_class=HTMLResponse,
+)
+def pfloor_interventions_fragment(
+    event_id: int,
+    kind: str,
+    item_id: int,
+    request: Request,
+):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     kind = (kind or "").lower()
-    with get_session() as db:
 
-        # fetch users + roles
+    with get_session() as db:
+        # Keep this if you already use event-scoped access control.
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        draft, scope = _resolve_pfloor_target_or_404(db, event_id, kind, item_id)
+
         all_users = db.exec(select(User).options(selectinload(User.roles))).all()
         user_map = {u.id: u for u in all_users}
         role_map = {u.id: sorted({r.name for r in (u.roles or [])}) for u in all_users}
-
-        if kind == "draft":
-            d = db.get(ProposalDraft, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            scope = dict(event_id=d.event_id, proposal_id=d.proposal_id,
-                         draft_id=d.id, amendment_id=None)
-        elif kind == "amendment":
-            a = db.get(Amendment, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            d = db.get(ProposalDraft, a.draft_id)
-            scope = dict(event_id=d.event_id, proposal_id=d.proposal_id,
-                         draft_id=None, amendment_id=a.id)
-        else:
-            raise HTTPException(400, "kind must be draft|amendment")
 
         rows = db.exec(
             select(ProposalIntervention)
@@ -4986,9 +5567,9 @@ def pfloor_interventions_fragment(kind: str, item_id: int, request: Request):
             .order_by(ProposalIntervention.created_at.asc())
         ).all()
 
-        # threadify within THIS scope only (parent_id-based)
         by_id = {r.id: {"node": r, "children": []} for r in rows}
         roots = []
+
         for r in rows:
             pid = r.parent_id
             if pid and pid in by_id:
@@ -4996,28 +5577,20 @@ def pfloor_interventions_fragment(kind: str, item_id: int, request: Request):
             else:
                 roots.append(by_id[r.id])
 
-        # proposal-floor state for this DRAFT scope
-        fs = _pfloor_get_or_create_state(
-            db,
-            event_id=d.event_id,
-            proposal_id=d.proposal_id,
-            draft_id=d.id,
-            amendment_id=None,
-        )
+        # Important: use the actual scope.
+        # For draft: draft_id=draft.id, amendment_id=None
+        # For amendment: draft_id=None, amendment_id=amend.id
+        fs = _pfloor_get_or_create_state(db, **scope)
 
-        # who can speak (proposal-floor possession; chairs/president override)
-        can_speak = _pf_user_has_floor(db, state=fs, user_id=(user.id if user else 0))
-        f = effective_flags(user)
-        if f.get("IS_CHAIR") or f.get("IS_PRESIDENT"):
-            can_speak = True
+        can_speak = _pf_user_has_floor(db, state=fs, user_id=user.id)
 
         flags = effective_flags(user)
-
-    flags = effective_flags(user)
+        if flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"):
+            can_speak = True
 
     return templates.TemplateResponse(
+        request,
         "partials/pfloor_interventions_list.html",
-        # {"request": request, "threads": roots, "user_map": user_map}
         {
             "request": request,
             "user": user,
@@ -5025,47 +5598,61 @@ def pfloor_interventions_fragment(kind: str, item_id: int, request: Request):
             "threads": roots,
             "user_map": user_map,
             "role_map": role_map,
+            "event_id": event_id,
             "kind": kind,
             "item_id": item_id,
             "can_speak": can_speak,
+            "last_any_id": max([r.id for r in rows], default=0),
         },
     )
 
-from sqlalchemy import func, and_
 
-@app.get("/events/proposal-floor/{kind}/{item_id}/interventions/head")
-def pfloor_interventions_head(kind: str, item_id: int):
+@app.get("/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions/head")
+def pfloor_interventions_head(
+    event_id: int,
+    kind: str,
+    item_id: int,
+    request: Request,
+):
+    user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     kind = (kind or "").lower()
-    with get_session() as db:
-        if kind == "draft":
-            d = db.get(ProposalDraft, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            scope = dict(event_id=d.event_id, proposal_id=d.proposal_id, draft_id=d.id, amendment_id=None)
-        elif kind == "amendment":
-            a = db.get(Amendment, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            d = db.get(ProposalDraft, a.draft_id)
-            scope = dict(event_id=d.event_id, proposal_id=d.proposal_id, draft_id=None, amendment_id=a.id)
-        else:
-            raise HTTPException(400, "kind must be draft|amendment")
 
-        # max id in this scope
+    with get_session() as db:
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        draft, scope = _resolve_pfloor_target_or_404(db, event_id, kind, item_id)
+
         last_any = db.exec(
-            select(func.max(ProposalIntervention.id)).where(_pfi_scope_where(**scope))
+            select(func.max(ProposalIntervention.id))
+            .where(_pfi_scope_where(**scope))
         ).one_or_none()
-        # max id among replies (parented) in this scope
+
         last_reply = db.exec(
             select(func.max(ProposalIntervention.id))
-            .where(and_(_pfi_scope_where(**scope), ProposalIntervention.parent_id.isnot(None)))
+            .where(
+                and_(
+                    _pfi_scope_where(**scope),
+                    ProposalIntervention.parent_id.isnot(None),
+                )
+            )
         ).one_or_none()
 
-    def _scalar(t):  # normalize (may be (None,) / (val,))
-        if t is None: return 0
-        v = t[0] if isinstance(t, tuple) else t
-        return int(v or 0)
+    def _scalar(value):
+        if value is None:
+            return 0
+        if isinstance(value, tuple):
+            value = value[0]
+        return int(value or 0)
 
-    return {"last_any_id": _scalar(last_any), "last_child_id": _scalar(last_reply)}
+    return {
+        "last_any_id": _scalar(last_any),
+        "last_child_id": _scalar(last_reply),
+    }
 
-@app.post("/events/proposal-floor/{kind}/{item_id}/interventions")
+
+@app.post("/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions")
 def proposal_floor_post_intervention(
+    event_id: int,
     request: Request,
     kind: str,
     item_id: int,
@@ -5073,86 +5660,155 @@ def proposal_floor_post_intervention(
     relates_to_id: str = Form(""),
 ):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+
+    kind = (kind or "").lower()
+
     rel_id = None
     if relates_to_id and str(relates_to_id).strip():
-        try: rel_id = int(relates_to_id)
-        except: raise HTTPException(400, "relates_to_id must be an integer")
-    kind = (kind or "").lower()
-    if kind not in ("draft", "amendment"):
-        raise HTTPException(400, "invalid kind")
+        try:
+            rel_id = int(relates_to_id)
+        except Exception:
+            raise HTTPException(400, "relates_to_id must be an integer")
 
     with get_session() as db:
-        # resolve scope
-        if kind == "draft":
-            target = db.get(ProposalDraft, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            scope = dict(event_id=target.event_id, proposal_id=target.proposal_id, draft_id=target.id, amendment_id=None)
-            # prop = db.get(AgendaProposal, target.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
-            st = _pfloor_get_or_create_state(db, event_id=target.event_id, proposal_id=target.proposal_id,
-                                             draft_id=target.id, amendment_id=None)
-            # chair/president can always speak; others must have floor
-            if not (effective_flags(user)["IS_CHAIR"] or effective_flags(user)["IS_PRESIDENT"]):
-                if not _pf_user_has_floor(db, state=st, user_id=user.id):
-                    raise HTTPException(403, "You do not currently have the floor.")
+        _require_event_access(db=db, user=user, event_id=event_id)
 
-            # finish current speaker after posting (mirror general-floor)
-            fs = db.get(ProposalFloorState, st.id)
-            if fs and fs.current_speaker_request_id:
-                cur = db.get(ProposalSpeakerRequest, fs.current_speaker_request_id)
-                if cur and cur.status == "SPEAKING":
-                    cur.status = "DONE"
-                    db.add(cur)
-                fs.current_speaker_request_id = None
-                fs.updated_at = datetime.utcnow()
-                db.add(fs); db.commit()
+        target = _resolve_pfloor_target(
+            db,
+            event_id=event_id,
+            kind=kind,
+            item_id=item_id,
+        )
 
-        elif kind == "amendment":
-            amend = db.get(Amendment, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            draft = db.get(ProposalDraft, amend.draft_id)
-            scope = dict(event_id=draft.event_id, proposal_id=draft.proposal_id, draft_id=None, amendment_id=amend.id)
-            # prop  = db.get(AgendaProposal, draft.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
-            st = _pfloor_get_or_create_state(db, event_id=draft.event_id, proposal_id=draft.proposal_id,
-                                             draft_id=None, amendment_id=amend.id)
+        prop = target["prop"]
 
-            if not (effective_flags(user)["IS_CHAIR"] or effective_flags(user)["IS_PRESIDENT"]):
-                if not _pf_user_has_floor(db, state=st, user_id=user.id):
-                    raise HTTPException(403, "You do not currently have the floor.")
+        if prop.status != ProposalStatus.accepted:
+            raise HTTPException(404, "Agenda item not accepted")
 
-            fs = db.get(ProposalFloorState, st.id)
-            if fs and fs.current_speaker_request_id:
-                cur = db.get(ProposalSpeakerRequest, fs.current_speaker_request_id)
-                if cur and cur.status == "SPEAKING":
-                    cur.status = "DONE"
-                    db.add(cur)
-                fs.current_speaker_request_id = None
-                fs.updated_at = datetime.utcnow()
-                db.add(fs); db.commit()
-        else:
-            raise HTTPException(400)
-        # inside proposal_floor_post_intervention after scope resolution
+        scope = {
+            "event_id": target["event_id"],
+            "proposal_id": target["proposal_id"],
+            "draft_id": target["draft_id"],
+            "amendment_id": target["amendment_id"],
+        }
+
+        st = _pfloor_get_or_create_state(db, **scope)
+
+        flags = effective_flags(user)
+
+        fs = db.get(ProposalFloorState, st.id)
+        cur = None
+
+        if fs and fs.current_speaker_request_id:
+            cur = db.get(ProposalSpeakerRequest, fs.current_speaker_request_id)
+
+        is_current_speaker = (
+            cur is not None
+            and cur.user_id == user.id
+            and cur.status == "SPEAKING"
+        )
+
+        if not (flags["IS_CHAIR"] or flags["IS_PRESIDENT"]):
+            if not _pf_user_has_floor(db, state=st, user_id=user.id):
+                raise HTTPException(403, "You do not currently have the floor.")
+
+        # THREADING FIX:
+        # If user is speaking under ROR and the form did not send relates_to_id,
+        # copy the target from the speaker request.
+        if rel_id is None and is_current_speaker:
+            if (cur.kind or "").upper() == "ROR" and cur.target_intervention_id:
+                rel_id = cur.target_intervention_id
+
+        # Validate parent target if this is a reply.
+        if rel_id is not None:
+            parent = db.exec(
+                select(ProposalIntervention).where(
+                    ProposalIntervention.id == rel_id,
+                    ProposalIntervention.event_id == scope["event_id"],
+                    ProposalIntervention.proposal_id == scope["proposal_id"],
+                    ProposalIntervention.draft_id == scope["draft_id"],
+                    ProposalIntervention.amendment_id == scope["amendment_id"],
+                )
+            ).first()
+
+            if not parent:
+                raise HTTPException(
+                    400,
+                    "Reply target does not belong to this proposal-floor discussion.",
+                )
+
         it = ProposalIntervention(
             event_id=scope["event_id"],
             proposal_id=scope["proposal_id"],
             draft_id=scope["draft_id"],
             amendment_id=scope["amendment_id"],
-            by_user=user.id,            # <— use by_user if that's your model field
+            by_user=user.id,
             body=body,
+
+            # This makes the UI thread it.
             parent_id=rel_id,
-            local_no=_pfi_next_local_no(db, **scope)  # if you use local numbering
+
+            local_no=_pfi_next_local_no(db, **scope),
         )
-        db.add(it); db.commit()
-        mark_dirty(db, Scope(
-            kind="PFLOOR",
-            event_id=it.event_id,
-            proposal_id=it.proposal_id,
-            draft_id=it.draft_id,
-            amendment_id=it.amendment_id,
-        ))
 
-    return RedirectResponse(url=f"/events/proposal-floor/{kind}/{item_id}", status_code=303)
+        db.add(it)
+
+        # Only finish the floor if the posting user was the current speaker.
+        # This prevents chair/president comments from accidentally clearing someone else's floor.
+        if fs and cur and is_current_speaker:
+            cur.status = "DONE"
+            db.add(cur)
+
+            fs.current_speaker_request_id = None
+            fs.updated_at = datetime.utcnow()
+            db.add(fs)
+
+        db.commit()
+
+        mark_dirty(
+            db,
+            Scope(
+                kind="PFLOOR",
+                event_id=it.event_id,
+                proposal_id=it.proposal_id,
+                draft_id=it.draft_id,
+                amendment_id=it.amendment_id,
+            ),
+        )
+
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_floor",
+            action="PFLOOR_INTERVENTION_POSTED",
+            target_type="proposal_intervention",
+            target_id=it.id,
+            details={
+                "kind": kind,
+                "item_id": item_id,
+                "proposal_id": it.proposal_id,
+                "draft_id": it.draft_id,
+                "amendment_id": it.amendment_id,
+                "local_no": it.local_no,
+                "is_reply": rel_id is not None,
+                "parent_id": rel_id,
+                "was_current_speaker": is_current_speaker,
+                "body_chars": len(body or ""),
+            },
+        )
+
+    return RedirectResponse(
+        f"/events/{event_id}/proposal-floor/{kind}/{item_id}",
+        status_code=303,
+    )
+
+################
 
 
-@app.post("/events/proposal-floor/{kind}/{item_id}/floor/invite_ror")
+@app.post("/events/{event_id}/proposal-floor/{kind}/{item_id}/floor/invite_ror")
 def pfloor_invite_ror(
+    event_id: int,
     kind: str,
     item_id: int,
     request: Request,
@@ -5160,70 +5816,84 @@ def pfloor_invite_ror(
     to_handle: str = Form(...),
     ror_kind: str = Form("ROR"),   # "ROR" | "ROR_ALL"
 ):
-    """
-    Invite Right of Reply on proposal floor
-    kind: "draft" | "amendment"
-    item_id: draft.id or amendment.id (depending on kind)
-    """
     user = current_user(request)
     if not user:
-        return RedirectResponse(url="/login")
+        return RedirectResponse(url="/login", status_code=303)
 
     flags = effective_flags(user)
     if not (flags["IS_PRESIDENT"] or flags["IS_CHAIR"]):
         raise HTTPException(403, "Only president or chairman can invite RoR")
 
     kind = (kind or "").lower()
+
     with get_session() as db:
-        # --- Resolve scope: draft/amendment + backing proposal ---
+        _require_event_access(db=db, user=user, event_id=event_id)
+
         if kind == "draft":
             d = db.get(ProposalDraft, item_id) or (_ for _ in ()).throw(HTTPException(404))
+
+            if d.event_id != event_id:
+                raise HTTPException(404)
+
             prop = db.get(AgendaProposal, d.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
+
+            if prop.event_id != event_id:
+                raise HTTPException(404)
+
             if prop.status != ProposalStatus.accepted:
                 raise HTTPException(404, "Agenda item not accepted")
+
             scope = dict(
                 event_id=d.event_id,
                 proposal_id=d.proposal_id,
                 draft_id=d.id,
                 amendment_id=None,
             )
+
         elif kind == "amendment":
             a = db.get(Amendment, item_id) or (_ for _ in ()).throw(HTTPException(404))
-            d = db.get(ProposalDraft, a.draft_id)
+            d = db.get(ProposalDraft, a.draft_id) or (_ for _ in ()).throw(HTTPException(404))
+
+            if d.event_id != event_id:
+                raise HTTPException(404)
+
             prop = db.get(AgendaProposal, d.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
+
+            if prop.event_id != event_id:
+                raise HTTPException(404)
+
             if prop.status != ProposalStatus.accepted:
                 raise HTTPException(404, "Agenda item not accepted")
+
             scope = dict(
                 event_id=d.event_id,
                 proposal_id=d.proposal_id,
                 draft_id=None,
                 amendment_id=a.id,
             )
+
         else:
             raise HTTPException(400, "kind must be draft|amendment")
-
-        # 🔹 Anchor to the *same* Question used for general floor for this agenda item
-        q = ensure_general_floor_question(db, prop)
 
         to_user = db.exec(
             select(User).where(User.handle == to_handle.lstrip("@"))
         ).first()
+
         if not to_user:
             raise HTTPException(404, "User handle not found")
 
-        # --- Normalize and validate target intervention for targeted RoR ---
-        k = (ror_kind or "ROR").upper()
-        target_id: int | None = None
+        k = (ror_kind or "ROR").upper().strip()
+
+        target_id = None
 
         if k == "ROR":
             if not relates_to_id or not str(relates_to_id).strip().isdigit():
                 raise HTTPException(400, "relates_to_id required for targeted RoR")
+
             target_id = int(relates_to_id)
 
-            # Ensure the intervention exists AND is in this proposal-floor scope
             pfi = db.exec(
-                select(ProposalIntervention)
-                .where(
+                select(ProposalIntervention).where(
                     ProposalIntervention.id == target_id,
                     ProposalIntervention.event_id == scope["event_id"],
                     ProposalIntervention.proposal_id == scope["proposal_id"],
@@ -5231,127 +5901,327 @@ def pfloor_invite_ror(
                     ProposalIntervention.amendment_id == scope["amendment_id"],
                 )
             ).first()
+
             if not pfi:
                 raise HTTPException(404, "Target intervention not found in this proposal floor")
 
         elif k == "ROR_ALL":
             target_id = None
-        else:
-            raise HTTPException(400, "invalid kind")
 
-        # --- Create invite ---
+        else:
+            raise HTTPException(400, "ror_kind must be ROR or ROR_ALL")
+
+        q = ensure_general_floor_question(db, prop)
+
         inv = RorInvite(
-            question_id=q.id,                 # ✅ anchor to the agenda Question
-            target_intervention_id=target_id, # proposal-floor intervention ID or None
+            question_id=q.id,
+            target_intervention_id=target_id,
             from_user_id=user.id,
             to_user_id=to_user.id,
-            kind=k,                           # "ROR" or "ROR_ALL"
+            kind=k,
             status="PENDING",
         )
         db.add(inv)
-        db.commit()
-        db.refresh(inv)
+        db.flush()
 
-        # --- Notification ---
-        msg_target = f" on proposal-floor intervention #{target_id}" if target_id else " (to all)"
         note = Notification(
             user_id=to_user.id,
-            question_id=q.id,                 # ✅ same Question anchor
-            type="INVITE_ROR_PFLOOR",         # distinguish from general floor if you want
-            message=f'Chair invited you to Right of Reply{msg_target}',
+            question_id=q.id,
+            type="INVITE_ROR_PFLOOR",
+            message=(
+                f"Chair invited you to Right of Reply on proposal-floor intervention #{target_id}"
+                if target_id
+                else "Chair invited you to Right of Reply to all"
+            ),
             is_read=False,
-            payload_json=json.dumps({
+            payload_json={
                 "invite_id": inv.id,
                 "kind": k,
                 "target_intervention_id": target_id,
+                "event_id": event_id,
                 "question_id": q.id,
                 "proposal_id": prop.id,
                 "pfloor": {
                     "kind": kind,
+                    "item_id": item_id,
                     "draft_id": scope["draft_id"],
                     "amendment_id": scope["amendment_id"],
                 },
-            }),
+            },
         )
         db.add(note)
         db.commit()
+        db.refresh(inv)
 
     wants_json = (
         request.query_params.get("ajax") == "1"
         or "application/json" in request.headers.get("accept", "")
+        or request.headers.get("x-requested-with") == "fetch"
     )
-    if wants_json:
-        return JSONResponse({"ok": True, "invite_id": inv.id, "status": inv.status})
 
-    # redirect back to the correct proposal-floor page
-    if kind == "draft":
-        return RedirectResponse(
-            url=f"/events/proposal-floor/draft/{item_id}",
-            status_code=302,
-        )
-    else:
-        return RedirectResponse(
-            url=f"/events/proposal-floor/amendment/{item_id}",
-            status_code=302,
-        )
+    if wants_json:
+        return JSONResponse({
+            "ok": True,
+            "invite_id": inv.id,
+            "status": inv.status,
+        })
+
+    return RedirectResponse(
+        url=f"/events/{event_id}/proposal-floor/{kind}/{item_id}",
+        status_code=303,
+    )
 
 # ----- Common resolver for path targets -----
-def _resolve_pfloor_target(db, *, draft_id: int | None, amend_id: int | None):
+class PFloorTarget(dict):
+    """
+    Compatibility helper.
+
+    Supports new style:
+        target["event_id"]
+        target["proposal_id"]
+        target["draft_id"]
+        target["amendment_id"]
+        target["prop"]
+
+    Also supports old tuple unpacking:
+        mode, ev_id, prop_id, draft_id, amend_id, prop = target
+    """
+
+    def __iter__(self):
+        yield self["mode"]
+        yield self["event_id"]
+        yield self["proposal_id"]
+        yield self["draft_id"]
+        yield self["amendment_id"]
+        yield self["prop"]
+
+
+def _resolve_pfloor_target(
+    db,
+    *,
+    draft_id: int | None = None,
+    amend_id: int | None = None,
+
+    # New optional event-scoped style
+    event_id: int | None = None,
+    kind: str | None = None,
+    item_id: int | None = None,
+):
+    """
+    Resolve proposal-floor target.
+
+    Old supported call:
+        _resolve_pfloor_target(db, draft_id=12, amend_id=None)
+
+    New supported call:
+        _resolve_pfloor_target(db, event_id=5, kind="draft", item_id=12)
+
+    Returns a hybrid object:
+        - can be unpacked like your old tuple
+        - can be accessed like a dict
+    """
+
+    # If caller used the new URL-style args, convert them to your old args.
+    if kind is not None or item_id is not None:
+        if kind is None or item_id is None:
+            raise HTTPException(400, "kind and item_id must be provided together")
+
+        kind = (kind or "").lower()
+
+        if kind == "draft":
+            draft_id = item_id
+            amend_id = None
+        elif kind == "amendment":
+            draft_id = None
+            amend_id = item_id
+        else:
+            raise HTTPException(400, "kind must be draft|amendment")
+
     _pfloor_target_check(draft_id, amend_id)
+
     if draft_id:
         d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
-        prop = db.get(AgendaProposal, d.proposal_id)
-        return ("DRAFT", d.event_id, d.proposal_id, d.id, None, prop)
+
+        if event_id is not None and d.event_id != event_id:
+            raise HTTPException(404)
+
+        prop = db.get(AgendaProposal, d.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
+
+        if event_id is not None and getattr(prop, "event_id", None) != event_id:
+            raise HTTPException(404)
+
+        return PFloorTarget(
+            mode="DRAFT",
+            event_id=d.event_id,
+            proposal_id=d.proposal_id,
+            draft_id=d.id,
+            amendment_id=None,
+            prop=prop,
+            draft=d,
+            amendment=None,
+        )
+
     a = db.get(Amendment, amend_id) or (_ for _ in ()).throw(HTTPException(404))
-    d = db.get(ProposalDraft, a.draft_id); prop = db.get(AgendaProposal, d.proposal_id)
-    return ("AMENDMENT", d.event_id, d.proposal_id, None, a.id, prop)
+    d = db.get(ProposalDraft, a.draft_id) or (_ for _ in ()).throw(HTTPException(404))
+
+    if event_id is not None and d.event_id != event_id:
+        raise HTTPException(404)
+
+    prop = db.get(AgendaProposal, d.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
+
+    if event_id is not None and getattr(prop, "event_id", None) != event_id:
+        raise HTTPException(404)
+
+    return PFloorTarget(
+        mode="AMENDMENT",
+        event_id=d.event_id,
+        proposal_id=d.proposal_id,
+        draft_id=None,
+        amendment_id=a.id,
+        prop=prop,
+        draft=d,
+        amendment=a,
+    )
 
 # register
-@app.post("/events/{event_id}/proposal-floor/{kind}/{id}/floor/register")
-def pfloor_register(kind: str, id: int, request: Request, event_id: int, kind_req: str = Form("GENERAL"), relates_to_id: str = Form("")):
+@app.post("/events/{event_id}/proposal-floor/{kind}/{item_id}/floor/register")
+async def pfloor_register(
+    event_id: int,
+    kind: str,
+    item_id: int,
+    request: Request,
+):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+
+    form = await request.form()
+
+    # Accept both new and old field names.
+    # New preferred field: kind_req
+    # Old accidental field: kind
+    kind_req = (
+        form.get("kind_req")
+        or form.get("request_kind")
+        or form.get("floor_kind")
+        or form.get("kind")
+        or "GENERAL"
+    )
+
+    kind_req = str(kind_req).upper().strip()
+
+    relates_to_id = str(form.get("relates_to_id") or "").strip()
+
+    if kind_req not in ("GENERAL", "ROR", "ROR_ALL"):
+        raise HTTPException(400, "kind_req must be GENERAL, ROR, or ROR_ALL")
+
+    kind = (kind or "").lower()
+
     with get_session() as db:
         _require_event_access(db=db, user=user, event_id=event_id)
-        mode, ev_id, prop_id, draft_id, amend_id, prop = _resolve_pfloor_target(db,
-            draft_id=id if kind=="draft" else None,
-            amend_id=id if kind=="amendment" else None
+
+        mode, ev_id, prop_id, draft_id, amend_id, prop = _resolve_pfloor_target(
+            db,
+            draft_id=item_id if kind == "draft" else None,
+            amend_id=item_id if kind == "amendment" else None,
         )
+
         if ev_id != event_id:
             raise HTTPException(404)
+
         if prop.status != ProposalStatus.accepted:
             raise HTTPException(404, "Agenda item not accepted")
-        st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
 
-        if not st.is_open and kind_req not in ("ROR","ROR_ALL"):
-            raise HTTPException(400, "Speaker list is closed (use Right of Reply).")
+        st = _pfloor_get_or_create_state(
+            db,
+            event_id=ev_id,
+            proposal_id=prop_id,
+            draft_id=draft_id,
+            amendment_id=amend_id,
+        )
 
-        # duplicate active?
+        if not st.is_open and kind_req not in ("ROR", "ROR_ALL"):
+            raise HTTPException(400, "Speaker list is closed. Use Right of Reply.")
+
         exists = db.exec(
             select(ProposalSpeakerRequest).where(
                 ProposalSpeakerRequest.event_id == ev_id,
                 ProposalSpeakerRequest.proposal_id == prop_id,
-                (ProposalSpeakerRequest.draft_id == draft_id) if draft_id else (ProposalSpeakerRequest.amendment_id == amend_id),
+                ProposalSpeakerRequest.draft_id == draft_id,
+                ProposalSpeakerRequest.amendment_id == amend_id,
                 ProposalSpeakerRequest.user_id == user.id,
-                ProposalSpeakerRequest.status.in_(["QUEUED","SPEAKING"]),
+                ProposalSpeakerRequest.status.in_(["QUEUED", "SPEAKING"]),
             )
         ).first()
+
         if exists:
-            return RedirectResponse(request.url_for("proposal_floor_draft" if mode=="DRAFT" else "proposal_floor_amend", **{("draft_id" if mode=="DRAFT" else "amend_id"): id}), status_code=303)
+            return RedirectResponse(
+                f"/events/{event_id}/proposal-floor/{kind}/{item_id}",
+                status_code=303,
+            )
 
         target_id = None
-        if kind_req.upper() == "ROR" and str(relates_to_id).strip():
-            try: target_id = int(relates_to_id)
-            except: raise HTTPException(400, "relates_to_id must be an integer")
+
+        if kind_req == "ROR":
+            if not relates_to_id:
+                raise HTTPException(400, "relates_to_id is required for Right of Reply")
+
+            try:
+                target_id = int(relates_to_id)
+            except Exception:
+                raise HTTPException(400, "relates_to_id must be an integer")
+
+            pfi = db.exec(
+                select(ProposalIntervention).where(
+                    ProposalIntervention.id == target_id,
+                    ProposalIntervention.event_id == ev_id,
+                    ProposalIntervention.proposal_id == prop_id,
+                    ProposalIntervention.draft_id == draft_id,
+                    ProposalIntervention.amendment_id == amend_id,
+                )
+            ).first()
+
+            if not pfi:
+                raise HTTPException(404, "Target intervention not found in this proposal floor")
 
         req = ProposalSpeakerRequest(
-            event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id,
-            user_id=user.id, kind=kind_req.upper(), status="QUEUED",
+            event_id=ev_id,
+            proposal_id=prop_id,
+            draft_id=draft_id,
+            amendment_id=amend_id,
+            user_id=user.id,
+            kind=kind_req,
+            status="QUEUED",
             position=_pfloor_next_position(db, st),
-            target_intervention_id=target_id if kind_req.upper()=="ROR" else None,
+            target_intervention_id=target_id if kind_req == "ROR" else None,
         )
-        db.add(req); db.commit()
-    dest = f"/events/{event_id}/proposal-floor/{'draft' if mode=='DRAFT' else 'amendment'}/{id}"
-    return RedirectResponse(dest, status_code=303)
+
+        db.add(req)
+        db.commit()
+        db.refresh(req)
+
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_floor",
+            action="PFLOOR_SPEAKER_REGISTERED",
+            target_type="proposal_speaker_request",
+            target_id=req.id,
+            details={
+                "kind": kind,
+                "item_id": item_id,
+                "request_kind": kind_req,
+                "proposal_id": prop_id,
+                "draft_id": draft_id,
+                "amendment_id": amend_id,
+                "position": req.position,
+                "target_intervention_id": target_id,
+            },
+        )
+
+    return RedirectResponse(
+        f"/events/{event_id}/proposal-floor/{kind}/{item_id}",
+        status_code=303,
+    )
 
 # withdraw
 @app.post("/events/{event_id}/proposal-floor/{kind}/{id}/floor/withdraw")
@@ -5394,7 +6264,24 @@ def pfloor_toggle(kind: str, id: int, request: Request, event_id: int):
             raise HTTPException(404)
         st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
         st.is_open = not st.is_open; st.updated_at = datetime.utcnow()
-        db.add(st); db.commit()
+        db.add(st)
+        db.commit()
+
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_floor",
+            action="PFLOOR_SPEAKER_LIST_OPENED" if st.is_open else "PFLOOR_SPEAKER_LIST_CLOSED",
+            target_type=kind,
+            target_id=id,
+            details={
+                "proposal_id": prop_id,
+                "draft_id": draft_id,
+                "amendment_id": amend_id,
+                "is_open": st.is_open,
+            },
+        )
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
 # call next
@@ -5446,6 +6333,25 @@ def pfloor_call_next(kind: str, id: int, request: Request, event_id: int):
             is_read=False,
         )
         db.add(note); db.commit()
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_floor",
+            action="PFLOOR_NEXT_SPEAKER_CALLED",
+            target_type="proposal_speaker_request",
+            target_id=next_req.id,
+            details={
+                "kind": kind,
+                "item_id": id,
+                "proposal_id": prop_id,
+                "draft_id": draft_id,
+                "amendment_id": amend_id,
+                "called_user_id": next_req.user_id,
+                "request_kind": next_req.kind,
+                "target_intervention_id": next_req.target_intervention_id,
+            },
+        )
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
 # finish current
@@ -5561,35 +6467,93 @@ def _early_cosigner_ids(d: ProposalDraft) -> list[int]:
         if i and i not in seen: seen.add(i); res.append(i)
     return res
 
-@app.post("/events/proposal-floor/draft/{draft_id}/invite_sponsors")
-def pfloor_invite_sponsors(draft_id: int, request: Request):
+@app.post("/events/{event_id}/proposal-floor/draft/{draft_id}/invite_sponsors")
+def pfloor_invite_sponsors(event_id: int, draft_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
-    f = effective_flags(user)
-    if not (f["IS_CHAIR"] or f["IS_PRESIDENT"]): raise HTTPException(403)
-    with get_session() as db:
-        d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
-        prop = db.get(AgendaProposal, d.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
-        if prop.status != ProposalStatus.accepted: raise HTTPException(404)
-        st = _pfloor_get_or_create_state(db, event_id=d.event_id, proposal_id=d.proposal_id, draft_id=d.id, amendment_id=None)
 
-        handles = {u.id: u.handle for u in db.exec(select(User)).all()}
+    f = effective_flags(user)
+    if not (f["IS_CHAIR"] or f["IS_PRESIDENT"]):
+        raise HTTPException(403)
+
+    with get_session() as db:
+        # Optional but recommended if you already have event access control
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
+
+        # Important: prevent draft 30 from another event being used under /events/12
+        if d.event_id != event_id:
+            raise HTTPException(404)
+
+        prop = db.get(AgendaProposal, d.proposal_id) or (_ for _ in ()).throw(HTTPException(404))
+
+        if prop.event_id != event_id:
+            raise HTTPException(404)
+
+        if prop.status != ProposalStatus.accepted:
+            raise HTTPException(404)
+
+        st = _pfloor_get_or_create_state(
+            db,
+            event_id=d.event_id,
+            proposal_id=d.proposal_id,
+            draft_id=d.id,
+            amendment_id=None,
+        )
+
         for uid in _early_cosigner_ids(d):
-            if uid == user.id: continue
+            if uid == user.id:
+                continue
+
             note = Notification(
-                user_id=uid, question_id=None, type="INVITE_INTRO",
+                user_id=uid,
+                question_id=None,
+                type="INVITE_INTRO",
                 message=f'Chair invites you to introduce: “{(d.title or prop.title)[:120]}”',
-                is_read=False, payload_json=json.dumps({"kind": "INTRO", "draft_id": d.id}),
+                is_read=False,
+
+                # If payload_json is JSONB, use a dict, not json.dumps(...)
+                payload_json={
+                    "kind": "INTRO",
+                    "event_id": event_id,
+                    "draft_id": d.id,
+                },
             )
             db.add(note)
-            # Place them in queue (QUEUED) so first to accept can be called
-            # (We could also wait for explicit accept; to keep parity with general-floor,
-            # you can switch this to a true invite/accept if you prefer.)
-            db.add(ProposalSpeakerRequest(
-                event_id=d.event_id, proposal_id=d.proposal_id, draft_id=d.id, amendment_id=None,
-                user_id=uid, kind="GENERAL", status="QUEUED", position=_pfloor_next_position(db, st),
-            ))
+
+            # Avoid duplicate queued requests if chair clicks button twice
+            existing = db.exec(
+                select(ProposalSpeakerRequest).where(
+                    ProposalSpeakerRequest.event_id == d.event_id,
+                    ProposalSpeakerRequest.proposal_id == d.proposal_id,
+                    ProposalSpeakerRequest.draft_id == d.id,
+                    ProposalSpeakerRequest.amendment_id.is_(None),
+                    ProposalSpeakerRequest.user_id == uid,
+                    ProposalSpeakerRequest.kind == "GENERAL",
+                    ProposalSpeakerRequest.status.in_(["QUEUED", "SPEAKING"]),
+                )
+            ).first()
+
+            if not existing:
+                db.add(
+                    ProposalSpeakerRequest(
+                        event_id=d.event_id,
+                        proposal_id=d.proposal_id,
+                        draft_id=d.id,
+                        amendment_id=None,
+                        user_id=uid,
+                        kind="GENERAL",
+                        status="QUEUED",
+                        position=_pfloor_next_position(db, st),
+                    )
+                )
+
         db.commit()
-    return RedirectResponse(f"/events/proposal-floor/draft/{draft_id}", status_code=303)
+
+    return RedirectResponse(
+        f"/events/{event_id}/proposal-floor/draft/{draft_id}",
+        status_code=303,
+    )
 
 def _get_or_create_early_vote(db, st: ProposalFloorState) -> ProposalEarlyVote:
     v = db.exec(
@@ -5651,6 +6615,29 @@ def pfloor_early_open(event_id: int, kind: str, id: int, request: Request):
         db.add(st)
         db.commit()
 
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="proposal_floor",
+                    action="EARLY_VOTE_OPENED",
+                    target_type=kind,
+                    target_id=id,
+                    details={
+                        "kind": kind,
+                        "item_id": id,
+                        "proposal_id": prop_id,
+                        "draft_id": draft_id,
+                        "amendment_id": amend_id,
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log EARLY_VOTE_OPENED", exc_info=True)
+
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
 
@@ -5689,6 +6676,34 @@ def pfloor_early_close(event_id: int, kind: str, id: int, request: Request):
         db.add(v)
         db.add(st)
         db.commit()
+
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="proposal_floor",
+                    action="EARLY_VOTE_CLOSED",
+                    target_type=kind,
+                    target_id=id,
+                    details={
+                        "kind": kind,
+                        "item_id": id,
+                        "proposal_id": prop_id,
+                        "draft_id": draft_id,
+                        "amendment_id": amend_id,
+                        "yes": v.yes,
+                        "no": v.no,
+                        "abstain": getattr(v, "abstain", 0),
+                        "adopted_by_consensus": bool(v.no == 0 and v.yes > 0),
+                        "rejected_by_consensus": bool(v.yes == 0 and v.no > 0),
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log EARLY_VOTE_CLOSED", exc_info=True)
 
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
@@ -5745,6 +6760,33 @@ def pfloor_early_vote(event_id: int, kind: str, id: int, request: Request, choic
         db.add(v)
         db.commit()
 
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="proposal_floor",
+                    action="EARLY_VOTE_CAST",
+                    target_type=kind,
+                    target_id=id,
+                    details={
+                        "kind": kind,
+                        "item_id": id,
+                        "proposal_id": prop_id,
+                        "draft_id": draft_id,
+                        "amendment_id": amend_id,
+                        "choice": choice,
+                        "yes": v.yes,
+                        "no": v.no,
+                        "abstain": v.abstain,
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log EARLY_VOTE_CAST", exc_info=True)
+
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
 
@@ -5797,7 +6839,32 @@ def pfloor_formal_open(kind: str, id: int, request: Request, event_id: int):
         v = _get_or_create_formal_vote(db, st)
         v.is_open = True
         v.opened_at = datetime.utcnow()
-        db.add(v); db.commit()
+        db.add(v)
+        db.commit()
+
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="proposal_floor",
+                    action="FORMAL_VOTE_OPENED",
+                    target_type=kind,
+                    target_id=id,
+                    details={
+                        "kind": kind,
+                        "item_id": id,
+                        "proposal_id": prop_id,
+                        "draft_id": draft_id,
+                        "amendment_id": amend_id,
+                        "formal_vote_id": v.id,
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log FORMAL_VOTE_OPENED", exc_info=True)
         
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
@@ -5864,6 +6931,34 @@ def pfloor_formal_vote(kind: str, id: int, request: Request, event_id: int, choi
         db.add(v)
         db.commit()
 
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="proposal_floor",
+                    action="FORMAL_VOTE_CAST",
+                    target_type=kind,
+                    target_id=id,
+                    details={
+                        "kind": kind,
+                        "item_id": id,
+                        "proposal_id": prop_id,
+                        "draft_id": draft_id,
+                        "amendment_id": amend_id,
+                        "formal_vote_id": v.id,
+                        "choice": choice,
+                        "yes": v.yes,
+                        "no": v.no,
+                        "abstain": v.abstain,
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log FORMAL_VOTE_CAST", exc_info=True)
+
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
 @app.post("/events/{event_id}/proposal-floor/{kind}/{id}/formal/close")
@@ -5899,7 +6994,36 @@ def pfloor_formal_close(kind: str, id: int, request: Request, event_id: int):
         v = _get_or_create_formal_vote(db, st)
         v.is_open = False
         v.closed_at = datetime.utcnow()
-        db.add(v); db.commit()
+        db.add(v)
+        db.commit()
+
+        try:
+            with get_session() as log_db:
+                log_event(
+                    log_db,
+                    request=request,
+                    user=user,
+                    event_id=event_id,
+                    source="semantic",
+                    phase="proposal_floor",
+                    action="FORMAL_VOTE_CLOSED",
+                    target_type=kind,
+                    target_id=id,
+                    details={
+                        "kind": kind,
+                        "item_id": id,
+                        "proposal_id": prop_id,
+                        "draft_id": draft_id,
+                        "amendment_id": amend_id,
+                        "formal_vote_id": v.id,
+                        "yes": v.yes,
+                        "no": v.no,
+                        "abstain": v.abstain,
+                        "result": "ADOPTED" if v.yes > v.no else "REJECTED",
+                    },
+                )
+        except Exception:
+            log.warning("Failed to log FORMAL_VOTE_CLOSED", exc_info=True)
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
 def _formal_result(v: ProposalFormalVote) -> dict:
@@ -5908,55 +7032,134 @@ def _formal_result(v: ProposalFormalVote) -> dict:
     return {"yes": v.yes, "no": v.no, "abstain": v.abstain, "counted_total": counted_total, "status": status}
 
 @app.post("/events/{event_id}/proposal-floor/{kind}/{id}/close_discussion")
-def pfloor_close_discussion(kind: str, id: int, request: Request, event_id: int):
+def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
-    f = effective_flags(user); 
-    if not (f["IS_CHAIR"] or f["IS_PRESIDENT"]): raise HTTPException(403)
+
+    f = effective_flags(user)
+    if not (f["IS_CHAIR"] or f["IS_PRESIDENT"]):
+        raise HTTPException(403)
+
+    if kind not in ("draft", "amendment"):
+        raise HTTPException(404)
+
     with get_session() as db:
         _require_event_access(db=db, user=user, event_id=event_id)
-        mode, ev_id, prop_id, draft_id, amend_id, prop = _resolve_pfloor_target(db,
-            draft_id=id if kind=="draft" else None, amend_id=id if kind=="amendment" else None)
+
+        mode, ev_id, prop_id, draft_id, amend_id, prop = _resolve_pfloor_target(
+            db,
+            draft_id=id if kind == "draft" else None,
+            amend_id=id if kind == "amendment" else None,
+        )
+
         if ev_id != event_id:
             raise HTTPException(404)
-        st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
 
-        # prefer early vote outcome if present/closed; else formal if closed; else neutral
+        st = _pfloor_get_or_create_state(
+            db,
+            event_id=ev_id,
+            proposal_id=prop_id,
+            draft_id=draft_id,
+            amendment_id=amend_id,
+        )
+
+        # Close this discussion floor.
+        st.is_open = False
+        st.current_speaker_request_id = None
+        st.updated_at = datetime.utcnow()
+        db.add(st)
+
+        if mode == "AMENDMENT":
+            am = db.get(Amendment, amend_id) or (_ for _ in ()).throw(HTTPException(404))
+            parent_draft = db.get(ProposalDraft, am.draft_id) or (_ for _ in ()).throw(HTTPException(404))
+
+            # Important: close the amendment vote state too.
+            avote = _get_or_create_amend_vote_state(db, amend_id)
+            avote.is_open = False
+            db.add(avote)
+
+            db.commit()
+
+            slog(
+                request,
+                user=user,
+                event_id=event_id,
+                phase="proposal_floor",
+                action="PFLOOR_DISCUSSION_CLOSED",
+                target_type="amendment",
+                target_id=amend_id,
+                details={
+                    "proposal_id": prop_id,
+                    "draft_id": parent_draft.id,
+                    "amendment_id": amend_id,
+                    "mode": mode,
+                },
+            )
+
+            # Return to the parent draft floor so the amendment card/result refreshes.
+            return RedirectResponse(
+                f"/events/{event_id}/proposal-floor/draft/{parent_draft.id}?amendment_closed={amend_id}",
+                status_code=303,
+            )
+
+        # mode == "DRAFT"
         evote = db.exec(
             select(ProposalEarlyVote).where(
                 ProposalEarlyVote.event_id == ev_id,
                 ProposalEarlyVote.proposal_id == prop_id,
-                (ProposalEarlyVote.draft_id == draft_id) if draft_id else (ProposalEarlyVote.amendment_id == amend_id),
+                ProposalEarlyVote.draft_id == draft_id,
             )
         ).first()
-        adopted_by_consensus = (evote and not evote.is_open and evote.no == 0 and (evote.yes > 0))
+
+        adopted_by_consensus = (
+            evote
+            and not evote.is_open
+            and evote.no == 0
+            and evote.yes > 0
+        )
 
         fvote = db.exec(
             select(ProposalFormalVote).where(
                 ProposalFormalVote.event_id == ev_id,
                 ProposalFormalVote.proposal_id == prop_id,
-                (ProposalFormalVote.draft_id == draft_id) if draft_id else (ProposalFormalVote.amendment_id == amend_id),
+                ProposalFormalVote.draft_id == draft_id,
             )
         ).first()
+
         formally_adopted = False
         if fvote and not fvote.is_open:
-            formally_adopted = (fvote.yes > fvote.no)
+            formally_adopted = fvote.yes > fvote.no
 
-        if mode == "AMENDMENT":
-            # record nothing on draft here; caller decides the next step
-            pass
-        else:
-            d = db.get(ProposalDraft, draft_id)
-            if adopted_by_consensus or formally_adopted:
-                # mark as ADOPTED (your later "adoption list" page can pick this up)
-                d.status = ProposalDraftStatus.ADOPTED
-                db.add(d); db.commit()
+        d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
 
-        # Optionally: clear floor state
-        st.is_open = False; st.current_speaker_request_id = None; st.updated_at = datetime.utcnow()
-        db.add(st); db.commit()
+        if adopted_by_consensus or formally_adopted:
+            d.status = ProposalDraftStatus.ADOPTED
+            db.add(d)
 
-    # Send user back with a query param the UI can use to prompt about the adoption list
-    return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}?closed=1", status_code=303)
+        db.commit()
+
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="proposal_floor",
+            action="PFLOOR_DISCUSSION_CLOSED",
+            target_type="draft",
+            target_id=draft_id,
+            details={
+                "proposal_id": prop_id,
+                "draft_id": draft_id,
+                "mode": mode,
+                "adopted_by_consensus": bool(adopted_by_consensus),
+                "formally_adopted": bool(formally_adopted),
+                "final_draft_status": str(d.status),
+            },
+        )
+
+    # Return outside the proposal floor after closing the draft discussion.
+    return RedirectResponse(
+        f"/events/{event_id}/view-draft?closed=1",
+        status_code=303,
+    )
 
 def _decision_compute_outcome_draft(
     draft: ProposalDraft,
@@ -6024,38 +7227,42 @@ def _decision_compute_outcome_amendment(
 
     return "Pending"
 
-@app.get("/events/decision", response_class=HTMLResponse)
-def decision_page(request: Request):
+@app.get("/events/{event_id}/decision", response_class=HTMLResponse)
+def decision_page(event_id: int, request: Request):
     """
-    Read-only page listing all *tabled* drafts (L docs) and their amendments
-    for the current event, showing final outcome + tallies.
+    Read-only page listing all tabled drafts and amendments for this event,
+    showing final outcome + tallies.
 
-    Proposal floor already decides ADOPTED for drafts via pfloor_close_discussion.
-    For amendments, we mirror the same logic but do not mutate anything.
+    Draft outcomes are based on draft early/formal votes and draft status.
+    Amendment outcomes are based on amendment proposal-floor early/formal votes.
+    This page does not mutate anything.
     """
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     with get_session() as db:
-        event = _get_current_event(db) or (_ for _ in ()).throw(HTTPException(404, "No event"))
+        event = _require_event_access(db=db, user=user, event_id=event_id)
+
+        flags = effective_flags(user)
+
         drafts = db.exec(
             select(ProposalDraft)
             .where(
                 ProposalDraft.event_id == event.id,
-                ProposalDraft.is_submitted == True,  # "tabled" L docs
+                ProposalDraft.is_submitted == True,
             )
             .order_by(ProposalDraft.l_number, ProposalDraft.id)
         ).all()
 
-        draft_ids = [d.id for d in drafts] if drafts else []
+        draft_ids = [d.id for d in drafts]
         draft_by_id = {d.id: d for d in drafts}
 
         users = db.exec(select(User)).all()
         user_map = {u.id: u for u in users}
 
-        flags = effective_flags(user) if user else EMPTY_FLAGS
+        # ---------------- DRAFT VOTES ----------------
+        evote_by_draft = {}
+        fvote_by_draft = {}
 
-        evotes_drafts = []
-        fvotes_drafts = []
         if draft_ids:
             evotes_drafts = db.exec(
                 select(ProposalEarlyVote).where(
@@ -6071,14 +7278,20 @@ def decision_page(request: Request):
                 )
             ).all()
 
-        evote_by_draft = {v.draft_id: v for v in evotes_drafts}
-        fvote_by_draft = {v.draft_id: v for v in fvotes_drafts}
+            evote_by_draft = {v.draft_id: v for v in evotes_drafts}
+            fvote_by_draft = {v.draft_id: v for v in fvotes_drafts}
 
         results_drafts = []
+
         for d in drafts:
             evote = evote_by_draft.get(d.id)
             fvote = fvote_by_draft.get(d.id)
-            outcome = _decision_compute_outcome_draft(draft=d, fvote=fvote, evote=evote)
+
+            outcome = _decision_compute_outcome_draft(
+                draft=d,
+                fvote=fvote,
+                evote=evote,
+            )
 
             results_drafts.append(
                 {
@@ -6089,8 +7302,9 @@ def decision_page(request: Request):
                 }
             )
 
-        # ---------------- AMENDMENTS + SINGLE-PHASE VOTES ----------------
+        # ---------------- AMENDMENTS ----------------
         amendments = []
+
         if draft_ids:
             amendments = db.exec(
                 select(Amendment)
@@ -6100,47 +7314,94 @@ def decision_page(request: Request):
 
         amend_ids = [a.id for a in amendments]
 
-        # Load AmendmentVoteState in one query (no N+1)
-        vstate_by_amend = {}
-        if amend_ids:
-            vstates = db.exec(
-                select(AmendmentVoteState).where(AmendmentVoteState.amendment_id.in_(amend_ids))
-            ).all()
-            vstate_by_amend = {v.amendment_id: v for v in vstates}
+        evote_by_amend = {}
+        fvote_by_amend = {}
 
-        def _decision_compute_outcome_amendment_single(vstate: "AmendmentVoteState | None") -> str:
+        if amend_ids:
+            evotes_amends = db.exec(
+                select(ProposalEarlyVote).where(
+                    ProposalEarlyVote.event_id == event.id,
+                    ProposalEarlyVote.amendment_id.in_(amend_ids),
+                )
+            ).all()
+
+            fvotes_amends = db.exec(
+                select(ProposalFormalVote).where(
+                    ProposalFormalVote.event_id == event.id,
+                    ProposalFormalVote.amendment_id.in_(amend_ids),
+                )
+            ).all()
+
+            evote_by_amend = {v.amendment_id: v for v in evotes_amends}
+            fvote_by_amend = {v.amendment_id: v for v in fvotes_amends}
+
+        def _decision_compute_outcome_amendment(
+            *,
+            early_vote: ProposalEarlyVote | None,
+            formal_vote: ProposalFormalVote | None,
+        ) -> str:
             """
-            Single-phase outcome:
-              - Pending: no vote_state OR vote still open
-              - Adopted: closed AND no==0 AND yes>0
-              - Not adopted: closed AND (no>0 OR yes==0)
+            Amendment outcome priority:
+              1. If formal vote exists, use formal vote.
+              2. Otherwise, use early vote.
+              3. Otherwise, Pending.
             """
-            if not vstate:
-                return "Pending"
-            if vstate.is_open:
-                return "Pending"
-            yes = vstate.yes or 0
-            no = vstate.no or 0
-            if no == 0 and yes > 0:
-                return "Adopted"
-            return "Not adopted"
+
+            if formal_vote:
+                if formal_vote.is_open:
+                    return "Pending"
+
+                yes = formal_vote.yes or 0
+                no = formal_vote.no or 0
+
+                if yes > no:
+                    return "Adopted"
+                return "Not adopted"
+
+            if early_vote:
+                if early_vote.is_open:
+                    return "Pending"
+
+                yes = early_vote.yes or 0
+                no = early_vote.no or 0
+
+                if no == 0 and yes > 0:
+                    return "Adopted by consensus"
+
+                return "Not adopted"
+
+            return "Pending"
 
         results_amendments = []
+
         for a in amendments:
             parent_draft = draft_by_id.get(a.draft_id)
-            vstate = vstate_by_amend.get(a.id)
-            outcome = _decision_compute_outcome_amendment_single(vstate)
+
+            early_vote = evote_by_amend.get(a.id)
+            formal_vote = fvote_by_amend.get(a.id)
+
+            outcome = _decision_compute_outcome_amendment(
+                early_vote=early_vote,
+                formal_vote=formal_vote,
+            )
+
+            # Prefer showing formal vote if it exists; otherwise show early vote.
+            active_vote = formal_vote or early_vote
 
             results_amendments.append(
                 {
                     "amendment": a,
-                    "draft": parent_draft,       # <-- template expects item.draft
-                    "vote_state": vstate,        # <-- template expects item.vote_state
+                    "draft": parent_draft,
+                    "early_vote": early_vote,
+                    "formal_vote": formal_vote,
+                    "vote_state": active_vote,  # keep this if your template expects item.vote_state
                     "outcome": outcome,
+                    "vote_kind": "Formal vote" if formal_vote else "Early vote" if early_vote else None,
                 }
             )
 
     return templates.TemplateResponse(
+        request,
         "events/decision.html",
         {
             "request": request,

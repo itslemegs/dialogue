@@ -1,9 +1,13 @@
-{# app/templates/partials/interventions_list.html #}
+{# app/templates/partials/pfloor_interventions_list.html #}
 {% from "macros/interventions-prop.html" import render_node with context %}
 {% import "macros/interventions-prop.html" as iv with context %}
 
+<div data-last-any-id="{{ last_any_id|default(0) }}" hidden></div>
+
 {% for R in threads %}
-  {{ render_node(R, user_map, row, can_speak, user) }}
+  {{ render_node(R, user_map, none, can_speak, user) }}
 {% else %}
-  <li class="text-slate-500">No interventions yet. Be the first to post.</li>
+  <li class="text-slate-500 px-4 py-4">
+    No interventions yet. Be the first to post.
+  </li>
 {% endfor %}

@@ -377,40 +377,50 @@
 
     <!-- Plain-language AI helper -->
     <div class="rounded-2xl border bg-slate-50 p-4 space-y-3">
-      <label for="am_plain_text" class="block text-sm font-medium text-slate-700">
+      <label for="am_plain_text"
+       class="block text-sm font-medium text-slate-700 {% if not ai_features_enabled %}hidden{% endif %}">
         Describe your amendment in plain language
       </label>
 
       <textarea
   id="am_plain_text"
-  class="w-full border rounded-xl p-3 text-sm"
+  class="w-full border rounded-xl p-3 text-sm {% if not ai_features_enabled %}hidden{% endif %}"
   rows="5"
+  {% if not ai_features_enabled %}disabled{% endif %}
   placeholder="Example: Replace the operative clause starting with “Encourages Member States…” so that it also includes support for developing countries. Then add a new operative clause requesting technical reports and training workshops."
   data-hint="Describe the amendment normally. The AI will convert it into formal ADD, REMOVE, or REPLACE operations."
   data-hint-side="bottom"
 ></textarea>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <button
-  type="button"
-  id="am_btn_generate"
-  {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
-  class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
-  data-log-action="CLICK_GENERATE_AMENDMENT_WITH_AI"
-  data-target-type="proposal_draft"
-  data-target-id="{{ draft.id }}"
-  data-hint="Ask the AI to draft amendment operations from your plain-language description. Review before submitting."
-  data-hint-side="top"
->
-  {% if ai_features_enabled %}Generate amendment operations{% else %}AI features are currently disabled{% endif %}
-</button>
+<div class="flex flex-wrap items-center gap-2 {% if not ai_features_enabled %}hidden{% endif %}">
+  <button
+    type="button"
+    id="am_btn_generate"
+    {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
+    class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
+    data-log-action="CLICK_GENERATE_AMENDMENT_WITH_AI"
+    data-target-type="proposal_draft"
+    data-target-id="{{ draft.id }}"
+    data-hint="Ask the AI to draft amendment operations from your plain-language description. Review before submitting."
+    data-hint-side="top"
+  >
+    {% if ai_features_enabled %}Generate amendment operations{% else %}AI features are currently disabled{% endif %}
+  </button>
 
-        <div id="am_ai_status" class="text-xs text-slate-500"></div>
-      </div>
+  <div id="am_ai_status" class="text-xs text-slate-500"></div>
+</div>
 
-      <div class="text-xs text-slate-500">
-        Tip: include clause numbers if you know them, such as “replace operative 4(a).” Otherwise use wording like “starting with…”.
-      </div>
+{% if not ai_features_enabled %}
+  <div class="text-sm text-slate-500 rounded border border-slate-200 bg-white px-3 py-2">
+    AI-assisted amendment generation is currently disabled.
+    You can still create amendment operations manually below.
+  </div>
+{% endif %}
+
+<div class="text-xs text-slate-500 {% if not ai_features_enabled %}hidden{% endif %}">
+  Tip: include clause numbers if you know them, such as “replace operative 4(a).”
+  Otherwise use wording like “starting with…”.
+</div>
     </div>
 
     <!-- Manual builder -->

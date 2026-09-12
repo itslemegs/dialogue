@@ -110,34 +110,46 @@ Delete room
 
     {% if is_sponsor and not draft.is_submitted %}
     <div class="mt-2 p-2 rounded border bg-slate-50 space-y-2">
-      <label class="block text-sm text-slate-600">Write freely (plain paragraphs)</label>
+      <label class="block text-sm text-slate-600 {% if not ai_features_enabled %}hidden{% endif %}">
+        Write freely (plain paragraphs)
+      </label>
       <textarea id="plain_text"
-          class="w-full border rounded p-2"
-          rows="6"
-          placeholder="Explain what the draft should do. No UN format needed."
-          data-hint="Write your idea in normal paragraphs. The AI will convert it into draft sections."
-          data-hint-side="left"></textarea>
+    class="w-full border rounded p-2 {% if not ai_features_enabled %}hidden{% endif %}"
+    rows="6"
+    {% if not ai_features_enabled %}disabled{% endif %}
+    placeholder="Explain what the draft should do. No UN format needed."
+    data-hint="Write your idea in normal paragraphs. The AI will convert it into draft sections."
+    data-hint-side="left"></textarea>
 
-      <div class="flex items-center gap-2">
-        <!-- <button type="button"
-                id="btn_lookup"
-                class="px-3 py-2 rounded bg-slate-900 text-white">
-          Lookup
-        </button> -->
-        <button type="button"
-        id="btn_generate"
-  {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
-        class="px-3 py-1.5 bg-indigo-600 text-white rounded"
-        data-log-action="CLICK_GENERATE_DRAFT_WITH_AI"
-        data-target-type="proposal_draft"
-        data-target-id="{{ draft.id }}"
-        data-hint="Use AI to turn your plain paragraphs into draft sections. Review the result before saving."
-        data-hint-side="top">
-  {% if ai_features_enabled %}Generate draft from paragraphs{% else %}AI features are currently disabled{% endif %}
-</button>
-        <div id="ai_status" class="text-xs text-slate-500"></div>
-        <!-- <div id="lookup_status" class="text-xs text-slate-500"></div> -->
+    <div class="flex items-center gap-2 {% if not ai_features_enabled %}hidden{% endif %}">
+      <!-- <button type="button"
+              id="btn_lookup"
+              class="px-3 py-2 rounded bg-slate-900 text-white">
+        Lookup
+      </button> -->
+
+      <button type="button"
+              id="btn_generate"
+              {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
+              class="px-3 py-1.5 bg-indigo-600 text-white rounded"
+              data-log-action="CLICK_GENERATE_DRAFT_WITH_AI"
+              data-target-type="proposal_draft"
+              data-target-id="{{ draft.id }}"
+              data-hint="Use AI to turn your plain paragraphs into draft sections. Review the result before saving."
+              data-hint-side="top">
+        {% if ai_features_enabled %}Generate draft from paragraphs{% else %}AI features are currently disabled{% endif %}
+      </button>
+
+      <div id="ai_status" class="text-xs text-slate-500"></div>
+      <!-- <div id="lookup_status" class="text-xs text-slate-500"></div> -->
+    </div>
+
+    {% if not ai_features_enabled %}
+      <div class="text-sm text-slate-500 rounded border border-slate-200 bg-white px-3 py-2">
+        AI-assisted draft generation is currently disabled.
+        You can continue drafting manually below.
       </div>
+    {% endif %}
       <div id="lookup_panel" class="hidden mt-3 border rounded bg-white">
         <div class="p-3 border-b flex items-center justify-between">
           <div class="font-semibold">Cross-check</div>

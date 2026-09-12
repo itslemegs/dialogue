@@ -424,27 +424,73 @@
     </div>
 
     <!-- Manual builder -->
-    <div>
-      <div class="flex items-center justify-between mb-2">
-        <h4 class="text-sm font-semibold text-slate-800">Operations</h4>
+    <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
+      <div class="font-semibold text-indigo-900 mb-2">How amendments work</div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        <div>
+          <div class="font-medium text-slate-800">Preambular</div>
+          <div class="text-xs text-slate-600">
+            Changes the background, reasoning, or concerns —
+            <strong>why</strong> the proposal is needed.
+          </div>
+        </div>
+
+        <div>
+          <div class="font-medium text-slate-800">Operative</div>
+          <div class="text-xs text-slate-600">
+            Changes an action, request, recommendation, or decision —
+            <strong>what</strong> the proposal asks to happen.
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-indigo-100 mt-3 pt-3 grid md:grid-cols-3 gap-2 text-xs">
+        <div>
+          <strong>ADD</strong><br>
+          Insert a new clause or piece of text.
+        </div>
+
+        <div>
+          <strong>REMOVE</strong><br>
+          Delete an existing clause or piece of text.
+        </div>
+
+        <div>
+          <strong>REPLACE</strong><br>
+          Replace existing wording with new wording.
+        </div>
+      </div>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h4 class="text-sm font-semibold text-slate-800">Amendment operations</h4>
+          <p class="text-xs text-slate-500 mt-1">
+            Add each change you want to make. One amendment can contain more than one operation.
+          </p>
+        </div>
 
         <button
   type="button"
   id="add-op"
-  class="px-3 py-1.5 rounded bg-slate-700 text-white text-sm hover:bg-slate-800"
+  class="shrink-0 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm hover:bg-slate-100"
   data-log-action="CLICK_ADD_AMENDMENT_OPERATION"
   data-target-type="proposal_draft"
   data-target-id="{{ draft.id }}"
   data-hint="Add another amendment operation, such as ADD, REMOVE, or REPLACE."
   data-hint-side="left"
 >
-  Add operation
++ Add another operation
 </button>
       </div>
 
       <div id="ops" class="space-y-3"></div>
     </div>
-
+    <div class="mt-3 text-xs text-slate-500">
+      Review all operations before submitting.
+      Your amendment will be created from the changes listed above.
+    </div>
     <form
   id="amend-form"
   method="post"
@@ -457,7 +503,7 @@
       <input type="hidden" name="body_markdown" id="amend-body">
 
       <button
-  class="px-3 py-1.5 rounded bg-indigo-600 text-white text-sm hover:bg-indigo-700"
+      class="mt-2 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
   data-log-action="CLICK_SUBMIT_AMENDMENT"
   data-target-type="proposal_draft"
   data-target-id="{{ draft.id }}"
@@ -905,79 +951,135 @@
     }
   
     function addOperation(prefill = {}) {
-      const row = el("div", {
-        class: "grid grid-cols-1 md:grid-cols-6 gap-2 items-start border rounded-xl p-3 bg-white",
-        "data-op-row": "1"
-      });
-  
-      const action = el("select", {
-  class: "border rounded p-2 md:col-span-1",
-  "data-role": "action",
-  "data-hint": "Choose what this amendment does: ADD new text, REMOVE existing text, or REPLACE existing text.",
-  "data-hint-side": "top"
-});
-  
-      ACTIONS.forEach(item => {
-        action.appendChild(el("option", { value: item.v }, [item.label]));
-      });
-  
-      const clauseType = el("select", {
-  class: "border rounded p-2 md:col-span-1",
-  "data-role": "clause_type",
-  "data-hint": "Choose whether this operation changes a preambular clause or an operative clause.",
-  "data-hint-side": "top"
-});
-  
-      CLAUSE_TYPES.forEach(item => {
-        clauseType.appendChild(el("option", { value: item.v }, [item.label]));
-      });
-  
-      const target = el("input", {
-  class: "border rounded p-2 md:col-span-2",
-  "data-role": "target",
-  placeholder: "Target, e.g. operative 4(a), or clause starting with “Encourages…”",
-  "data-hint": "Identify the clause to change. For ADD, you can say where the new clause should be inserted.",
-  "data-hint-side": "top"
-});
-  
-const content = el("textarea", {
-  class: "border rounded p-2 md:col-span-2",
-  "data-role": "content",
-  rows: "2",
-  placeholder: "Text to ADD or replacement text. Leave blank only for REMOVE whole target.",
-  "data-hint": "Write the new text for ADD or REPLACE. Leave blank only when removing the whole target.",
-  "data-hint-side": "top"
-});
-  
-const removeBtn = el("button", {
-  type: "button",
-  class: "text-sm text-rose-700 hover:underline",
-  "data-hint": "Remove this operation from the amendment builder.",
-  "data-hint-side": "left"
-}, ["Remove"]);
-  
-      removeBtn.addEventListener("click", () => {
-        row.remove();
-  
-        logAmend("AMENDMENT_OPERATION_REMOVED", {
-          remaining_operations_count: getRows().length
-        });
-      });
-  
-      row.appendChild(action);
-      row.appendChild(clauseType);
-      row.appendChild(target);
-      row.appendChild(content);
-      row.appendChild(el("div", { class: "md:col-span-6 flex justify-end" }, [removeBtn]));
-  
-      ops.appendChild(row);
-  
-      if (prefill.action) action.value = prefill.action;
-      if (prefill.clause_type) clauseType.value = prefill.clause_type;
-      if (prefill.target) target.value = prefill.target;
-      if (typeof prefill.content === "string") content.value = prefill.content;
-    }
-  
+  const row = el("div", {
+    class: "rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3",
+    "data-op-row": "1"
+  });
+
+  const action = el("select", {
+    class: "w-full border rounded-lg p-2 bg-white",
+    "data-role": "action"
+  });
+
+  ACTIONS.forEach(item => {
+    action.appendChild(el("option", { value: item.v }, [item.label]));
+  });
+
+  const clauseType = el("select", {
+    class: "w-full border rounded-lg p-2 bg-white",
+    "data-role": "clause_type"
+  });
+
+  CLAUSE_TYPES.forEach(item => {
+    clauseType.appendChild(el("option", { value: item.v }, [item.label]));
+  });
+
+  const target = el("input", {
+    class: "w-full border rounded-lg p-2",
+    "data-role": "target",
+    placeholder: "Example: operative 4(a), or clause starting with “Encourages…”"
+  });
+
+  const content = el("textarea", {
+    class: "w-full border rounded-lg p-2",
+    "data-role": "content",
+    rows: "3",
+    placeholder: "Write the new text here. Leave blank only when removing the entire target."
+  });
+
+  const removeBtn = el("button", {
+    type: "button",
+    class: "text-xs font-medium text-rose-700 hover:underline"
+  }, ["Remove operation"]);
+
+  removeBtn.addEventListener("click", () => row.remove());
+
+  const header = el("div", {
+    class: "flex items-center justify-between border-b border-slate-100 pb-2"
+  });
+
+  header.appendChild(
+    el("div", {
+      class: "text-sm font-semibold text-slate-800",
+      text: "Amendment operation"
+    })
+  );
+
+  header.appendChild(removeBtn);
+
+
+  const choiceGrid = el("div", {
+    class: "grid grid-cols-1 md:grid-cols-2 gap-3"
+  });
+
+  const actionWrap = el("div", { class: "space-y-1" });
+  actionWrap.appendChild(
+    el("div", {
+      class: "text-xs font-medium text-slate-600",
+      text: "What do you want to do?"
+    })
+  );
+  actionWrap.appendChild(action);
+
+  const typeWrap = el("div", { class: "space-y-1" });
+  typeWrap.appendChild(
+    el("div", {
+      class: "text-xs font-medium text-slate-600",
+      text: "Which part of the draft?"
+    })
+  );
+  typeWrap.appendChild(clauseType);
+
+  choiceGrid.appendChild(actionWrap);
+  choiceGrid.appendChild(typeWrap);
+
+
+  const targetWrap = el("div", { class: "space-y-1" });
+  targetWrap.appendChild(
+    el("div", {
+      class: "text-xs font-medium text-slate-600",
+      text: "Target"
+    })
+  );
+  targetWrap.appendChild(
+    el("div", {
+      class: "text-xs text-slate-500",
+      text: "Identify the existing clause for REMOVE or REPLACE. For ADD, describe where the new clause should go."
+    })
+  );
+  targetWrap.appendChild(target);
+
+
+  const contentWrap = el("div", { class: "space-y-1" });
+  contentWrap.appendChild(
+    el("div", {
+      class: "text-xs font-medium text-slate-600",
+      text: "New wording"
+    })
+  );
+  contentWrap.appendChild(
+    el("div", {
+      class: "text-xs text-slate-500",
+      text: "Required for ADD and REPLACE. Leave blank only when removing an entire target."
+    })
+  );
+  contentWrap.appendChild(content);
+
+
+  row.appendChild(header);
+  row.appendChild(choiceGrid);
+  row.appendChild(targetWrap);
+  row.appendChild(contentWrap);
+
+  ops.appendChild(row);
+
+  if (prefill.action) action.value = prefill.action;
+  if (prefill.clause_type) clauseType.value = prefill.clause_type;
+  if (prefill.target) target.value = prefill.target;
+  if (typeof prefill.content === "string") content.value = prefill.content;
+}
+
+
     function clearOperations() {
       ops.innerHTML = "";
     }

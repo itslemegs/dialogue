@@ -3974,25 +3974,63 @@ def draft_submit(pid: int, rid: int, request: Request, event_id: int):
         if room.proposal_id != pid: raise HTTPException(404)
         if user.id != room.sponsor_id: raise HTTPException(403, "Only the room sponsor can submit")
         if draft.is_submitted:
-            return RedirectResponse(url=f"/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}", status_code=303)
-        if not any([draft.decides, draft.requests, draft.calls_upon, draft.encourages]):
-            raise HTTPException(400, "At least one operative section is required to submit")
-        
+            return RedirectResponse(
+                url=f"/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}",
+                status_code=303
+            )
+
         if not draft.title or not draft.title.strip():
             raise HTTPException(400, "Title is required to submit draft")
 
+        if not any(
+            (value or "").strip()
+            for value in [
+                draft.recalling,
+                draft.noting,
+                draft.welcoming,
+                draft.expressing_regret,
+                draft.expressing_deep_concern,
+                draft.emphasizing,
+            ]
+        ):
+            raise HTTPException(
+                400,
+                "At least one preambular section is required to submit"
+            )
+
+        if not any(
+            (value or "").strip()
+            for value in [
+                draft.decides,
+                draft.requests,
+                draft.calls_upon,
+                draft.encourages,
+            ]
+        ):
+            raise HTTPException(
+                400,
+                "At least one operative section is required to submit"
+            )
+
         # get event year
-        event = db.get(Event, draft.event_id) or (_ for _ in ()).throw(HTTPException(400, "Event missing"))
-        event_year = (getattr(event, "starts_at", None) or getattr(event, "created_at", None) or datetime.utcnow()).year
+        event = db.get(Event, draft.event_id) or (
+            _ for _ in ()
+        ).throw(HTTPException(400, "Event missing"))
+
+        event_year = (
+            getattr(event, "starts_at", None)
+            or getattr(event, "created_at", None)
+            or datetime.utcnow()
+        ).year
 
         # allocate next L seq for this event (inside tx)
         seq = _next_l_seq_tx(db, draft.event_id)
 
         # build full symbol
-        draft.l_number     = build_doc_symbol(event_year, draft.event_id, seq)
+        draft.l_number = build_doc_symbol(event_year, draft.event_id, seq)
         draft.is_submitted = True
         draft.submitted_at = datetime.utcnow()
-        draft.updated_at   = datetime.utcnow()
+        draft.updated_at = datetime.utcnow()
 
         db.add(draft)
         db.commit()

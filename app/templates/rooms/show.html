@@ -175,48 +175,160 @@ Delete room
           data-log-action="SAVE_DRAFT"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}">
-      <label class="block text-sm text-slate-600">Title</label>
-      <input id="draft_title"
-           name="title"
-           type="text"
-           maxlength="200"
-           class="w-full border rounded p-2"
-           value="{{ draft.title or '' }}"
-           placeholder="Short title for this draft" />
+          <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
+            <div class="font-semibold text-indigo-900 mb-2">
+              Before submitting, your draft must include:
+            </div>
 
-      {% for label, name in [
-        ('Recalling', 'recalling'), ('Noting', 'noting'), ('Welcoming', 'welcoming'),
-        ('Expressing regret', 'expressing_regret'), ('Expressing deep concern', 'expressing_deep_concern'),
-        ('Emphasizing', 'emphasizing'), ('Decides', 'decides'), ('Requests', 'requests'),
-        ('Calls upon', 'calls_upon'), ('Encourages', 'encourages')
-      ] %}
-        <label class="block text-sm text-slate-600">{{ label }}</label>
-        <textarea id="draft_{{ name }}"
-                  name="{{ name }}"
-                  class="w-full border rounded p-2"
-                  rows="2">{{ getattr(draft, name) or '' }}</textarea>
-      {% endfor %}
+            <div class="grid gap-1">
+              <div>✓ <strong>A title</strong></div>
+              <div>✓ <strong>At least one preambular clause</strong> — why the proposal is needed</div>
+              <div>✓ <strong>At least one operative clause</strong> — what the proposal asks to happen</div>
+            </div>
 
-      <div class="flex gap-2">
-        <button class="px-3 py-1.5 bg-slate-700 text-white rounded"
-        data-log-action="CLICK_SAVE_DRAFT"
-        data-target-type="proposal_draft"
-        data-target-id="{{ draft.id }}"
-        data-hint="Save your draft progress without submitting it to the proposal floor."
-        data-hint-side="top">
-  Save
-</button>
+            <div class="mt-2 text-xs text-indigo-800">
+              Remember to save your latest changes before submitting.
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <label for="draft_title" class="text-sm font-semibold text-slate-700">
+                Title
+              </label>
+              <span class="text-[11px] font-medium text-rose-600">Required</span>
+            </div>
 
-<button formaction="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/submit"
-        class="px-3 py-1.5 bg-emerald-600 text-white rounded"
-        data-log-action="CLICK_SUBMIT_DRAFT_AS_L_DOC"
-        data-target-type="proposal_draft"
-        data-target-id="{{ draft.id }}"
-        data-hint="Submit this draft and assign it an L-number. After submission, editing and co-signing close."
-        data-hint-side="top">
-  Submit (assign L.#)
-</button>
-      </div>
+            <p class="text-xs text-slate-500">
+              Give the proposal a short name that tells others what it is about.
+              Example: <em>Improving Transparency for AI-Generated Personas</em>
+            </p>
+
+            <input id="draft_title"
+                   name="title"
+                   type="text"
+                   maxlength="200"
+                   required
+                   class="w-full border rounded-lg p-2"
+                   value="{{ draft.title or '' }}"
+                   placeholder="Example: Improving Transparency for AI-Generated Personas" />
+          </div>
+
+      <!-- Preambular clauses -->
+<div class="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+  <div>
+    <div class="flex items-center gap-2">
+      <h4 class="text-sm font-semibold text-slate-800">Preambular clauses</h4>
+      <span class="text-[11px] font-medium text-rose-600">At least one required</span>
+    </div>
+
+    <p class="text-xs text-slate-500 mt-1">
+      Explain <strong>why</strong> the proposal is needed: its background,
+      concerns, or circumstances.
+    </p>
+
+    <p class="text-xs text-slate-500 mt-1">
+      Example:
+      <em>Recognizing the increasing use of AI-generated personas in online communication…</em>
+    </p>
+  </div>
+
+  {% for label, name in [
+    ('Recalling', 'recalling'),
+    ('Noting', 'noting'),
+    ('Welcoming', 'welcoming'),
+    ('Expressing regret', 'expressing_regret'),
+    ('Expressing deep concern', 'expressing_deep_concern'),
+    ('Emphasizing', 'emphasizing')
+  ] %}
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-slate-700">
+        {{ label }}
+      </label>
+
+      <textarea id="draft_{{ name }}"
+                name="{{ name }}"
+                class="w-full border rounded-lg p-2"
+                rows="2"
+                placeholder="Write this clause here…">{{ getattr(draft, name) or '' }}</textarea>
+    </div>
+  {% endfor %}
+</div>
+
+
+<!-- Operative clauses -->
+<div class="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
+  <div>
+    <div class="flex items-center gap-2">
+      <h4 class="text-sm font-semibold text-slate-800">Operative clauses</h4>
+      <span class="text-[11px] font-medium text-rose-600">At least one required</span>
+    </div>
+
+    <p class="text-xs text-slate-500 mt-1">
+      Explain <strong>what</strong> you want to happen: an action,
+      recommendation, request, or decision.
+    </p>
+
+    <p class="text-xs text-slate-500 mt-1">
+      Example:
+      <em>Encourages platforms to clearly disclose AI-generated personas used in public communication…</em>
+    </p>
+  </div>
+
+  {% for label, name in [
+    ('Decides', 'decides'),
+    ('Requests', 'requests'),
+    ('Calls upon', 'calls_upon'),
+    ('Encourages', 'encourages')
+  ] %}
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-slate-700">
+        {{ label }}
+      </label>
+
+      <textarea id="draft_{{ name }}"
+                name="{{ name }}"
+                class="w-full border rounded-lg p-2"
+                rows="2"
+                placeholder="Write this clause here…">{{ getattr(draft, name) or '' }}</textarea>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 space-y-2">
+  <div>
+    <strong class="text-slate-800">1. Save Draft</strong>
+    — saves your latest changes so other participants can read and co-sign them.
+    You can continue editing after saving.
+  </div>
+
+  <div>
+    <strong class="text-slate-800">2. Submit Final Draft</strong>
+    — submits the <strong>last saved version</strong> and assigns its L-number.
+    Save your latest changes before submitting.
+    After submission, the draft can no longer be edited and no new co-signers can join.
+  </div>
+</div>
+
+<div class="flex flex-wrap gap-2">
+  <button class="px-3 py-1.5 bg-slate-700 text-white rounded"
+          data-log-action="CLICK_SAVE_DRAFT"
+          data-target-type="proposal_draft"
+          data-target-id="{{ draft.id }}"
+          data-hint="Save your draft progress without submitting it to the proposal floor."
+          data-hint-side="top">
+    Save Draft
+  </button>
+
+  <button formaction="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/submit"
+          class="px-3 py-1.5 bg-emerald-600 text-white rounded"
+          data-log-action="CLICK_SUBMIT_DRAFT_AS_L_DOC"
+          data-target-type="proposal_draft"
+          data-target-id="{{ draft.id }}"
+          data-hint="Submit this draft and assign it an L-number. After submission, editing and co-signing close."
+          data-hint-side="top">
+    Submit Saved Draft
+  </button>
+</div>
     </form>
     {% else %}
       {# read-only view #}
@@ -245,13 +357,25 @@ Delete room
     {% endif %}
 
     {% if not draft.is_submitted and not is_sponsor %}
-      <form method="post" action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/cosign" class="mt-3">
+  <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+    <div class="text-sm font-semibold text-slate-800">
+      Do you support this proposal?
+    </div>
+
+    <div class="text-xs text-slate-500 mt-1 mb-2">
+      Co-signing shows that you support bringing this draft forward.
+      It is not your final vote on the proposal.
+    </div>
+
+    <form method="post"
+          action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/cosign">
         <button class="px-3 py-1.5 rounded {{ 'bg-fuchsia-700 text-white' if user and (user.id in (cos_list or [])) else 'bg-slate-100' }}"
         data-hint="{{ 'Remove your support from this draft before it is submitted.' if user and (user.id in (cos_list or [])) else 'Add your support as a co-signer before this draft is submitted.' }}"
         data-hint-side="top">
   {{ 'Remove co-sign' if user and (user.id in (cos_list or [])) else 'Co-sign' }}
 </button>
       </form>
+      </div>
     {% else %}
       <div class="mt-3 text-sm text-slate-500">Co-signing closed after submission.</div>
     {% endif %}

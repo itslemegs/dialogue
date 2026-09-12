@@ -230,26 +230,64 @@ Delete room
       Example:
       <em>Recognizing the increasing use of AI-generated personas in online communication…</em>
     </p>
+    <p class="text-xs text-indigo-700 mt-2">
+      You do not need to use every opening. Choose one or more that best explain
+      the background or reasons for your proposal.
+    </p>
   </div>
 
-  {% for label, name in [
-    ('Recalling', 'recalling'),
-    ('Noting', 'noting'),
-    ('Welcoming', 'welcoming'),
-    ('Expressing regret', 'expressing_regret'),
-    ('Expressing deep concern', 'expressing_deep_concern'),
-    ('Emphasizing', 'emphasizing')
+  {% for label, name, description, example in [
+    (
+      'Recalling',
+      'recalling',
+      'Refer back to an earlier agreement, discussion, principle, or event that is relevant to this proposal.',
+      'Example: previous discussions on transparency and digital trust…'
+    ),
+    (
+      'Noting',
+      'noting',
+      'Point out a relevant fact, observation, or situation without strongly judging it.',
+      'Example: the growing use of AI-generated personas in online communication…'
+    ),
+    (
+      'Welcoming',
+      'welcoming',
+      'Acknowledge a positive development, effort, or action that has already taken place.',
+      'Example: recent efforts to improve disclosure of synthetic content…'
+    ),
+    (
+      'Expressing regret',
+      'expressing_regret',
+      'Show disappointment about an undesirable situation or something that has happened.',
+      'Example: the lack of clear disclosure in some online campaigns…'
+    ),
+    (
+      'Expressing deep concern',
+      'expressing_deep_concern',
+      'Highlight a serious problem, risk, or harm that requires attention.',
+      'Example: the potential use of synthetic personas for manipulation…'
+    ),
+    (
+      'Emphasizing',
+      'emphasizing',
+      'Stress a principle or point that is especially important to the proposal.',
+      'Example: the importance of transparency, accountability, and digital trust…'
+    )
   ] %}
     <div class="space-y-1">
-      <label class="block text-sm font-medium text-slate-700">
+      <label class="block text-sm font-semibold text-slate-700">
         {{ label }}
       </label>
+
+      <p class="text-xs text-slate-500">
+        {{ description }}
+      </p>
 
       <textarea id="draft_{{ name }}"
                 name="{{ name }}"
                 class="w-full border rounded-lg p-2"
                 rows="2"
-                placeholder="Write this clause here…">{{ getattr(draft, name) or '' }}</textarea>
+                placeholder="{{ example }}">{{ getattr(draft, name) or '' }}</textarea>
     </div>
   {% endfor %}
 </div>
@@ -272,24 +310,52 @@ Delete room
       Example:
       <em>Encourages platforms to clearly disclose AI-generated personas used in public communication…</em>
     </p>
+    <p class="text-xs text-indigo-700 mt-2">
+      You do not need to use every opening. Choose one or more depending on the
+      kind of action you want the proposal to take.
+    </p>
   </div>
 
-  {% for label, name in [
-    ('Decides', 'decides'),
-    ('Requests', 'requests'),
-    ('Calls upon', 'calls_upon'),
-    ('Encourages', 'encourages')
+  {% for label, name, description, example in [
+    (
+      'Decides',
+      'decides',
+      'State a concrete decision or action that the group or body itself will take.',
+      'Example: to establish a common guideline for disclosure of AI-generated personas…'
+    ),
+    (
+      'Requests',
+      'requests',
+      'Formally ask a particular person, organization, or body to take an action.',
+      'Example: platform operators to provide clearer disclosure mechanisms…'
+    ),
+    (
+      'Calls upon',
+      'calls_upon',
+      'Strongly urge an actor to take action. This is stronger than simply encouraging them.',
+      'Example: relevant organizations to adopt safeguards against deceptive synthetic personas…'
+    ),
+    (
+      'Encourages',
+      'encourages',
+      'Recommend or support an action without making it sound compulsory.',
+      'Example: researchers and platforms to share best practices on transparency…'
+    )
   ] %}
     <div class="space-y-1">
-      <label class="block text-sm font-medium text-slate-700">
+      <label class="block text-sm font-semibold text-slate-700">
         {{ label }}
       </label>
+
+      <p class="text-xs text-slate-500">
+        {{ description }}
+      </p>
 
       <textarea id="draft_{{ name }}"
                 name="{{ name }}"
                 class="w-full border rounded-lg p-2"
                 rows="2"
-                placeholder="Write this clause here…">{{ getattr(draft, name) or '' }}</textarea>
+                placeholder="{{ example }}">{{ getattr(draft, name) or '' }}</textarea>
     </div>
   {% endfor %}
 </div>

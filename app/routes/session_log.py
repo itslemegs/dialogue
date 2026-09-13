@@ -16,7 +16,7 @@ from sqlmodel import select
 from app.db import get_session
 from app.models import ExperimentSessionLog, User
 from app.services.session_log import add_session_log
-from app.security import unsign_cookie
+from app.security import effective_flags, unsign_cookie
 
 
 router = APIRouter()
@@ -38,6 +38,42 @@ def _require_user(request: Request):
         raise HTTPException(status_code=401)
 
     return user
+
+def _require_event_user(request: Request, event_id: int, db):
+    """Require a logged-in user who may access this event."""
+    user = _require_user(request)
+
+    # Import lazily to avoid a module-level circular import with app.main.
+    from app.main import _require_event_access
+
+    _require_event_access(
+        db=db,
+        user=user,
+        event_id=event_id,
+    )
+    return user
+
+
+def _require_log_viewer(request: Request, event_id: int, db):
+    """Restrict experiment logs to privileged event operators."""
+    user = _require_event_user(request, event_id, db)
+    flags = effective_flags(user)
+
+    if not any(
+        (
+            flags.get("IS_ADMIN"),
+            flags.get("IS_PRESIDENT"),
+            flags.get("IS_CHAIR"),
+        )
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Experiment logs are restricted to admins, presidents, and chairmen",
+        )
+
+    return user
+
+
 
 def _user_id_from_session_cookie(request: Request) -> int | None:
     """
@@ -107,6 +143,12 @@ async def client_session_log(request: Request):
         details["user_handle"] = payload.get("user_handle")
 
     with get_session() as db:
+        # Never trust a client-supplied user_id for event-scoped telemetry.
+        # The authenticated user must actually be allowed into the event.
+        if event_id is not None:
+            event_user = _require_event_user(request, event_id, db)
+            effective_user_id = int(event_user.id)
+
         add_session_log(
             db,
             request=request,
@@ -127,9 +169,8 @@ async def client_session_log(request: Request):
 
 @router.get("/events/{event_id}/session-log/export")
 def export_session_log(event_id: int, request: Request, format: str = "csv"):
-    _require_user(request)
-
     with get_session() as db:
+        _require_log_viewer(request, event_id, db)
         logs = db.exec(
             select(ExperimentSessionLog)
             .where(ExperimentSessionLog.event_id == event_id)
@@ -211,9 +252,8 @@ def export_session_log(event_id: int, request: Request, format: str = "csv"):
 
 @router.get("/events/{event_id}/session-log", response_class=HTMLResponse)
 def view_session_log(event_id: int, request: Request):
-    _require_user(request)
-
     with get_session() as db:
+        _require_log_viewer(request, event_id, db)
         logs = db.exec(
             select(ExperimentSessionLog)
             .where(ExperimentSessionLog.event_id == event_id)

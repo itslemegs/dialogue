@@ -3391,23 +3391,129 @@ def rooms_show(event_id: int, pid: int, rid: int, request: Request):
 
 
 @app.get("/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}/updates")
-def room_updates(event_id: int, pid: int, rid: int, request: Request, revision: str = ""):
+def room_updates(
+    event_id: int,
+    pid: int,
+    rid: int,
+    request: Request,
+    revision: str = "",
+    draft_revision: str = "",
+):
+    import hashlib
+    import json
+
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+
     with get_session() as db:
         event = _require_event_access(db=db, user=user, event_id=event_id)
-        _get_event_proposal_or_404(db, event.id, pid, accepted_only=True)
-        _get_event_room_or_404(db, event.id, pid, rid)
+        prop = _get_event_proposal_or_404(db, event.id, pid, accepted_only=True)
+        room = _get_event_room_or_404(db, event.id, pid, rid)
+
+        # Message/reply state.
         current = _discussion_revision(db, ProposalMessage, ProposalMessage.room_id == rid)
         html = None
+
         if current != revision:
-            rows = db.exec(select(ProposalMessage).where(ProposalMessage.room_id == rid)
-                           .order_by(ProposalMessage.created_at.asc(), ProposalMessage.id.asc())).all()
+            rows = db.exec(
+                select(ProposalMessage)
+                .where(ProposalMessage.room_id == rid)
+                .order_by(ProposalMessage.created_at.asc(), ProposalMessage.id.asc())
+            ).all()
+
             ids = {r.user_id for r in rows}
             users = db.exec(select(User).where(User.id.in_(ids))).all() if ids else []
+
             current = _rows_revision(rows)
             html = templates.env.get_template("partials/room_messages.html").render(
-                threads=_thread_rows(rows, "parent_id"), user_map={u.id: u for u in users})
-    return _poll_json({"revision": current, "html": html})
+                threads=_thread_rows(rows, "parent_id"),
+                user_map={u.id: u for u in users},
+            )
+
+        # Shared draft state. This is deliberately read-only:
+        # unlike rooms_show(), polling must never create a missing draft.
+        draft = db.exec(
+            select(ProposalDraft).where(ProposalDraft.room_id == rid)
+        ).first()
+
+        current_draft_revision = "missing"
+        draft_html = None
+
+        if draft:
+            try:
+                cos_list = (
+                    draft.cosigners_json
+                    if isinstance(draft.cosigners_json, list)
+                    else json.loads(draft.cosigners_json or "[]")
+                )
+                cos_list = [int(x) for x in cos_list]
+            except Exception:
+                cos_list = []
+
+            draft_fields = (
+                "title",
+                "recalling",
+                "noting",
+                "welcoming",
+                "expressing_regret",
+                "expressing_deep_concern",
+                "emphasizing",
+                "decides",
+                "requests",
+                "calls_upon",
+                "encourages",
+            )
+
+            draft_state = {
+                name: getattr(draft, name, None)
+                for name in draft_fields
+            }
+            draft_state.update(
+                {
+                    "id": getattr(draft, "id", None),
+                    "cosigners": cos_list,
+                    "is_submitted": bool(getattr(draft, "is_submitted", False)),
+                    "l_number": getattr(draft, "l_number", None),
+                    "submitted_at": getattr(draft, "submitted_at", None),
+                }
+            )
+
+            encoded = json.dumps(
+                draft_state,
+                sort_keys=True,
+                default=str,
+                separators=(",", ":"),
+            ).encode("utf-8")
+
+            current_draft_revision = hashlib.sha256(encoded).hexdigest()
+
+            if current_draft_revision != draft_revision:
+                user_ids = {room.sponsor_id, *cos_list}
+                shared_users = (
+                    db.exec(select(User).where(User.id.in_(user_ids))).all()
+                    if user_ids
+                    else []
+                )
+
+                draft_html = templates.env.get_template(
+                    "partials/room_shared_state.html"
+                ).render(
+                    user=user,
+                    event=event,
+                    proposal=prop,
+                    room=room,
+                    draft=draft,
+                    cos_list=cos_list,
+                    user_map={u.id: u for u in shared_users},
+                )
+
+    return _poll_json(
+        {
+            "revision": current,
+            "html": html,
+            "draft_revision": current_draft_revision,
+            "draft_html": draft_html,
+        }
+    )
 
 
 import sqlalchemy as sa

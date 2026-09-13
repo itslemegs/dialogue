@@ -330,16 +330,45 @@
 
   function room(options) {
     const list = document.getElementById(options.list);
+    const shared = document.getElementById(options.shared || '');
     let revision = '';
+    let draftRevision = '';
+
     list.addEventListener('click', event => {
       const button = event.target.closest('[data-room-reply]');
       if (button) document.getElementById('parent_id').value = button.dataset.roomReply;
     });
+
     return watch(options.url, async ({read}) => {
-      const data = await read(options.url + '?revision=' + encodeURIComponent(revision));
-      if (data.html !== null) reconcilePosts(list, markup(data.html));
+      const params = new URLSearchParams({
+        revision,
+        draft_revision: draftRevision,
+      });
+
+      const data = await read(options.url + '?' + params.toString());
+
+      if (data.html !== null) {
+        reconcilePosts(list, markup(data.html));
+      }
       revision = data.revision;
+
+      if (shared && data.draft_html !== null) {
+        /*
+         * Avoid replacing the shared controls while someone is actively
+         * interacting with them. Keep the old revision so the next poll
+         * requests the fragment again.
+         */
+        if (!shared.contains(document.activeElement)) {
+          preserveScroll(shared, () => {
+            shared.replaceChildren(markup(data.draft_html));
+          });
+          draftRevision = data.draft_revision;
+        }
+      } else {
+        draftRevision = data.draft_revision;
+      }
     });
   }
+
   window.DeliberationPolling = {floor, room};
 })();

@@ -114,12 +114,6 @@ Delete room
     <h3 class="font-semibold">Draft (Room sponsor edits; others can co-sign)</h3>
 
     {% set is_sponsor = (user and user.id == room.sponsor_id) %}
-    {% if draft.is_submitted %}
-      <div class="mt-2 p-2 rounded bg-emerald-50 text-emerald-700">
-        Submitted as <strong>{{ draft.l_number }}</strong> at {{ draft.submitted_at }}
-      </div>
-    {% endif %}
-
     {% if is_sponsor and not draft.is_submitted %}
     <div class="mt-2 p-2 rounded border bg-slate-50 space-y-2">
       <label class="block text-sm text-slate-600 {% if not ai_features_enabled %}hidden{% endif %}">
@@ -424,76 +418,10 @@ Delete room
   </button>
 </div>
     </form>
-    {% else %}
-      {# read-only view #}
-      <div class="mt-2 grid grid-cols-1 gap-2">
-        {% if draft.title %}
-          <div>
-            <div class="text-xs text-slate-500">Title</div>
-            <div class="border rounded p-2 font-medium">{{ draft.title }}</div>
-          </div>
-        {% endif %}
-        {% for label, name in [
-          ('Recalling', 'recalling'), ('Noting', 'noting'), ('Welcoming', 'welcoming'),
-          ('Expressing regret', 'expressing_regret'), ('Expressing deep concern', 'expressing_deep_concern'),
-          ('Emphasizing', 'emphasizing'), ('Decides', 'decides'), ('Requests', 'requests'),
-          ('Calls upon', 'calls_upon'), ('Encourages', 'encourages')
-        ] %}
-          {% set val = getattr(draft, name) %}
-          {% if val %}
-            <div>
-              <div class="text-xs text-slate-500">{{ label }}</div>
-              <div class="whitespace-pre-wrap border rounded p-2">{{ val }}</div>
-            </div>
-          {% endif %}
-        {% endfor %}
-      </div>
     {% endif %}
 
-    {% if not draft.is_submitted and not is_sponsor %}
-  <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-    <div class="text-sm font-semibold text-slate-800">
-      Do you support this proposal?
-    </div>
-
-    <div class="text-xs text-slate-500 mt-1 mb-2">
-      Co-signing shows that you support bringing this draft forward.
-      It is not your final vote on the proposal.
-    </div>
-
-    <form method="post"
-          action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/cosign">
-        <button class="px-3 py-1.5 rounded {{ 'bg-fuchsia-700 text-white' if user and (user.id in (cos_list or [])) else 'bg-slate-100' }}"
-        data-hint="{{ 'Remove your support from this draft before it is submitted.' if user and (user.id in (cos_list or [])) else 'Add your support as a co-signer before this draft is submitted.' }}"
-        data-hint-side="top">
-  {{ 'Remove co-sign' if user and (user.id in (cos_list or [])) else 'Co-sign' }}
-</button>
-      </form>
-      </div>
-    {% else %}
-      <div class="mt-3 text-sm text-slate-500">Co-signing closed after submission.</div>
-    {% endif %}
-
-    <div class="mt-3 text-sm">
-      <div class="text-slate-500"
-     data-hint="The main sponsor owns this room draft and can edit it before submission."
-     data-hint-side="top">
-  Main sponsor: @{{ user_map[room.sponsor_id].handle if user_map.get(room.sponsor_id) }}
-</div>
-      <div>Co-signers:
-        {% set ids = (cos_list or []) %}
-        {% if ids and ids|length %}
-          {% for uid in ids %}
-          <span class="inline-block rounded bg-slate-100 px-2 py-0.5 mr-1"
-          data-hint="This member has co-signed the draft."
-          data-hint-side="top">
-      @{{ user_map[uid].handle if user_map.get(uid) }}
-    </span>
-          {% endfor %}
-        {% else %}
-          <span class="text-slate-500">—</span>
-        {% endif %}
-      </div>
+    <div id="room-shared-draft-state">
+      {% include "partials/room_shared_state.html" %}
     </div>
   </section>
   <!-- Live Summary -->
@@ -1342,7 +1270,8 @@ Delete room
 <script>
   DeliberationPolling.room({
     url: "/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/updates",
-    list: "room-messages"
+    list: "room-messages",
+    shared: "room-shared-draft-state"
   });
 </script>
 {% endblock %}

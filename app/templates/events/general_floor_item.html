@@ -188,9 +188,13 @@
 
   #threads-container pre,
   #threads-container code,
-  #threads-container p,
-  #threads-container span {
+  #threads-container p {
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* Do not force every span to pre-wrap; this keeps reply controls compact. */
+  #threads-container span {
     overflow-wrap: anywhere;
   }
 
@@ -199,6 +203,49 @@
   #threads-container iframe {
     max-width: 100%;
     height: auto;
+  }
+
+  /* Compact View n replies button. */
+  #threads-container .js-toggle-replies {
+    width: auto !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: .25rem;
+
+    margin-top: .35rem !important;
+    margin-bottom: .15rem !important;
+    padding: .2rem .55rem !important;
+
+    min-height: 0 !important;
+    border-radius: 999px !important;
+    font-size: .75rem !important;
+    line-height: 1rem !important;
+    box-shadow: none !important;
+
+    background: rgba(248, 250, 252, .8) !important;
+    border: 1px solid rgba(226, 232, 240, .9) !important;
+    color: #475569;
+  }
+
+  #threads-container .js-toggle-replies span {
+    white-space: nowrap !important;
+  }
+
+  #threads-container .js-toggle-replies [data-chevron] {
+    width: .75rem;
+    height: .75rem;
+  }
+
+  /* Keep nested replies close to their parent intervention. */
+  #threads-container [id^="replies-"] {
+    margin-top: .35rem !important;
+    padding-top: .25rem !important;
+    padding-left: .75rem !important;
+    border-left: 2px solid rgba(226, 232, 240, .9);
+  }
+
+  #threads-container [id^="replies-"] > * {
+    margin-top: .35rem !important;
   }
 
 

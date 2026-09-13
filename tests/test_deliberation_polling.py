@@ -244,6 +244,92 @@ class PollingTests(unittest.TestCase):
         self.assertEqual(self.client.get(self.room_url).status_code,200)
         self.assertFalse(any(type(r) is self.models['ProposalDraft'] for r in self.rows))
 
+    def test_room_shared_draft_revision_tracks_save_cosign_and_submission(self):
+        self.client.cookies.set('session', '2')
+        self.room.sponsor_id = 1
+        self.draft.sponsor_id = 1
+
+        self.draft.title = 'Initial saved title'
+        self.draft.cosigners_json = []
+        self.draft.is_submitted = False
+        self.draft.l_number = None
+        self.draft.submitted_at = None
+
+        first = self.client.get(self.room_url).json()
+        self.assertTrue(first['draft_revision'])
+        self.assertIsNotNone(first['draft_html'])
+        self.assertIn('Initial saved title', first['draft_html'])
+
+        unchanged = self.client.get(
+            self.room_url,
+            params={
+                'revision': first['revision'],
+                'draft_revision': first['draft_revision'],
+            },
+        ).json()
+        self.assertIsNone(unchanged['html'])
+        self.assertIsNone(unchanged['draft_html'])
+        self.assertEqual(
+            unchanged['draft_revision'],
+            first['draft_revision'],
+        )
+
+        # A saved draft change must produce a new shared-state revision.
+        self.draft.title = 'Updated saved title'
+        saved = self.client.get(
+            self.room_url,
+            params={
+                'revision': unchanged['revision'],
+                'draft_revision': unchanged['draft_revision'],
+            },
+        ).json()
+        self.assertNotEqual(
+            saved['draft_revision'],
+            unchanged['draft_revision'],
+        )
+        self.assertIsNotNone(saved['draft_html'])
+        self.assertIn('Updated saved title', saved['draft_html'])
+
+        # A co-sign change must also invalidate the shared-state fragment.
+        self.draft.cosigners_json = [2]
+        cosigned = self.client.get(
+            self.room_url,
+            params={
+                'revision': saved['revision'],
+                'draft_revision': saved['draft_revision'],
+            },
+        ).json()
+        self.assertNotEqual(
+            cosigned['draft_revision'],
+            saved['draft_revision'],
+        )
+        self.assertIsNotNone(cosigned['draft_html'])
+        self.assertIn('Remove co-sign', cosigned['draft_html'])
+
+        # Submission/L-number changes must propagate without a page reload.
+        self.draft.is_submitted = True
+        self.draft.l_number = 'L.77'
+        self.draft.submitted_at = self.now
+
+        submitted = self.client.get(
+            self.room_url,
+            params={
+                'revision': cosigned['revision'],
+                'draft_revision': cosigned['draft_revision'],
+            },
+        ).json()
+        self.assertNotEqual(
+            submitted['draft_revision'],
+            cosigned['draft_revision'],
+        )
+        self.assertIsNotNone(submitted['draft_html'])
+        self.assertIn('Submitted as', submitted['draft_html'])
+        self.assertIn('L.77', submitted['draft_html'])
+        self.assertIn(
+            'Co-signing closed after submission.',
+            submitted['draft_html'],
+        )
+
     def test_room_access_and_relations(self):
         self.client.cookies.clear();self.assertEqual(self.client.get(self.room_url).status_code,401)
         self.client.cookies.set('session','4');self.assertEqual(self.client.get(self.room_url).status_code,403)

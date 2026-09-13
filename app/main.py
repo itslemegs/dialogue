@@ -2503,6 +2503,12 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
 
         speakers = ordered_speakers(db, q.id)
 
+        discussion_revision = _rows_revision(ints)
+        initial_floor_state = _floor_snapshot(
+            db, fs, speakers, user, proposal_floor=False
+        )
+        initial_floor_state["discussion_revision"] = discussion_revision
+
         last_child_id = db.exec(
             select(func.max(Intervention.id)).where(
                 (Intervention.question_id == q.id)
@@ -2533,6 +2539,8 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
             "role_map": role_map,
             "floor": fs,
             "speakers": speakers,
+            "discussion_revision": discussion_revision,
+            "initial_floor_state": initial_floor_state,
             "can_speak": can_speak,
             "current_req": cur_req,
             "last_child_id": int(last_child_id),
@@ -5645,9 +5653,39 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
 
         q = ensure_general_floor_question(db, prop)
 
-        users = db.exec(select(User)).all()
+        users = db.exec(
+            select(User).options(selectinload(User.roles))
+        ).all()
         user_map = {u.id: u for u in users}
+        role_map = {
+            u.id: sorted({r.name for r in (u.roles or [])})
+            for u in users
+        }
         speakers = _pfloor_load_speakers(db, st)
+
+        discussion_scope = dict(
+            event_id=event.id,
+            proposal_id=d.proposal_id,
+            draft_id=d.id,
+            amendment_id=None,
+        )
+        discussion_rows = db.exec(
+            select(ProposalIntervention)
+            .where(_pfi_scope_where(**discussion_scope))
+            .order_by(
+                ProposalIntervention.created_at.asc(),
+                ProposalIntervention.id.asc(),
+            )
+        ).all()
+
+        threads = _thread_rows(discussion_rows, "parent_id")
+        discussion_revision = _rows_revision(discussion_rows)
+        last_any_id = max((row.id for row in discussion_rows), default=0)
+
+        initial_floor_state = _floor_snapshot(
+            db, st, speakers, user, proposal_floor=True
+        )
+        initial_floor_state["discussion_revision"] = discussion_revision
 
 
     return templates.TemplateResponse(request, "events/proposal_floor_item.html",
@@ -5664,6 +5702,11 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
             **voting,
             "speakers": speakers,
             "user_map": user_map,
+            "role_map": role_map,
+            "threads": threads,
+            "discussion_revision": discussion_revision,
+            "last_any_id": last_any_id,
+            "initial_floor_state": initial_floor_state,
             "can_speak": can_speak,
             "q": q,
         },
@@ -5703,9 +5746,39 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
 
         q = ensure_general_floor_question(db, prop)
 
-        users = db.exec(select(User)).all()
+        users = db.exec(
+            select(User).options(selectinload(User.roles))
+        ).all()
         user_map = {u.id: u for u in users}
+        role_map = {
+            u.id: sorted({r.name for r in (u.roles or [])})
+            for u in users
+        }
         speakers = _pfloor_load_speakers(db, st)
+
+        discussion_scope = dict(
+            event_id=event.id,
+            proposal_id=prop.id,
+            draft_id=None,
+            amendment_id=am.id,
+        )
+        discussion_rows = db.exec(
+            select(ProposalIntervention)
+            .where(_pfi_scope_where(**discussion_scope))
+            .order_by(
+                ProposalIntervention.created_at.asc(),
+                ProposalIntervention.id.asc(),
+            )
+        ).all()
+
+        threads = _thread_rows(discussion_rows, "parent_id")
+        discussion_revision = _rows_revision(discussion_rows)
+        last_any_id = max((row.id for row in discussion_rows), default=0)
+
+        initial_floor_state = _floor_snapshot(
+            db, st, speakers, user, proposal_floor=True
+        )
+        initial_floor_state["discussion_revision"] = discussion_revision
 
     return templates.TemplateResponse(request, "events/proposal_floor_item.html",
         {
@@ -5721,6 +5794,11 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
             **voting,
             "speakers": speakers,
             "user_map": user_map,
+            "role_map": role_map,
+            "threads": threads,
+            "discussion_revision": discussion_revision,
+            "last_any_id": last_any_id,
+            "initial_floor_state": initial_floor_state,
             "can_speak": can_speak,
             "q": q,
         },

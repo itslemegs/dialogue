@@ -162,7 +162,12 @@
     return complete;
   }
 
-  function queueRenderer() {
+  function queueLabel(value) {
+    const keys = {"GENERAL": "floor.queue.general", "ROR": "floor.queue.ror", "ROR_ALL": "floor.ror.all", "SPEAKING": "floor.queue.speaking", "QUEUED": "floor.queue.queued", "DONE": "floor.queue.done", "WITHDRAWN": "floor.queue.withdrawn", "CHAIR": "floor.queue.chair"};
+    return keys[value] ? window.UII18n.t(keys[value]) : value;
+  }
+
+  function queueRenderer(generalFloor) {
     const ui = document.getElementById('admin-queue-ui');
     const state = {filter: 'ALL', showCount: 10, compact: false, speakers: []};
     function render() {
@@ -185,7 +190,7 @@
             row = document.createElement('tr'); row.dataset.requestId = id; row.className = 'border-t';
             for (let i = 0; i < 5; i++) row.appendChild(document.createElement('td'));
           }
-          const values = [speaker.position, speaker.handle ? '@' + speaker.handle : '', speaker.kind, speaker.status,
+          const values = [speaker.position, speaker.handle ? '@' + speaker.handle : '', generalFloor ? queueLabel(speaker.kind) : speaker.kind, generalFloor ? queueLabel(speaker.status) : speaker.status,
             window.formatJstTimestamp(speaker.created_at)];
           values.forEach((value, i) => {
             const cell = row.children[i];
@@ -229,7 +234,8 @@
   function floor(options) {
     const list = document.getElementById(options.list);
     const votes = document.getElementById(options.voting || '');
-    const renderQueue = queueRenderer();
+    const renderQueue = queueRenderer(options.generalFloor);
+    const tr = (key, fallback, params = {}) => options.generalFloor ? window.UII18n.t(key, params) : fallback;
     let revision = null, permissions = null, votingHTML = null, recognition = null;
     const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
     function show(id, visible) {
@@ -243,17 +249,17 @@
       const mine = queued.find(s => Number(s.user_id) === Number(options.userId));
       const recognized = Number(data.current_user_id) === Number(options.userId);
       renderQueue(speakers);
-      text('floor-open-badge', data.is_open ? 'Open' : 'Closed');
+      text('floor-open-badge', tr(data.is_open ? 'floor.open' : 'floor.closed', data.is_open ? 'Open' : 'Closed'));
       const badge = document.getElementById('floor-open-badge');
       if (badge) {
         for (const cls of ['bg-emerald-100', 'text-emerald-700']) badge.classList.toggle(cls, data.is_open);
         for (const cls of ['bg-slate-200', 'text-slate-600']) badge.classList.toggle(cls, !data.is_open);
       }
-      text('admin-now', current ? `Current: @${current.handle} (req #${current.id})` : 'No one currently speaking.');
-      text('qb-now', current ? `Now speaking: @${current.handle}` : 'Now speaking: —');
-      text('np-text', current ? `Now speaking: @${current.handle}` : 'Now speaking: —');
-      text('qb-ahead', `People before your turn: ${mine ? queued.filter(s => Number(s.position) < Number(mine.position)).length : '—'}`);
-      text('qb-left', `Speakers left in queue: ${queued.length}`);
+      text('admin-now', current ? tr('floor.current', `Current: @${current.handle} (req #${current.id})`, {handle: current.handle, id: current.id}) : tr('floor.none_speaking', 'No one currently speaking.'));
+      text('qb-now', current ? tr('floor.now', `Now speaking: @${current.handle}`, {handle: current.handle}) : tr('floor.now_empty', 'Now speaking: —'));
+      text('np-text', current ? tr('floor.now', `Now speaking: @${current.handle}`, {handle: current.handle}) : tr('floor.now_empty', 'Now speaking: —'));
+      text('qb-ahead', tr('floor.ahead', `People before your turn: ${mine ? queued.filter(s => Number(s.position) < Number(mine.position)).length : '—'}`, {count: mine ? queued.filter(s => Number(s.position) < Number(mine.position)).length : '—'}));
+      text('qb-left', tr('floor.remaining', `Speakers left in queue: ${queued.length}`, {count: queued.length}));
       show('btn-request-floor', data.is_open && !recognized && !data.can_manage);
       show('btn-withdraw', !!mine && !data.can_manage);
       show('btn-ror-all', !recognized && !data.can_manage);
@@ -272,10 +278,10 @@
       if (recognition !== data.current_req_id && recognized && !body?.value && target && !target.value) {
         if (data.current_kind === 'ROR' && data.current_target_intervention_id) {
           target.value = data.current_target_intervention_id;
-          text('reply-chip', `Replying to #${data.current_target_local_no || data.current_target_intervention_id}`);
+          text('reply-chip', tr('floor.reply_to', `Replying to #${data.current_target_local_no || data.current_target_intervention_id}`, {target: '#' + (data.current_target_local_no || data.current_target_intervention_id)}));
           show('reply-chip', true);
         } else if (data.current_kind === 'ROR_ALL') {
-          text('reply-chip', 'Right of Reply to all');
+          text('reply-chip', tr('floor.ror.all', 'Right of Reply to all'));
           show('reply-chip', true);
         }
       }

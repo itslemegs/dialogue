@@ -1,5 +1,5 @@
 {# app/templates/macros/user_flair.html #}
-{% macro flair_for_user(u=None, roles_list=None, handle_text=None) %}
+{% macro flair_for_user(u=None, roles_list=None, handle_text=None, chairman_label=None) %}
   {# Decide handle text #}
   {% set handle = handle_text or ("@" ~ (u.handle if u and u.handle else "user")) %}
 
@@ -26,7 +26,7 @@
            src="{{ url_for('static', path='img/badges/president.png') }}" width="16" height="16" />
     {% endif %}
     {% if 'chairman' in roles %}
-      <img class="badge-icon" alt="{{ t('roles.chairman') }}" title="{{ t('roles.chairman') }}"
+      <img class="badge-icon" alt="{{ chairman_label or t('roles.chairman') }}" title="{{ chairman_label or t('roles.chairman') }}"
            src="{{ url_for('static', path='img/badges/chairman.png') }}" width="16" height="16" />
     {% endif %}
 

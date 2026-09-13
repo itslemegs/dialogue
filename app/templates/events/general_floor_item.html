@@ -535,22 +535,22 @@
     <!-- Agenda Item -->
     <section class="gf-card p-4">
         <div class="flex items-center justify-between gap-3 mb-3">
-          <span class="gf-kicker">Agenda</span>
+          <span class="gf-kicker">{{ t('floor.agenda') }}</span>
         </div>
         <h2 class="text-xl font-extrabold tracking-tight text-slate-950 break-words">{{ item.title }}</h2>
   
         <div class="mt-3 text-xs text-slate-500 leading-relaxed">
-          Proposed {{ item.created_at|jst }}
-          • Proposer:
-          {% if item.proposer %}{{ item.proposer.handle }}{% else %}<em>Anonymous</em>{% endif %}
-          {% if item.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ item.source_url }}">source</a>{% endif %}
+          {{ t('agenda.proposed_at', time=item.created_at|jst) }}
+          • {{ t('agenda.proposer') }}
+          {% if item.proposer %}{{ item.proposer.handle }}{% else %}<em>{{ t('common.anonymous') }}</em>{% endif %}
+          {% if item.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ item.source_url }}">{{ t('floor.source') }}</a>{% endif %}
         </div>
   
         <div class="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700 bg-slate-50/80 border border-slate-200 rounded-2xl p-3">{{ item.background }}</div>
   
         {% if points and points|length %}
         <div class="mt-4">
-          <span class="text-sm font-bold text-slate-800">Decision points</span>
+          <span class="text-sm font-bold text-slate-800">{{ t('floor.points') }}</span>
           <ol class="list-decimal ml-6 space-y-1 mt-1">
             {% for pt in points %}<li>{{ pt }}</li>{% endfor %}
           </ol>
@@ -562,11 +562,11 @@
     <aside class="md:col-span-12 lg:col-span-2 lg:sticky lg:top-4 pb-28">
       <div class="gf-card overflow-hidden">
         <div class="px-4 py-3 border-b gf-divider flex items-center justify-between bg-slate-50/70">
-          <div class="gf-panel-title flex items-center gap-2"><span>✦</span><span>Live summary</span></div>
+          <div class="gf-panel-title flex items-center gap-2"><span>✦</span><span>{{ t('floor.summary') }}</span></div>
           <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
         </div>
         <div class="p-4">
-          <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">{% if ai_features_enabled %}Loading…{% else %}AI features are currently disabled{% endif %}</div>
+          <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">{% if ai_features_enabled %}{{ t('common.loading') }}{% else %}{{ t('floor.ai_disabled') }}{% endif %}</div>
           <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-6 text-slate-700 font-sans"></pre>
         </div>
       </div>
@@ -586,16 +586,16 @@
         async function tick() {
           if (inflight) return;
           inflight = true;
-          status.textContent = "Updating…";
+          status.textContent = window.UII18n.t('floor.updating');
           try {
             const res = await fetch(url, { headers: { "Accept": "application/json" } });
             if (!res.ok) throw new Error("HTTP " + res.status);
             const data = await res.json();
             body.textContent = data.summary || "";
-            updated.textContent = data.updated_at ? ("Updated " + data.updated_at) : "";
+            updated.textContent = data.updated_at ? window.UII18n.t('floor.updated', {time: data.updated_at}) : "";
             status.textContent = "";
           } catch (e) {
-            status.textContent = "Summary unavailable (endpoint or LLM offline)";
+            status.textContent = window.UII18n.t('floor.summary_unavailable');
           } finally {
             inflight = false;
           }
@@ -614,9 +614,9 @@
     <section class="gf-card p-4">
       <div class="flex items-center justify-between gap-3">
         <div>
-          <div class="gf-kicker mb-2">Discussion</div>
-          <h3 class="text-2xl font-extrabold tracking-tight text-slate-950">General Floor</h3>
-          <div class="text-slate-500 text-sm mt-1">Discussing this agenda item</div>
+          <div class="gf-kicker mb-2">{{ t('floor.discussion') }}</div>
+          <h3 class="text-2xl font-extrabold tracking-tight text-slate-950">{{ t('event.general_floor') }}</h3>
+          <div class="text-slate-500 text-sm mt-1">{{ t('floor.discussing') }}</div>
         </div>
         <div class="hidden sm:flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 text-xl">💬</div>
       </div>
@@ -631,7 +631,7 @@
         {% for R in threads %}
           {{ render_node(R, user_map, q, can_speak, user) }}
         {% else %}
-          <li class="p-8 text-center text-slate-500"><div class="text-3xl mb-2">🗣️</div><div class="font-medium text-slate-700">No interventions yet.</div><div class="text-sm">Be the first to post.</div></li>
+          <li class="p-8 text-center text-slate-500"><div class="text-3xl mb-2">🗣️</div><div class="font-medium text-slate-700">{{ t('floor.empty') }}</div><div class="text-sm">{{ t('floor.first') }}</div></li>
         {% endfor %}
       </ul>
     </section>
@@ -643,10 +643,10 @@
     <section class="gf-card p-4 w-full max-w-full gf-right-speakers">
       <div class="flex items-center justify-between gap-3 shrink-0">
         <div>
-          <div class="gf-kicker mb-2">Queue</div>
-          <h3 class="gf-panel-title">Speakers</h3>
+          <div class="gf-kicker mb-2">{{ t('floor.queue.title') }}</div>
+          <h3 class="gf-panel-title">{{ t('floor.speakers') }}</h3>
         </div>
-        <span id="floor-open-badge" class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold truncate max-w-[50%]">Loading...</span>
+        <span id="floor-open-badge" class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold truncate max-w-[50%]">{{ t('common.loading') }}</span>
       </div>
 
       <!-- Queue brief -->
@@ -666,11 +666,11 @@
               data-target-id="{{ proposal.id }}">
           <input type="hidden" name="kind" value="GENERAL">
           <button class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
-                  data-hint="Join the speaker queue. The chair will recognize you when it is your turn."
+                  data-hint="{{ t('floor.hint.request') }}"
                   data-hint-side="left"
                   data-log-action="CLICK_GENERAL_FLOOR_REGISTER_SPEAKER"
                   data-target-type="agenda_proposal"
-                  data-target-id="{{ proposal.id }}">Request the floor</button>
+                  data-target-id="{{ proposal.id }}">{{ t('floor.request') }}</button>
         </form>
 
         <form
@@ -684,13 +684,13 @@
         >
         <button
             class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
-            data-hint="Remove yourself from the speaker queue before you are called."
+            data-hint="{{ t('floor.hint.leave') }}"
             data-hint-side="left"
             data-log-action="CLICK_GENERAL_FLOOR_WITHDRAW_REQUEST"
             data-target-type="agenda_proposal"
             data-target-id="{{ proposal.id }}"
           >
-            Withdraw request
+            {{ t('floor.leave') }}
           </button>
         </form>
 
@@ -708,18 +708,18 @@
             <input name="to_handle"
               placeholder="@handle"
               class="border px-3 py-2 rounded-xl text-sm min-w-0 flex-1"
-              data-hint="Type the member handle you want to invite, for example alex (without the @)."
+              data-hint="{{ t('floor.hint.handle') }}"
               data-hint-side="left"
               required>
               <button
               class="ml-1 px-3 py-2 rounded-xl text-sm bg-fuchsia-700 hover:bg-fuchsia-800 text-white whitespace-nowrap font-semibold shadow-sm"
-              data-hint="Invite this member to give a Right of Reply to the whole discussion."
+              data-hint="{{ t('floor.hint.invite_all') }}"
               data-hint-side="left"
               data-log-action="CLICK_GENERAL_ROR_INVITE_TO_ALL"
               data-target-type="agenda_proposal"
               data-target-id="{{ proposal.id }}"
             >
-              Invite RoR (to all)
+              {{ t('floor.ror.invite_all') }}
             </button>
           </form>
 
@@ -732,9 +732,9 @@
               data-target-id="{{ proposal.id }}"
             >
             <button class="px-3.5 py-2 {{ 'bg-amber-600 hover:bg-amber-700' if floor.is_open else 'bg-emerald-700 hover:bg-emerald-800' }} text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
-        data-hint="{{ 'Stop new speaker requests. Existing queued speakers stay in the queue.' if floor.is_open else 'Allow members to request the floor and join the speaker queue.' }}"
+        data-hint="{{ t('floor.hint.close_list') if floor.is_open else t('floor.hint.open_list') }}"
         data-hint-side="left">
-              {{ 'Close list' if floor.is_open else 'Open list' }}
+              {{ t('floor.chair.close_list') if floor.is_open else t('floor.chair.open_list') }}
             </button>
           </form>
 
@@ -748,11 +748,11 @@
                 data-target-id="{{ proposal.id }}">
                 <button id="btn-call-next"
                 class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
-                data-hint="Recognize the next queued speaker and give them the floor."
+                data-hint="{{ t('floor.hint.next') }}"
                 data-hint-side="left"
                     data-log-action="CLICK_GENERAL_FLOOR_CALL_NEXT"
                     data-target-type="agenda_proposal"
-                    data-target-id="{{ proposal.id }}">Call next speaker</button>
+                    data-target-id="{{ proposal.id }}">{{ t('floor.chair.next') }}</button>
           </form>
 
           <form
@@ -768,13 +768,13 @@
           <button
           id="btn-finish-current"
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
-          data-hint="End the current speaker turn so the next person can be called."
+          data-hint="{{ t('floor.hint.finish') }}"
           data-hint-side="left"
               data-log-action="CLICK_GENERAL_FLOOR_FINISH_CURRENT"
               data-target-type="agenda_proposal"
               data-target-id="{{ proposal.id }}"
             >
-              Finish current
+              {{ t('floor.chair.finish') }}
             </button>
           </form>
 
@@ -788,13 +788,13 @@
           >
           <input name="message"
           class="flex-1 min-w-0 border px-3 py-2 rounded-xl text-sm"
-          placeholder="Announcement to everyone"
-          data-hint="Write a short message that will be posted as an announcement."
+          placeholder="{{ t('floor.announcement_placeholder') }}"
+          data-hint="{{ t('floor.hint.announcement_write') }}"
           data-hint-side="left">
    
    <button class="px-3.5 py-2 bg-slate-950 hover:bg-slate-800 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
-           data-hint="Send this announcement to everyone on the general floor."
-           data-hint-side="left">Announcement</button>
+           data-hint="{{ t('floor.hint.announcement_send') }}"
+           data-hint-side="left">{{ t('floor.announcement') }}</button>
           </form>
 
           <!-- Admin queue UI -->
@@ -804,48 +804,48 @@
               <button type="button"
         class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
         data-filter="ALL"
-        data-hint="Show all speaker requests."
-        data-hint-side="top">All</button>
+        data-hint="{{ t('floor.hint.all') }}"
+        data-hint-side="top">{{ t('floor.queue.all') }}</button>
 
 <button type="button"
         class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
         data-filter="QUEUED"
-        data-hint="Show only members still waiting to speak."
-        data-hint-side="top">Queued</button>
+        data-hint="{{ t('floor.hint.waiting') }}"
+        data-hint-side="top">{{ t('floor.queue.waiting') }}</button>
 
 <button type="button"
         class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
         data-filter="DONE"
-        data-hint="Show completed or withdrawn speaker requests."
-        data-hint-side="top">Done</button>
+        data-hint="{{ t('floor.hint.done') }}"
+        data-hint-side="top">{{ t('floor.queue.done') }}</button>
 
 <button type="button"
         class="ml-auto px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-medium"
         id="toggle-compact"
-        data-hint="Switch the queue table to a denser view."
-        data-hint-side="top">Compact</button>
+        data-hint="{{ t('floor.hint.compact') }}"
+        data-hint-side="top">{{ t('floor.queue.compact') }}</button>
             </div>
             <div id="admin-nextup" class="border border-slate-200 rounded-2xl w-full overflow-x-auto">
-              <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b bg-slate-50/80">Next up</div>
+              <div class="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b bg-slate-50/80">{{ t('floor.queue.next') }}</div>
               <table class="w-full min-w-full text-sm table-auto" id="table-nextup">
                 <tbody class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words"></tbody>
               </table>
               <button type="button"
         class="w-full text-sm px-3 py-2 text-blue-700 hover:bg-blue-50 font-medium"
         id="btn-more"
-        data-hint="Reveal more people in the speaker queue."
+        data-hint="{{ t('floor.hint.more') }}"
         data-hint-side="top"
-        hidden>Show more…</button>
+        hidden>{{ t('floor.queue.more') }}</button>
             </div>
 
             <details class="mt-4 rounded-2xl bg-slate-50/70 border border-slate-200 p-3">
-              <summary class="text-sm text-slate-500 cursor-pointer">History (DONE / WITHDRAWN)</summary>
+              <summary class="text-sm text-slate-500 cursor-pointer">{{ t('floor.queue.history') }}</summary>
               <div class="overflow-x-auto">
                 <table class="w-full min-w-full text-sm mt-2 table-auto">
                   <thead class="[&>tr>th]:px-2 [&>tr>th]:py-1 [&>tr>th]:text-left [&>tr>th]:text-slate-500">
                     <tr class="text-left text-slate-500">
-                      <th class="py-1">Pos</th><th>Handle</th><th>Kind</th><th>Status</th>
-                      <th class="text-right">Requested</th>
+                      <th class="py-1">{{ t('floor.queue.position') }}</th><th>{{ t('floor.queue.handle') }}</th><th>{{ t('floor.queue.kind') }}</th><th>{{ t('floor.queue.status') }}</th>
+                      <th class="text-right">{{ t('floor.queue.requested') }}</th>
                     </tr>
                   </thead>
                   <tbody id="speaker-history" class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words"></tbody>
@@ -860,8 +860,8 @@
 
       {% if floor.current_speaker_request_id %}
       <div class="mt-3 text-sm text-slate-700 shrink-0">
-        Current speaker request ID: <span class="font-mono">{{ floor.current_speaker_request_id }}</span>
-        • Time limit: {{ floor.speaking_time_sec }}s
+        {{ t('floor.queue.current_id') }} <span class="font-mono">{{ floor.current_speaker_request_id }}</span>
+        • {{ t('floor.time_limit', seconds=floor.speaking_time_sec) }}
       </div>
       {% endif %}
     </section>
@@ -869,7 +869,7 @@
     <!-- Speaking field -->
     <section class="gf-card p-4 gf-right-composer">
       <div id="recognized-banner" class="mb-3 text-sm text-emerald-700 hidden rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
-        🔔 You've been recognized: you have the floor.
+        {{ t('floor.recognized') }}
       </div>
 
       <form id="composer-box"
@@ -887,30 +887,30 @@
           <span id="reply-chip" class="hidden text-xs px-2 py-1 rounded bg-slate-100 text-slate-700"></span>
         </div>
 
-        <textarea name="body" rows="3" placeholder="Share your view…" class="border p-3 rounded-2xl w-full min-h-28 resize-y" required></textarea>
+        <textarea name="body" rows="3" placeholder="{{ t('floor.body_placeholder') }}" class="border p-3 rounded-2xl w-full min-h-28 resize-y" required></textarea>
 
         <div class="flex items-center gap-2">
           <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm"
         data-log-action="CLICK_POST_GENERAL_FLOOR_INTERVENTION"
         data-target-type="agenda_proposal"
         data-target-id="{{ proposal.id }}"
-        data-hint="Publish your intervention to the discussion thread."
-        data-hint-side="top">Post</button>
+        data-hint="{{ t('floor.hint.post') }}"
+        data-hint-side="top">{{ t('floor.post') }}</button>
 
 <button type="button"
         class="text-slate-600 text-sm"
         onclick="clearReply()"
-        data-hint="Remove the selected reply target and post as a general intervention."
-        data-hint-side="top">Clear reply</button>
+        data-hint="{{ t('floor.hint.clear_reply') }}"
+        data-hint-side="top">{{ t('floor.clear_reply') }}</button>
         </div>
 
         <div class="text-xs text-emerald-700 mt-1 rounded-xl bg-emerald-50 border border-emerald-100 px-3 py-2">
-          You have the floor (time limit {{ floor.speaking_time_sec }}s).
+          {{ t('floor.your_turn', seconds=floor.speaking_time_sec) }}
         </div>
       </form>
 
       <div id="composer-locked" class="text-sm text-slate-600 rounded-2xl bg-slate-50 border border-slate-200 px-4 py-3">
-        The floor is reserved for the current speaker. You can <strong>request the floor</strong> above.
+        {{ t('floor.composer_locked') }}
       </div>
     </section>
   </aside>
@@ -921,7 +921,7 @@
 <div id="now-playing"
      class="hidden lg:flex items-center gap-3 fixed bottom-4 left-4 z-40 bg-slate-950/85 text-white rounded-full px-4 py-2 shadow-2xl backdrop-blur border border-white/10">
   <div class="animate-pulse w-2 h-2 rounded-full bg-emerald-400"></div>
-  <div id="np-text" class="text-sm">Now speaking: —</div>
+  <div id="np-text" class="text-sm">{{ t('floor.now_empty') }}</div>
 </div>
 
 <script defer src="/static/js/interventions-replies-toggle.js"></script>
@@ -966,7 +966,7 @@
         }
 
         if (chip) {
-          chip.textContent = "Replying to " + label;
+          chip.textContent = window.UII18n.t('floor.reply_to', {target: label});
           chip.classList.remove("hidden");
         }
 
@@ -1021,6 +1021,7 @@
     const IS_RAPP = {{ 'true' if IS_PRESIDENT or IS_CHAIR else 'false' }};
     const floorPoll = DeliberationPolling.floor({
       userId: CURRENT_USER_ID,
+      generalFloor: true,
       url: "/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/state",
       fragmentUrl: "/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/interventions/fragment",
       list: "threads-container"
@@ -1060,7 +1061,7 @@
     
       if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Sending…';
+        btn.textContent = window.UII18n.t('floor.sending');
       }
     
       try {
@@ -1091,8 +1092,8 @@
             });
           }
     
-          if (btn) btn.textContent = 'Invited ✓';
-          if (typeof toast === 'function') toast('Invitation sent.');
+          if (btn) btn.textContent = window.UII18n.t('floor.invited');
+          if (typeof toast === 'function') toast(window.UII18n.t('floor.invitation_sent'));
           if (typeof refreshFloor === 'function') refreshFloor();
     
           setTimeout(() => {
@@ -1115,7 +1116,7 @@
           }
     
           if (btn) {
-            btn.textContent = 'Error';
+            btn.textContent = window.UII18n.t('floor.error');
             setTimeout(() => {
               btn.textContent = old;
               btn.disabled = false;
@@ -1133,7 +1134,7 @@
         }
     
         if (btn) {
-          btn.textContent = 'Error';
+          btn.textContent = window.UII18n.t('floor.error');
           setTimeout(() => {
             btn.textContent = old;
             btn.disabled = false;
@@ -1237,7 +1238,7 @@
     
             return `
               <div class="border border-slate-200 rounded-2xl p-3 bg-white/95 shadow-2xl backdrop-blur">
-                <div class="text-sm">${n.message}</div>
+                <div class="text-sm" data-invite-message></div>
     
                 <div class="mt-2 flex gap-2">
                   <button
@@ -1248,10 +1249,10 @@
                     data-notification-type="${n.type || ''}"
                     data-ror-kind="${p.kind || ''}"
                     data-target-intervention-id="${p.target_intervention_id || ''}"
-                    data-hint="Accept this Right of Reply invitation and enter the speaker queue."
+                    data-invite-hint="floor.hint.accept"
                     data-hint-side="left"
                   >
-                    Accept
+                    <span data-invite-label="floor.ror.accept"></span>
                   </button>
     
                   <button
@@ -1262,10 +1263,10 @@
                     data-notification-type="${n.type || ''}"
                     data-ror-kind="${p.kind || ''}"
                     data-target-intervention-id="${p.target_intervention_id || ''}"
-                    data-hint="Decline this invitation. You will not be added to the queue."
+                    data-invite-hint="floor.hint.decline"
                     data-hint-side="left"
                   >
-                    Decline
+                    <span data-invite-label="floor.ror.decline"></span>
                   </button>
                 </div>
     
@@ -1273,6 +1274,12 @@
               </div>
             `;
           }).join('');
+          box.querySelectorAll('[data-invite-message]').forEach((el, index) => {
+            const payload = invites[index].payload || {};
+            el.textContent = window.UII18n.t(payload.kind === 'ROR_ALL' ? 'floor.ror.invited_all' : 'floor.ror.invited_target', {target: payload.target_intervention_id || ''});
+          });
+          box.querySelectorAll('[data-invite-label]').forEach(el => { el.textContent = window.UII18n.t(el.dataset.inviteLabel); });
+          box.querySelectorAll('[data-invite-hint]').forEach(el => { el.dataset.hint = window.UII18n.t(el.dataset.inviteHint); });
         }
     
         if (!inviteHandlerAttached) {
@@ -1307,7 +1314,7 @@
               });
     
               if (res.ok) {
-                btn.textContent = act === 'accept' ? 'Accepted ✓' : 'Declined ✓';
+                btn.textContent = act === 'accept' ? window.UII18n.t('floor.accepted') : window.UII18n.t('floor.declined');
     
                 if (window.floorLog) {
                   window.floorLog(
@@ -1329,7 +1336,7 @@
                   refreshFloor();
                 }
               } else {
-                btn.textContent = 'Error';
+                btn.textContent = window.UII18n.t('floor.error');
     
                 if (window.floorLog) {
                   window.floorLog("ROR_INVITE_RESPONSE_FAILED", {
@@ -1342,7 +1349,7 @@
                 }
               }
             } catch (err) {
-              btn.textContent = 'Error';
+              btn.textContent = window.UII18n.t('floor.error');
     
               if (window.floorLog) {
                 window.floorLog("ROR_INVITE_RESPONSE_FAILED", {
@@ -1413,10 +1420,10 @@
           if (take.ok) {
             form.submit();
           } else {
-            toast('Could not take floor.');
+            toast(window.UII18n.t('floor.take_failed'));
           }
         } catch {
-          toast('Network error taking floor.');
+          toast(window.UII18n.t('floor.take_network'));
         }
       });
     })();

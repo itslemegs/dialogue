@@ -35,7 +35,7 @@
       {# Avatar + connector lines #}
       <div class="relative shrink-0">
         <div class="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-semibold"
-             title="{{ author.handle if author else 'user' }}">
+             title="{{ author.handle if author else t('roles.member') }}">
           {{ author.handle[0]|upper if author else "?" }}
         </div>
 
@@ -52,7 +52,7 @@
 
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 text-sm">
-          {{ uf.flair_for_user(u=author, roles_list=author_roles) }}
+          {{ uf.flair_for_user(u=author, roles_list=author_roles, chairman_label=t('floor.chair.label')) }}
           <span class="text-slate-400">•</span>
           <span class="text-slate-500">{{ it.created_at|jst }}</span>
           <!-- <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-100">{{ it.point_key }}</span> -->
@@ -69,9 +69,9 @@
                 <input type="hidden" name="relates_to_id" value="{{ it.id }}">
           
                 <button class="text-fuchsia-700 hover:underline"
-                        data-hint="Ask to reply directly to this intervention. The chair will decide when to recognize you."
+                        data-hint="{{ t('floor.hint.ror') }}"
                         data-hint-side="top">
-                  Request Right of Reply
+                  {{ t('floor.ror.request') }}
                 </button>
               </form>
             {% endif %}
@@ -86,14 +86,14 @@
                 <input name="to_handle"
                        placeholder="@handle"
                        class="border px-2 py-1 rounded text-sm"
-                       data-hint="Type the member handle you want to invite, for example alex (without the @)."
+                       data-hint="{{ t('floor.hint.handle') }}"
                        data-hint-side="top"
                        required>
           
                 <button class="ml-1 px-2 py-1 rounded text-sm bg-amber-600 text-white"
-                        data-hint="Invite this member to give a Right of Reply to this intervention."
+                        data-hint="{{ t('floor.hint.invite') }}"
                         data-hint-side="top">
-                  Invite RoR
+                  {{ t('floor.ror.invite') }}
                 </button>
               </form>
             {% endif %}
@@ -113,8 +113,8 @@
             <svg class="w-4 h-4 transition-transform duration-150" data-chevron viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
             </svg>
-            <span data-closed>View {{ reply_count }} repl{{ 'y' if reply_count == 1 else 'ies' }}</span>
-            <span data-open class="hidden">Hide replies</span>
+            <span data-closed>{{ t('floor.replies.one' if reply_count == 1 else 'floor.replies.many', count=reply_count) }}</span>
+            <span data-open class="hidden">{{ t('floor.replies.hide') }}</span>
           </button>
         {% endif %}
 

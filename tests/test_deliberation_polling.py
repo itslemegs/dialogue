@@ -215,6 +215,19 @@ class PollingTests(unittest.TestCase):
         self.assertIn('name="to_handle"',response.text)
         self.assertIn('/events/10/general-floor/20/floor/invite_ror',response.text)
 
+    def test_general_fragment_locale_pinned_across_cookie_changes(self):
+        self.link_general(); self.intervention(1); self.intervention(2,1)
+        self.client.cookies.set('ui_locale','en')
+        response=self.client.get(self.general+'/interventions/fragment',headers={'X-UI-Language':'ja'})
+        self.assertEqual(response.status_code,200)
+        self.assertIn('答弁権を申請',response.text)
+        self.assertIn('返信1件を表示',response.text)
+        self.assertIn('value="ROR"',response.text)
+        self.assertIn('&lt;script&gt;unsafe&lt;/script&gt;',response.text)
+        self.client.cookies.set('ui_locale','ja')
+        response=self.client.get(self.general+'/interventions/fragment',headers={'X-UI-Language':'en'})
+        self.assertIn('Request Right of Reply',response.text)
+
     def test_general_reads_do_not_create_missing_question_or_floor(self):
         for linked in [False,True]:
             if linked: self.link_general()

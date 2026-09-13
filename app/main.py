@@ -2639,7 +2639,7 @@ def post_intervention_for_agenda(
         try:
             rel_id = int(relates_to_id)
         except ValueError:
-            raise HTTPException(status_code=400, detail="relates_to_id must be an integer")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), 'floor.error.reply_id'))
 
     with get_session() as db:
         # # 1) Check agenda item exists and is ACCEPTED
@@ -2658,7 +2658,7 @@ def post_intervention_for_agenda(
         if rel_id:
             target = db.get(Intervention, rel_id)
             if not target or target.question_id != qid:
-                raise HTTPException(status_code=400, detail="Invalid reply target")
+                raise HTTPException(status_code=400, detail=translate(request_locale(request), 'floor.error.reply_target'))
 
         # 3) Privileged users can auto-take the floor, else enforce floor possession
         if is_privileged(user) and not user_has_floor(db, qid, user.id):
@@ -2666,7 +2666,7 @@ def post_intervention_for_agenda(
             force_take_floor(db, qid, user.id, kind=k, target=rel_id)
 
         if not user_has_floor(db, qid, user.id):
-            raise HTTPException(status_code=403, detail="You do not currently have the floor.")
+            raise HTTPException(status_code=403, detail=translate(request_locale(request), 'floor.error.not_speaking'))
 
         # 4) Create intervention
         it = _insert_intervention(
@@ -2727,7 +2727,7 @@ def floor_register_for_agenda(
         try:
             target_id = int(relates_to_id)
         except ValueError:
-            raise HTTPException(status_code=400, detail="relates_to_id must be an integer")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), 'floor.error.reply_id'))
 
     with get_session() as db:
         # # ensure agenda item exists and is ACCEPTED
@@ -2746,7 +2746,7 @@ def floor_register_for_agenda(
 
         # when floor is closed, only ROR / ROR_ALL is allowed
         if not fs.is_open and kind not in ("ROR", "ROR_ALL"):
-            raise HTTPException(status_code=400, detail="Speaker list is closed (use Right of Reply).")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), 'floor.error.closed'))
 
         # prevent duplicate active entry (QUEUED or SPEAKING) for this user on this item
         existing = db.exec(
@@ -2844,7 +2844,7 @@ def floor_toggle_for_agenda(pid: int, request: Request, event_id: int):
 
     flags = effective_flags(user)
     if not (flags["IS_PRESIDENT"] or flags["IS_CHAIR"]):
-        raise HTTPException(status_code=403, detail="Only president or chairman can toggle the floor")
+        raise HTTPException(status_code=403, detail=translate(request_locale(request), 'floor.error.toggle'))
 
     with get_session() as db:
         # # ensure agenda item exists and is ACCEPTED
@@ -2875,7 +2875,7 @@ def floor_call_next_for_agenda(pid: int, request: Request, event_id: int):
 
     flags = effective_flags(user)
     if not (flags["IS_PRESIDENT"] or flags["IS_CHAIR"]):
-        raise HTTPException(status_code=403, detail="Only president or chairman can call speakers")
+        raise HTTPException(status_code=403, detail=translate(request_locale(request), 'floor.error.call'))
 
     with get_session() as db:
         # # agenda must exist and be accepted
@@ -2959,7 +2959,7 @@ def floor_finish_current_for_agenda(pid: int, request: Request, event_id: int):
 
     flags = effective_flags(user)
     if not (flags["IS_PRESIDENT"] or flags["IS_CHAIR"]):
-        raise HTTPException(status_code=403, detail="Only president or chairman can finish speakers")
+        raise HTTPException(status_code=403, detail=translate(request_locale(request), 'floor.error.finish'))
 
     with get_session() as db:
         # # agenda must exist and be accepted
@@ -3012,7 +3012,7 @@ def floor_take_now_for_agenda(
     flags = effective_flags(user)
     # Only chair or president may take the floor / announce
     if not (flags["IS_CHAIR"] or flags["IS_PRESIDENT"]):
-        raise HTTPException(403, "Only the chair/president can take the floor")
+        raise HTTPException(403, translate(request_locale(request), 'floor.error.take'))
 
     with get_session() as db:
         # prop = db.get(AgendaProposal, pid)
@@ -3077,7 +3077,7 @@ def floor_invite_ror_for_agenda(
 
     flags = effective_flags(user)
     if not (flags["IS_PRESIDENT"] or flags["IS_CHAIR"]):
-        raise HTTPException(403, "Only president or chairman can invite RoR")
+        raise HTTPException(403, translate(request_locale(request), 'floor.error.invite'))
 
     with get_session() as db:
         # # Find accepted agenda item and ensure a backing Question exists
@@ -3092,19 +3092,19 @@ def floor_invite_ror_for_agenda(
 
         to_user = db.exec(select(User).where(User.handle == to_handle.lstrip("@"))).first()
         if not to_user:
-            raise HTTPException(404, "User handle not found")
+            raise HTTPException(404, translate(request_locale(request), 'floor.error.handle'))
 
         # Validate/normalize target for targeted RoR
         target_id = None
         k = (kind or "ROR").upper()
         if k == "ROR":
             if not relates_to_id or not str(relates_to_id).strip().isdigit():
-                raise HTTPException(400, "relates_to_id required for targeted RoR")
+                raise HTTPException(400, translate(request_locale(request), 'floor.error.target_required'))
             target_id = int(relates_to_id)
         elif k == "ROR_ALL":
             target_id = None
         else:
-            raise HTTPException(400, "invalid kind")
+            raise HTTPException(400, translate(request_locale(request), 'floor.error.kind'))
 
         inv = RorInvite(
             question_id=q.id,

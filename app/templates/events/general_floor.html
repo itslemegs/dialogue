@@ -2,7 +2,7 @@
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">General Floor</h1>
+    <h1 class="text-2xl font-bold">{{ t('event.general_floor') }}</h1>
     {% if event %}
       <div class="text-sm text-slate-600">
         <span class="font-medium">{{ event.title }}</span>
@@ -12,7 +12,7 @@
 
   {% if not event %}
     <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-      No upcoming or live event.
+      {{ t('event.none') }}
     </div>
   {% else %}
     {% if proposals and proposals|length %}
@@ -23,17 +23,17 @@
                href="/events/{{ event.id }}/general-floor/{{ p.id }}">{{ p.title }}</a>
             <div class="mt-2 text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap">{{ p.background }}</div>
             <div class="mt-2 text-xs text-slate-500">
-              Proposed {{ p.created_at|jst }}
-              • Proposer:
-              {% if p.proposer %}{{ p.proposer.handle }}{% else %}<em>Anonymous</em>{% endif %}
-              {% if p.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ p.source_url }}">source</a>{% endif %}
+              {{ t('agenda.proposed_at', time=p.created_at|jst) }}
+              • {{ t('agenda.proposer') }}
+              {% if p.proposer %}{{ p.proposer.handle }}{% else %}<em>{{ t('common.anonymous') }}</em>{% endif %}
+              {% if p.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ p.source_url }}">{{ t('floor.source') }}</a>{% endif %}
             </div>
           </li>
         {% endfor %}
       </ul>
     {% else %}
       <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-        No accepted agenda items yet.
+        {{ t('agenda.none_accepted') }}
       </div>
     {% endif %}
   {% endif %}

@@ -6,5 +6,5 @@
 {% for R in threads %}
   {{ render_node(R, user_map, q, can_speak, user) }}
 {% else %}
-  <li data-empty-message class="text-slate-500">No interventions yet. Be the first to post.</li>
+  <li data-empty-message class="text-slate-500">{{ t('floor.empty') }} {{ t('floor.first') }}</li>
 {% endfor %}

@@ -295,7 +295,9 @@ class RequestTests(unittest.TestCase):
             json.loads((ROOT/f'app/locales/{locale}.json').read_text(), object_pairs_hook=unique)
         import re
         for name in ['base.html','home.html','dashboard.html','login.html','register.html','macros/user_flair.html','events_menu.html','events/propose_agenda.html',
-                     'events/review_agenda.html','events/view_agenda.html','events/unlock_event.html']:
+                     'events/review_agenda.html','events/view_agenda.html','events/unlock_event.html',
+                     'events/general_floor.html','events/general_floor_item.html','macros/interventions.html',
+                     'partials/interventions_list.html']:
             source = (ROOT/'app/templates'/name).read_text()
             for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)", source):
                 self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
@@ -440,6 +442,97 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(payload['event.locked'],'ロック中')
         self.assertEqual(payload['event.open'],'利用可能')
         self.assertEqual(i18n.translate('ja','event.opens_on',time='09:00 JST'),'09:00 JSTから利用できます')
+
+    def general_floor_context(self, chair=False, opened=True):
+        context = self.phase3_context()
+        user = SimpleNamespace(id=2, handle='viewer', roles=[])
+        item = dict(context['event'], proposal_id=8, id=60, title='Authored agenda 日本語',
+                    background='Original background', source_url=None, created_at='2026-09-01T00:00:00Z', proposer=None)
+        post = SimpleNamespace(id=1, by_user=2, body='Original speech 日本語',
+            created_at='2026-09-01T00:00:00Z', relates_to_id=None)
+        context.update(user=user, item=item, proposal=SimpleNamespace(id=8), q=SimpleNamespace(id=60),
+            floor=SimpleNamespace(is_open=opened,current_speaker_request_id=1,speaking_time_sec=120),
+            threads=[dict(node=post,children=[])], user_map={2:user}, role_map={2:['chairman' if chair else 'member']},
+            flags=dict(IS_CHAIR=chair,IS_PRESIDENT=False,IS_ADMIN=False,IS_MEMBER=True),
+            can_speak=chair,last_child_id=0,last_any_id=1,discussion_revision='1:1')
+        return context
+
+    def test_phase4_general_floor_participant_and_chair_presentation(self):
+        for locale, heading, speakers, request_label, ror in [
+                ('en','General Floor','Speakers','Request the floor','Request Right of Reply'),
+                ('ja','一般討論フロア','発言者リスト','発言を希望する','答弁権を申請')]:
+            for chair in [False,True]:
+                for opened in [False,True]:
+                    ctx=self.general_floor_context(chair,opened)
+                    html=self.render_phase2('events/general_floor_item.html',locale,**ctx)
+                    for label in [heading,speakers,request_label,'Original speech 日本語','Authored agenda 日本語','@viewer']:
+                        self.assertIn(label,html)
+                    self.assertEqual('id="btn-call-next"' in html,chair)
+                    self.assertEqual('value="ROR_ALL"' in html,chair)
+                    self.assertIn('value="GENERAL"',html)
+                    if chair:
+                        self.assertIn('次の発言者の発言を許可' if locale=='ja' else 'Call next speaker',html)
+                        expected=('発言者リストの受付を終了' if opened else '発言者リストの受付を開始') if locale=='ja' else ('Close list' if opened else 'Open list')
+                        self.assertIn(expected,html)
+                        self.assertIn('title="議長"' if locale=='ja' else 'title="chairman"',html)
+                    else:
+                        self.assertIn(ror,html)
+                        self.assertIn('value="ROR"',html)
+                    self.assertEqual(ctx['user'].id,2)
+                    self.assertEqual(ctx['floor'].is_open,opened)
+                    self.assertIn('AI機能は現在無効です' if locale=='ja' else 'AI features are currently disabled',html)
+            index=self.render_phase2('events/general_floor.html',locale,**self.phase3_context())
+            self.assertIn(heading,index)
+
+    def test_phase4_direct_fragment_uses_pinned_locale_and_retains_content(self):
+        self.templates.env.globals['url_for'] = lambda name, **params: '/static/' + params['path']
+        ctx=self.general_floor_context()
+        for locale, label in [('en','Request Right of Reply'),('ja','答弁権を申請')]:
+            req=request(locale,'en' if locale=='ja' else 'ja')
+            html=self.templates.env.get_template('partials/interventions_list.html').render(request=req,**ctx)
+            self.assertIn(label,html)
+            self.assertIn('Original speech 日本語',html)
+            self.assertIn('value="ROR"',html)
+            self.assertIn('data-discussion-revision="1:1"',html)
+        ctx['threads']=[]
+        self.assertIn('発言はまだありません。',self.templates.env.get_template('partials/interventions_list.html').render(request=request('ja'),**ctx))
+
+    def test_phase4_permission_errors_keep_codes_and_do_not_touch_db(self):
+        from fastapi import HTTPException
+        from unittest.mock import Mock
+        names={'floor_toggle_for_agenda':'toggle', 'floor_call_next_for_agenda':'call',
+               'floor_finish_current_for_agenda':'finish', 'floor_take_now_for_agenda':'take',
+               'floor_invite_ror_for_agenda':'invite'}
+        nodes=[n for n in ast.parse((ROOT/'app/main.py').read_text()).body
+               if isinstance(n,ast.FunctionDef) and n.name in names]
+        for n in nodes:
+            n.decorator_list=[]
+            for arg in n.args.args: arg.annotation=None
+            n.returns=None
+        db=Mock(side_effect=AssertionError('Unauthorized action reached DB'))
+        ns=dict(Form=Form,HTTPException=HTTPException,current_user=lambda req:SimpleNamespace(id=2),
+                effective_flags=lambda u:dict(IS_PRESIDENT=False,IS_CHAIR=False,IS_ADMIN=False),
+                get_session=db,translate=i18n.translate,request_locale=i18n.request_locale)
+        exec(compile(ast.Module(body=nodes,type_ignores=[]),'isolated_floor_errors','exec'),ns)
+        for locale in ['en','ja']:
+            for name,key in names.items():
+                with self.assertRaises(HTTPException) as raised:
+                    ns[name](request=request(locale),event_id=10,pid=20)
+                self.assertEqual(raised.exception.status_code,403)
+                self.assertEqual(raised.exception.detail,i18n.translate(locale,'floor.error.'+key))
+        db.assert_not_called()
+
+    def test_phase4_dynamic_catalogue_and_scope(self):
+        payload=json.loads(self.templates.env.from_string('{{ ui_js_catalogue()|tojson }}').render(request=request('ja')))
+        for key,label in [('floor.queue.speaking','発言中'),('floor.queue.queued','待機中'),
+                          ('floor.queue.ror','答弁権'),('floor.ror.all','討論全体への答弁権')]:
+            self.assertEqual(payload[key],label)
+        self.assertEqual(i18n.translate('ja','floor.ror.invited_target',target=17),'議長から発言#17への答弁を依頼されました。')
+        source=(ROOT/'app/static/js/deliberation-polling.js').read_text()
+        self.assertIn('options.generalFloor ? window.UII18n.t(key, params) : fallback',source)
+        self.assertIn('generalFloor: true',(ROOT/'app/templates/events/general_floor_item.html').read_text())
+        self.assertNotIn('generalFloor: true',(ROOT/'app/templates/events/proposal_floor_item.html').read_text())
+        self.assertEqual(i18n.translate('ja','roles.chairman'),'chairman')
 
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden

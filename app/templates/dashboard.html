@@ -9,8 +9,8 @@
       <div class="h-full rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div class="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 class="text-2xl font-semibold text-slate-900">Events</h2>
-            <p class="text-sm text-slate-500 mt-1">Live and upcoming sessions</p>
+            <h2 class="text-2xl font-semibold text-slate-900">{{ t('dashboard.events') }}</h2>
+            <p class="text-sm text-slate-500 mt-1">{{ t('dashboard.sessions') }}</p>
           </div>
           <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700">
             {{ dashboard_events|length }}
@@ -42,7 +42,7 @@
                 <div class="relative z-10 h-full p-6 md:p-8 flex flex-col justify-between text-white">
                   <div class="flex items-start justify-between gap-3">
                     <div>
-                      <p class="text-xs uppercase tracking-[0.18em] text-white/75">Event</p>
+                      <p class="text-xs uppercase tracking-[0.18em] text-white/75">{{ t('dashboard.event') }}</p>
                       <h3 class="mt-2 text-2xl md:text-3xl font-bold leading-tight">
                         {{ ev.title }}
                       </h3>
@@ -53,12 +53,12 @@
 
                     <div class="flex flex-col items-end gap-2 shrink-0">
                       <span class="js-event-badge px-2 py-1 rounded text-xs font-semibold bg-white/90 text-slate-900 backdrop-blur">
-                        {% if ev.state == 'live' %}Live{% else %}Upcoming{% endif %}
+                        {% if ev.state == 'live' %}{{ t('dashboard.live') }}{% else %}{{ t('dashboard.upcoming') }}{% endif %}
                       </span>
 
                       {% if ev.locked %}
                         <span class="px-2 py-1 rounded text-xs font-semibold bg-amber-100/95 text-amber-900 backdrop-blur">
-                          Passcode
+                          {{ t('dashboard.passcode') }}
                         </span>
                       {% endif %}
                     </div>
@@ -67,19 +67,19 @@
                   <div class="mt-8">
                     <!-- Upcoming -->
                     <div class="js-countdown-wrap">
-                      <div class="text-4xl md:text-5xl font-extrabold tracking-tight js-countdown">--h --m --s</div>
-                      <p class="text-sm mt-2 text-white/80">until start</p>
+                      <div class="text-4xl md:text-5xl font-extrabold tracking-tight js-countdown">{{ t('dashboard.countdown_hours', hours='--', minutes='--', seconds='--') }}</div>
+                      <p class="text-sm mt-2 text-white/80">{{ t('dashboard.until_start') }}</p>
                     </div>
 
                     <!-- Live -->
                     <div class="js-live-wrap hidden mt-6">
                       <div class="flex items-center justify-between gap-3">
                         <div>
-                          <p class="text-xs uppercase tracking-[0.16em] text-white/70">Current stage</p>
-                          <p class="js-stage-name mt-1 text-lg font-semibold">In progress</p>
+                          <p class="text-xs uppercase tracking-[0.16em] text-white/70">{{ t('dashboard.current_stage') }}</p>
+                          <p class="js-stage-name mt-1 text-lg font-semibold">{{ t('dashboard.in_progress') }}</p>
                         </div>
                         <div class="text-right">
-                          <p class="text-xs uppercase tracking-[0.16em] text-white/70">Time remaining</p>
+                          <p class="text-xs uppercase tracking-[0.16em] text-white/70">{{ t('dashboard.time_remaining') }}</p>
                           <p class="js-stage-remain mt-1 text-lg font-semibold">--:--:--</p>
                         </div>
                       </div>
@@ -91,8 +91,8 @@
 
                     <!-- Ended -->
                     <div class="js-ended-wrap hidden mt-6">
-                      <p class="text-lg font-semibold">Event ended</p>
-                      <p class="js-ended-when text-sm text-white/80 mt-1">Ended</p>
+                      <p class="text-lg font-semibold">{{ t('dashboard.event_ended') }}</p>
+                      <p class="js-ended-when text-sm text-white/80 mt-1">{{ t('dashboard.ended') }}</p>
                     </div>
                   </div>
 
@@ -109,7 +109,7 @@
           {% else %}
             <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
               <div class="text-5xl font-bold text-slate-300">—</div>
-              <p class="text-sm text-slate-500 mt-2">No live or upcoming events</p>
+              <p class="text-sm text-slate-500 mt-2">{{ t('dashboard.no_events') }}</p>
             </div>
           {% endif %}
         </div>
@@ -127,9 +127,9 @@
 
         <div class="relative z-10 p-8 flex flex-col justify-between h-full text-white">
           <div class="flex items-center justify-between">
-            <h2 class="text-2xl font-semibold">Department of Records</h2>
+            <h2 class="text-2xl font-semibold">{{ t('dashboard.records') }}</h2>
             <span class="inline-flex items-center gap-1 text-white/90 px-2 py-1 rounded text-sm font-semibold">
-              Open
+              {{ t('common.open') }}
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M9 5l7 7-7 7"/>
@@ -138,11 +138,11 @@
           </div>
 
           <div class="mt-6 space-y-3">
-            <p class="text-lg font-medium">Browse agendas, interventions, minutes, and official documents.</p>
+            <p class="text-lg font-medium">{{ t('dashboard.records_help') }}</p>
             <ul class="text-sm text-white/90 space-y-1">
-              <li>• Recent agendas</li>
-              <li>• Speaker records</li>
-              <li>• Decisions &amp; resolutions</li>
+              <li>• {{ t('dashboard.recent_agendas') }}</li>
+              <li>• {{ t('dashboard.speaker_records') }}</li>
+              <li>• {{ t('dashboard.decisions') }}</li>
             </ul>
           </div>
         </div>
@@ -155,6 +155,7 @@
 {% if dashboard_events %}
 <script>
 (function () {
+  const tr = window.UII18n.t;
   const cards = Array.from(document.querySelectorAll('.js-event-card'));
   if (!cards.length) return;
 
@@ -164,13 +165,13 @@
 
   function humanSince(d) {
     const s = Math.floor((Date.now() - d.getTime()) / 1000);
-    if (s < 60) return `${s}s ago`;
+    if (s < 60) return tr('dashboard.ended_seconds', {count: s});
     const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m ago`;
+    if (m < 60) return tr('dashboard.ended_minutes', {count: m});
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
+    if (h < 24) return tr('dashboard.ended_hours', {count: h});
     const days = Math.floor(h / 24);
-    return `${days}d ago`;
+    return tr('dashboard.ended_days', {count: days});
   }
 
   function clamp01(x) {
@@ -194,7 +195,7 @@
       if (t >= a && t < b) {
         const pct = clamp01((t - a) / (b - a));
         const remain = Math.max(0, Math.floor((b - t) / 1000));
-        return { name: st.name || 'Stage', pct, remain };
+        return { name: st.name || tr('dashboard.stage'), pct, remain };
       }
     }
 
@@ -205,7 +206,7 @@
       if (t >= a && t < b) {
         const pct = clamp01((t - a) / (b - a));
         const remain = Math.max(0, Math.floor((b - t) / 1000));
-        return { name: 'In progress', pct, remain };
+        return { name: tr('dashboard.in_progress'), pct, remain };
       }
     }
 
@@ -219,19 +220,19 @@
     const endedWrap = root.querySelector('.js-ended-wrap');
 
     if (state === 'upcoming') {
-      badge.textContent = 'Upcoming';
+      badge.textContent = tr('dashboard.upcoming');
       badge.className = 'js-event-badge px-2 py-1 rounded text-xs font-semibold bg-sky-100 text-sky-700';
       countdownWrap.classList.remove('hidden');
       liveWrap.classList.add('hidden');
       endedWrap.classList.add('hidden');
     } else if (state === 'live') {
-      badge.textContent = 'Live';
+      badge.textContent = tr('dashboard.live');
       badge.className = 'js-event-badge px-2 py-1 rounded text-xs font-semibold bg-emerald-100 text-emerald-700';
       countdownWrap.classList.add('hidden');
       liveWrap.classList.remove('hidden');
       endedWrap.classList.add('hidden');
     } else {
-      badge.textContent = 'Ended';
+      badge.textContent = tr('dashboard.ended');
       badge.className = 'js-event-badge px-2 py-1 rounded text-xs font-semibold bg-slate-200 text-slate-600';
       countdownWrap.classList.add('hidden');
       liveWrap.classList.add('hidden');
@@ -263,12 +264,12 @@
         const d = Math.floor(delta / 86400); delta %= 86400;
         const h = Math.floor(delta / 3600); delta %= 3600;
         const m = Math.floor(delta / 60);
-        countdown.textContent = `${d}d ${fmt2(h)}h ${fmt2(m)}m`;
+        countdown.textContent = tr('dashboard.countdown_days', {days: d, hours: fmt2(h), minutes: fmt2(m)});
       } else {
         const h = Math.floor(delta / 3600); delta %= 3600;
         const m = Math.floor(delta / 60);
         const s = delta % 60;
-        countdown.textContent = `${fmt2(h)}h ${fmt2(m)}m ${fmt2(s)}s`;
+        countdown.textContent = tr('dashboard.countdown_hours', {hours: fmt2(h), minutes: fmt2(m), seconds: fmt2(s)});
       }
       return;
     }
@@ -286,7 +287,7 @@
         const s = st.remain % 60;
         stageRemain.textContent = `${fmt2(h)}:${fmt2(m)}:${fmt2(s)}`;
       } else {
-        stageName.textContent = 'In progress';
+        stageName.textContent = tr('dashboard.in_progress');
         liveProgress.style.width = '100%';
         stageRemain.textContent = '—';
       }
@@ -294,7 +295,7 @@
     }
 
     setState(root, 'ended');
-    endedWhen.textContent = end ? `Ended ${humanSince(end)}` : 'Ended';
+    endedWhen.textContent = end ? humanSince(end) : tr('dashboard.ended');
   }
 
   function tickAll() {

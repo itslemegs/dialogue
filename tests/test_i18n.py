@@ -206,6 +206,137 @@ class RequestTests(unittest.TestCase):
         self.assertEqual(template.render(request=request('en'), **context),
                          template.render(request=request('ja'), **context))
 
+    def render_phase2(self, name, locale, **context):
+        req = request(locale)
+        req.state.help_ctx = {}
+        self.templates.env.globals['url_for'] = lambda name, **params: '/static/' + params['path']
+        values = dict(request=req, user=None, event=None, flags={}, dashboard_events=[])
+        values.update(context)
+        return self.templates.env.get_template(name).render(**values)
+
+    def test_phase2_public_account_pages(self):
+        examples = {
+            'home.html': ('Download User Manual', '利用マニュアルをダウンロード'),
+            'dashboard.html': ('No live or upcoming events', '開催中・開催予定のイベントはありません'),
+            'login.html': ('Welcome back', 'おかえりなさい'),
+            'register.html': ('Create your account', 'アカウントの作成'),
+        }
+        for name, labels in examples.items():
+            for locale, label in zip(('en', 'ja'), labels):
+                with self.subTest(template=name, locale=locale):
+                    html = self.render_phase2(name, locale)
+                    self.assertIn(label, html)
+                    self.assertIn(f'<html lang="{locale}">', html)
+                    self.assertIn('d¡alogüe.', html)
+        for name in ['login.html', 'register.html']:
+            html = self.render_phase2(name, 'ja')
+            self.assertIn('パスワード', html)
+            self.assertIn('name="password"', html)
+            self.assertIn('method="post"', html)
+        html = self.render_phase2('home.html', 'ja')
+        self.assertIn('/static/manuals/user_manual_en.pdf', html)
+        self.assertIn('/static/manuals/user_manual_ja.pdf', html)
+
+    def test_phase2_navigation_and_role_presentation(self):
+        user = SimpleNamespace(handle='alice<&>', roles=[])
+        for locale, greeting, admin_label in [('en', 'hi,', 'Admin'), ('ja', 'こんにちは、', '管理画面')]:
+            html = self.render_phase2('base.html', locale, user=user, flags={'IS_ADMIN': True})
+            self.assertIn(greeting, html)
+            self.assertIn(admin_label, html)
+            self.assertIn('@alice&lt;&amp;&gt;', html)
+            self.assertIn('href="/admin"', html)
+        for role, image, ja_label in [('admin','admin','管理者'), ('member','member','参加者'),
+                ('invited speaker','speaker','招待発言者'), ('president','president','president'),
+                ('chairman','chairman','chairman')]:
+            roles = [role]
+            template = self.templates.env.from_string(
+                '{% from "macros/user_flair.html" import flair_for_user with context %}'
+                '{{ flair_for_user(u=user, roles_list=roles) }}')
+            html = template.render(request=request('ja'), user=user, roles=roles)
+            self.assertIn(f'title="{ja_label}"', html)
+            self.assertIn(f'img/badges/{image}.png', html)
+            self.assertEqual(roles, [role])
+
+    def test_phase2_dashboard_keeps_authored_values_and_state(self):
+        event = dict(id=41, menu_href='/events/41/menu', title='Original event <title>',
+            starts_at_iso='2026-09-01T00:00:00Z', ends_at_iso='2026-09-01T01:00:00Z',
+            starts_at_human='2026-09-01 09:00 JST', state='live', locked=True,
+            stages=json.dumps([{'name':'General Floor'}]), stages_json=[{'name':'General Floor'}])
+        for locale, label in [('en','Live'), ('ja','開催中')]:
+            html = self.render_phase2('dashboard.html', locale, dashboard_events=[event])
+            self.assertIn(label, html)
+            self.assertIn('Original event &lt;title&gt;', html)
+            self.assertIn('General Floor', html)
+            self.assertIn('data-state="live"', html)
+            self.assertIn('2026-09-01 09:00 JST', html)
+            self.assertIn("setInterval(tickAll, 1000)", html)
+            self.assertIn("}, 10000)", html)
+        self.assertEqual(event['title'], 'Original event <title>')
+
+    def test_phase2_dynamic_catalogue_and_placeholder_sentences(self):
+        payload = json.loads(self.templates.env.from_string('{{ ui_js_catalogue()|tojson }}').render(request=request('ja')))
+        self.assertEqual(payload['dashboard.ended_minutes'], '{count}分前に終了')
+        self.assertEqual(payload['dashboard.countdown_hours'], '{hours}時間 {minutes}分 {seconds}秒')
+        self.assertEqual(payload['common.ok'], 'OK')
+        self.assertIn('notifications.floor_recognition', payload)
+        self.assertIn("window.UII18n.t('common.ok')", (ROOT/'app/templates/base.html').read_text())
+        for filename in ['login.html','register.html']:
+            self.assertIn("t('account.password')", (ROOT/'app/templates'/filename).read_text())
+
+    def test_phase2_catalogues_have_no_duplicate_or_unknown_template_keys(self):
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                self.assertNotIn(key, result)
+                result[key] = value
+            return result
+        for locale in ['en','ja']:
+            json.loads((ROOT/f'app/locales/{locale}.json').read_text(), object_pairs_hook=unique)
+        import re
+        for name in ['base.html','home.html','dashboard.html','login.html','register.html','macros/user_flair.html']:
+            source = (ROOT/'app/templates'/name).read_text()
+            for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)", source):
+                self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
+
+    def test_phase2_account_failures_keep_codes_and_uniform_login_errors(self):
+        import re
+        from unittest.mock import MagicMock
+        from fastapi import HTTPException
+        nodes = [n for n in ast.parse((ROOT/'app/main.py').read_text()).body
+                 if isinstance(n, ast.FunctionDef) and n.name in ['post_login','post_register']]
+        for node in nodes:
+            node.decorator_list = []
+        db = MagicMock()
+        db.__enter__.return_value = db
+        column = MagicMock()
+        ns = dict(Request=Request, Form=Form, HTTPException=HTTPException, re=re,
+                  request_locale=i18n.request_locale, translate=i18n.translate,
+                  get_session=lambda: db, User=SimpleNamespace(email=column, handle=column),
+                  select=lambda *args: SimpleNamespace(where=lambda *args: None),
+                  verify_password=lambda *args: False, has_role=lambda *args: True)
+        exec(compile(ast.Module(body=nodes,type_ignores=[]),'isolated_account_messages','exec'), ns)
+        for locale in ['en','ja']:
+            for user in [None, SimpleNamespace(password_hash=None), SimpleNamespace(password_hash='hash')]:
+                db.exec.return_value.scalar_one_or_none.return_value = user
+                with self.assertRaises(HTTPException) as raised:
+                    ns['post_login'](request(locale), identifier='example', password='bad')
+                self.assertEqual(raised.exception.status_code,400)
+                self.assertEqual(raised.exception.detail,i18n.translate(locale,'account.invalid_credentials'))
+            ns['verify_password'] = lambda *args: True
+            db.exec.return_value.scalar_one_or_none.return_value = SimpleNamespace(password_hash='hash')
+            with self.assertRaises(HTTPException) as raised:
+                ns['post_login'](request(locale), identifier='example', password='good')
+            self.assertEqual(raised.exception.status_code,403)
+            self.assertEqual(raised.exception.detail,i18n.translate(locale,'account.banned'))
+            ns['verify_password'] = lambda *args: False
+            db.exec.return_value.first.return_value = object()
+            with self.assertRaises(HTTPException) as raised:
+                ns['post_register'](request(locale),handle='example',email='existing@example.com',password='bad')
+            self.assertEqual(raised.exception.status_code,400)
+            self.assertEqual(raised.exception.detail,i18n.translate(locale,'account.already_registered'))
+        db.add.assert_not_called()
+        db.commit.assert_not_called()
+
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden
         # reply ID is server state, not evidence of an unfinished user edit.

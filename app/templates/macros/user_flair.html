@@ -18,26 +18,26 @@
 
     {# Show badges in priority order #}
     {% if 'admin' in roles %}
-      <img class="badge-icon" alt="admin" title="admin"
+      <img class="badge-icon" alt="{{ t('roles.admin') }}" title="{{ t('roles.admin') }}"
            src="{{ url_for('static', path='img/badges/admin.png') }}" width="16" height="16" />
     {% endif %}
     {% if 'president' in roles %}
-      <img class="badge-icon" alt="president" title="president"
+      <img class="badge-icon" alt="{{ t('roles.president') }}" title="{{ t('roles.president') }}"
            src="{{ url_for('static', path='img/badges/president.png') }}" width="16" height="16" />
     {% endif %}
     {% if 'chairman' in roles %}
-      <img class="badge-icon" alt="chairman" title="chairman"
+      <img class="badge-icon" alt="{{ t('roles.chairman') }}" title="{{ t('roles.chairman') }}"
            src="{{ url_for('static', path='img/badges/chairman.png') }}" width="16" height="16" />
     {% endif %}
 
     {% if 'invited speaker' in roles %}
-      <img class="badge-icon" alt="speaker" title="speaker"
+      <img class="badge-icon" alt="{{ t('roles.invited_speaker') }}" title="{{ t('roles.invited_speaker') }}"
            src="{{ url_for('static', path='img/badges/speaker.png') }}" width="16" height="16" />
     {% endif %}
 
     {# Optional: only show 'user' if no higher roles #}
     {% if 'member' in roles and not ('admin' in roles or 'president' in roles or 'chairman' in roles or 'invited speaker' in roles) %}
-      <img class="badge-icon" alt="user" title="user"
+      <img class="badge-icon" alt="{{ t('roles.member') }}" title="{{ t('roles.member') }}"
            src="{{ url_for('static', path='img/badges/member.png') }}" width="16" height="16" />
     {% endif %}
   </span>

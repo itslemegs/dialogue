@@ -38,13 +38,14 @@
           const el = document.createElement('div');
           el.className = "max-w-sm bg-white border rounded shadow p-3";
           el.innerHTML = `
-            <div class="text-sm font-semibold mb-1">${it.type === 'FLOOR' ? 'You have the floor' : 'Notice'}</div>
+            <div class="text-sm font-semibold mb-1"></div>
             <div class="text-sm text-slate-700">${it.message}</div>
             <div class="text-xs text-slate-500 mt-1">${window.formatJstTimestamp(it.ts)}</div>
             <div class="mt-2 text-right">
-              <button class="px-2 py-1 text-xs bg-slate-800 text-white rounded">OK</button>
+              <button class="px-2 py-1 text-xs bg-slate-800 text-white rounded"></button>
             </div>`;
-          if (it.type !== 'FLOOR') el.firstElementChild.textContent = window.UII18n.t('ui.notifications');
+          el.firstElementChild.textContent = window.UII18n.t(it.type === 'FLOOR' ? 'notifications.floor_recognition' : 'ui.notifications');
+          el.querySelector('button').textContent = window.UII18n.t('common.ok');
           el.querySelector('button').onclick = () => root.removeChild(el);
           root.appendChild(el);
           setTimeout(()=>{ if (el.parentNode) root.removeChild(el); }, 8000);
@@ -88,19 +89,19 @@
 
         {% if user %}
           <span class="mr-3">
-            hi, {{ uf.flair_for_user(u=user, roles_list=roles_from_flags) }}
+            {{ t('account.greeting') }} {{ uf.flair_for_user(u=user, roles_list=roles_from_flags) }}
           </span>
           <a href="/dashboard" class="mr-3 text-blue-600">{{ t('nav.dashboard') }}</a>
           {% if flags.IS_ADMIN or flags.IS_PRESIDENT or flags.IS_CHAIR %}
             <a href="/logout" class="mr-3 text-red-600">{{ t('nav.logout') }}</a>
-            <a href="/admin" class="text-green-600">Admin</a>
+            <a href="/admin" class="text-green-600">{{ t('nav.admin') }}</a>
           {% else %}
             <a href="/logout" class="text-red-600">{{ t('nav.logout') }}</a>
             </form>            
           {% endif %}
         {% else %}
           <a href="/login" class="mr-3 text-blue-600">{{ t('nav.login') }}</a>
-          <a href="/register" class="text-blue-600">Register</a>
+          <a href="/register" class="text-blue-600">{{ t('nav.register') }}</a>
         {% endif %}
         <form method="post" action="/ui-language" data-ui-language
               class="inline-flex items-center gap-1 ml-3 text-sm"

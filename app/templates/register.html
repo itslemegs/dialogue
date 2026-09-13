@@ -12,10 +12,10 @@
       <div class="mb-6">
         <div class="flex items-center justify-between">
           <a href="/" class="text-lg font-semibold tracking-tight text-slate-900">d¡alogüe.</a>
-          <span class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Register</span>
+          <span class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">{{ t('nav.register') }}</span>
         </div>
-        <h1 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900">Create your account</h1>
-        <p class="mt-1 text-sm text-slate-600">Join the room in under a minute.</p>
+        <h1 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900">{{ t('account.create_heading') }}</h1>
+        <p class="mt-1 text-sm text-slate-600">{{ t('account.join_help') }}</p>
       </div>
 
       {% if error %}
@@ -26,7 +26,7 @@
 
       <form method="post" class="space-y-5">
         <div>
-          <label for="handle" class="mb-2 block text-sm font-medium text-slate-700">Handle</label>
+          <label for="handle" class="mb-2 block text-sm font-medium text-slate-700">{{ t('account.handle') }}</label>
           <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
               <!-- at-sign icon -->
@@ -37,18 +37,18 @@
             <input
               id="handle"
               name="handle"
-              placeholder="johndoe123"
+              placeholder="{{ t('account.handle_example') }}"
               required
               autocomplete="nickname"
               class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pl-10 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition
                      focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15"
             >
           </div>
-          <p class="mt-2 text-xs text-slate-500">Keep it short. You can’t change this easily later.</p>
+          <p class="mt-2 text-xs text-slate-500">{{ t('account.handle_help') }}</p>
         </div>
 
         <div>
-          <label for="email" class="mb-2 block text-sm font-medium text-slate-700">Email</label>
+          <label for="email" class="mb-2 block text-sm font-medium text-slate-700">{{ t('account.email') }}</label>
           <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
               <!-- mail icon -->
@@ -71,7 +71,7 @@
         </div>
 
         <div>
-          <label for="password" class="mb-2 block text-sm font-medium text-slate-700">Password</label>
+          <label for="password" class="mb-2 block text-sm font-medium text-slate-700">{{ t('account.password') }}</label>
           <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
               <!-- lock icon -->
@@ -83,14 +83,14 @@
               type="password"
               id="password"
               name="password"
-              placeholder="Create a strong password"
+              placeholder="{{ t('account.password_placeholder') }}"
               required
               autocomplete="new-password"
               class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pl-10 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition
                      focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15"
             >
           </div>
-          <p class="mt-2 text-xs text-slate-500">Tip: 10+ chars is a sweet spot.</p>
+          <p class="mt-2 text-xs text-slate-500">{{ t('account.password_help') }}</p>
         </div>
 
         <button
@@ -99,17 +99,17 @@
                  text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700
                  focus:outline-none focus:ring-4 focus:ring-blue-600/25"
         >
-          Create account
+          {{ t('account.create') }}
           <span class="transition group-hover:translate-x-0.5">→</span>
         </button>
 
         <div class="text-center text-sm text-slate-600">
-          Already have an account?
-          <a href="/login" class="font-medium text-blue-700 hover:underline">Log in</a>
+          {{ t('account.existing_account') }}
+          <a href="/login" class="font-medium text-blue-700 hover:underline">{{ t('nav.login') }}</a>
         </div>
 
         <p class="text-center text-xs text-slate-500">
-          By creating an account, you agree to the platform’s terms and privacy policy.
+          {{ t('account.register_terms') }}
         </p>
       </form>
     </div>

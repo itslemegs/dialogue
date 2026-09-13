@@ -13,7 +13,12 @@ CATALOGUES = MappingProxyType({
         (Path(__file__).parent / "locales" / f"{locale}.json").read_text(encoding="utf-8")
     )) for locale in SUPPORTED_LOCALES
 })
-JS_KEYS = ("ui.notifications", "ui.unsaved_language")
+JS_KEYS = (
+    "ui.notifications", "ui.unsaved_language", "common.ok", "notifications.floor_recognition",
+    "dashboard.stage", "dashboard.in_progress", "dashboard.live", "dashboard.upcoming", "dashboard.ended",
+    "dashboard.ended_seconds", "dashboard.ended_minutes", "dashboard.ended_hours", "dashboard.ended_days",
+    "dashboard.countdown_days", "dashboard.countdown_hours",
+)
 
 
 def normalize_locale(value):

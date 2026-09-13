@@ -12,10 +12,10 @@
       <div class="mb-6">
         <div class="flex items-center justify-between">
           <a href="/" class="text-lg font-semibold tracking-tight text-slate-900">d¡alogüe.</a>
-          <span class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">Login</span>
+          <span class="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">{{ t('nav.login') }}</span>
         </div>
-        <h1 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900">Welcome back</h1>
-        <p class="mt-1 text-sm text-slate-600">Sign in to continue.</p>
+        <h1 class="mt-4 text-2xl font-semibold tracking-tight text-slate-900">{{ t('account.welcome_back') }}</h1>
+        <p class="mt-1 text-sm text-slate-600">{{ t('account.sign_in_help') }}</p>
       </div>
 
       {# If you pass `error` into the template, this will show nicely #}
@@ -27,7 +27,7 @@
 
       <form method="post" class="space-y-5">
         <div>
-          <label for="identifier" class="mb-2 block text-sm font-medium text-slate-700">Username</label>
+          <label for="identifier" class="mb-2 block text-sm font-medium text-slate-700">{{ t('account.username') }}</label>
           <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
               <!-- user/mail icon -->
@@ -39,10 +39,10 @@
               type="text"
               id="identifier"
               name="identifier"
-              placeholder="username"
+              placeholder="{{ t('account.username_placeholder') }}"
               required
               autocomplete="username"
-              aria-label="Username or Email"
+              aria-label="{{ t('account.identifier') }}"
               class="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 pl-10 text-slate-900 placeholder-slate-400 shadow-sm outline-none transition
                      focus:border-blue-600 focus:ring-4 focus:ring-blue-600/15"
             >
@@ -51,7 +51,7 @@
 
         <div>
           <div class="mb-2 flex items-center justify-between">
-            <label for="password" class="block text-sm font-medium text-slate-700">Password</label>
+            <label for="password" class="block text-sm font-medium text-slate-700">{{ t('account.password') }}</label>
             {# if you don't have this route, remove the link #}
             {# <a href="/forgot" class="text-sm font-medium text-blue-700 hover:underline">Forgot?</a> #}
           </div>
@@ -80,10 +80,10 @@
           <label class="flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" name="remember"
               class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-4 focus:ring-blue-600/20">
-            Remember me
+            {{ t('account.remember') }}
           </label>
           <a href="/register" class="text-sm font-medium text-slate-700 hover:text-slate-900 hover:underline">
-            Create account
+            {{ t('account.create') }}
           </a>
         </div>
 
@@ -93,12 +93,12 @@
                  text-sm font-semibold text-white shadow-sm transition hover:from-blue-700 hover:to-indigo-700
                  focus:outline-none focus:ring-4 focus:ring-blue-600/25"
         >
-          Login
+          {{ t('nav.login') }}
           <span class="transition group-hover:translate-x-0.5">→</span>
         </button>
 
         <p class="text-center text-xs text-slate-500">
-          By continuing, you agree to the platform’s terms and privacy policy.
+          {{ t('account.login_terms') }}
         </p>
       </form>
     </div>

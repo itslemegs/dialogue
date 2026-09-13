@@ -231,7 +231,7 @@ templates.env.globals["getattr"] = getattr
 templates.env.globals["ai_features_enabled"] = AI_FEATURES_ENABLED
 templates.env.filters["jst"] = _format_jst
 
-from app.i18n import install_jinja, normalize_locale, resolve_locale, safe_return_to
+from app.i18n import install_jinja, normalize_locale, resolve_locale, safe_return_to, request_locale, translate
 from app.security import IS_PROD as UI_COOKIE_SECURE
 
 install_jinja(templates.env)
@@ -640,10 +640,10 @@ def get_register(request: Request):
     return render("register.html", request)
 
 @app.post("/register")
-def post_register(handle: str = Form(...), email: str = Form(...), password: str = Form(...)):
+def post_register(request: Request, handle: str = Form(...), email: str = Form(...), password: str = Form(...)):
     with get_session() as db:
         if db.exec(select(User).where((User.email == email) | (User.handle == handle))).first():
-            raise HTTPException(status_code=400, detail="Handle or email already in use")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), "account.already_registered"))
         user = User(handle=handle, email=email, password_hash=hash_password(password), verified=True)
         db.add(user); db.commit(); db.refresh(user)
 
@@ -707,7 +707,7 @@ def post_login(
 
         # Uniform error to avoid user enumeration
         if not user:
-            raise HTTPException(status_code=400, detail="Invalid credentials")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), "account.invalid_credentials"))
 
         # Handle potential column name differences across migrations
         pwd_hash = (
@@ -718,14 +718,14 @@ def post_login(
         if not pwd_hash:
             # Developer-facing message; still keep the login response generic
             # so users don't learn anything about the account.
-            raise HTTPException(status_code=400, detail="Invalid credentials")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), "account.invalid_credentials"))
 
         if not verify_password(password, pwd_hash):
-            raise HTTPException(status_code=400, detail="Invalid credentials")
+            raise HTTPException(status_code=400, detail=translate(request_locale(request), "account.invalid_credentials"))
 
         # Optional: prevent sessions for banned users right here
         if has_role(user, "banned"):
-            raise HTTPException(status_code=403, detail="Your account is banned")
+            raise HTTPException(status_code=403, detail=translate(request_locale(request), "account.banned"))
 
     dest = safe_next_url(next) or "/dashboard"
     resp = RedirectResponse(url=dest, status_code=status.HTTP_303_SEE_OTHER)

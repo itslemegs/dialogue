@@ -86,7 +86,7 @@
   "event.general_floor": "一般討論フロア",
   "event.proposal_floor": "提案審議フロア",
   "event.proposal_discussion": "提案討議",
-  "event.view_draft": "View Tabled Draft Resolution Text",
+  "event.view_draft": "提出済み決議案を表示",
   "event.decision": "決定",
   "agenda.propose_item": "議題項目を提案",
   "agenda.submitted": "✅ 提案を提出しました。presidentが審査します。",

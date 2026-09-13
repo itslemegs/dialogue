@@ -418,6 +418,9 @@ class RequestTests(unittest.TestCase):
                 self.assertIn('General Floor',html)
                 self.assertIn('Proposal Discussion',html)
                 self.assertIn('setInterval(tick, 1000 * 15)',html)
+            for html, label in zip(outputs, ('View Tabled Draft Resolution Text', '提出済み決議案を表示')):
+                card = re.search(r'<a data-key="view_draft_resolution".*?</a>', html, re.S)[0]
+                self.assertIn(f'<div class="text-lg font-semibold">{label}</div>', card)
             # Locale may change labels, never link destinations or gate identifiers.
             for pattern in [r'data-key="[^"]+"',r'href="/events/[^"]+"',r"data-stages='[^']*'"]:
                 self.assertEqual(re.findall(pattern,outputs[0]),re.findall(pattern,outputs[1]))

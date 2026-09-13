@@ -236,14 +236,7 @@
     const votes = document.getElementById(options.voting || '');
     const renderQueue = queueRenderer(options.generalFloor || options.proposalFloor);
     const tr = (key, fallback, params = {}) => (options.generalFloor || options.proposalFloor) ? window.UII18n.t(key, params) : fallback;
-    let revision = options.initialState?.discussion_revision ?? null;
-    let permissions = options.initialState
-      ? JSON.stringify([
-          options.initialState.can_speak,
-          options.initialState.can_manage
-        ])
-      : null;
-    let votingHTML = null, recognition = null;
+    let revision = null, permissions = null, votingHTML = null, recognition = null;
     const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
     function show(id, visible) {
       const el = document.getElementById(id);
@@ -294,9 +287,6 @@
       }
       recognition = data.current_req_id;
     }
-
-    if (options.initialState) applyFloor(options.initialState);
-
     if (votes) {
       votes.addEventListener('pointerdown', () => { votes.__pointer = true; });
       const releasePointer = () => { setTimeout(() => { votes.__pointer = false; }, 0); };

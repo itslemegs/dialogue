@@ -1,19 +1,58 @@
 {% macro message(n, depth=0) %}
 {% set m = n.node %}
-<li data-post-id="{{ m.id }}" class="{{ 'p-3' if depth == 0 else 'pl-2' }}">
-  <div class="text-slate-600 text-sm">
-    @{{ user_map[m.user_id].handle if user_map.get(m.user_id) }}
-    {% if depth == 0 %}<span class="text-xs text-slate-400">{{ m.created_at|jst }}</span>{% endif %}
+{% set author = user_map.get(m.user_id) %}
+{% set handle = author.handle if author else 'unknown' %}
+{% set mine = user and m.user_id == user.id %}
+
+<li
+  data-post-id="{{ m.id }}"
+  class="room-message {% if mine %}is-mine{% endif %} {% if depth > 0 %}is-reply{% endif %}">
+
+  <div class="room-message-row">
+    <div class="room-message-content">
+
+      <div class="room-message-meta">
+        <span class="room-message-author">@{{ handle }}</span>
+        <span aria-hidden="true">·</span>
+        <span>{{ m.created_at|jst }}</span>
+      </div>
+
+      <div class="room-message-bubble">{{ m.body }}</div>
+
+      {% if depth == 0 %}
+      <div class="room-message-actions">
+        <button
+          type="button"
+          class="room-reply-button"
+          data-room-reply="{{ m.id }}">
+          Reply
+        </button>
+      </div>
+      {% endif %}
+
+    </div>
   </div>
-  <div class="whitespace-pre-wrap mt-1">{{ m.body }}</div>
-  {% if depth == 0 %}
-  <button type="button" class="text-xs text-indigo-600 mt-1" data-room-reply="{{ m.id }}">Reply</button>
-  {% endif %}
-  <ul data-reply-list class="pl-4 mt-2 space-y-2 border-l {% if not n.children %}hidden{% endif %}">
-    {% for child in n.children %}{{ message(child, depth+1) }}{% endfor %}
+
+  <ul
+    data-reply-list
+    class="room-replies {% if not n.children %}hidden{% endif %}">
+    {% for child in n.children %}
+      {{ message(child, depth + 1) }}
+    {% endfor %}
   </ul>
 </li>
 {% endmacro %}
-{% for node in threads %}{{ message(node) }}{% else %}
-<li data-empty-message class="p-3 text-slate-500">No messages yet.</li>
+
+{% for node in threads %}
+  {{ message(node) }}
+{% else %}
+<li data-empty-message class="room-empty-chat">
+  <div class="room-empty-chat-inner">
+    <div class="room-empty-icon" aria-hidden="true">✦</div>
+    <div class="font-semibold text-slate-600">Start the discussion</div>
+    <div class="mt-1 text-xs">
+      Share an idea, question, or suggestion for the draft.
+    </div>
+  </div>
+</li>
 {% endfor %}

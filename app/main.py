@@ -6809,7 +6809,7 @@ def pfloor_early_close(event_id: int, kind: str, id: int, request: Request):
 
         v = _get_early_vote(db, st)
         if v is None:
-            raise HTTPException(400, "No early-vote session exists for this item")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.no_early'))
 
         v.is_open = False
         st.early_is_open = False
@@ -6852,7 +6852,7 @@ def pfloor_early_vote(event_id: int, kind: str, id: int, request: Request, choic
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     choice = (choice or "").upper()
     if choice not in ("YES", "NO", "ABSTAIN"):
-        raise HTTPException(400, "choice must be YES, NO, or ABSTAIN")
+        raise HTTPException(400, translate(request_locale(request), 'vote.error.choice_early'))
 
     with get_session() as db:
         _require_event_access(db=db, user=user, event_id=event_id)
@@ -6875,10 +6875,10 @@ def pfloor_early_vote(event_id: int, kind: str, id: int, request: Request, choic
 
         v = _get_early_vote(db, st)
         if v is None or not v.is_open:
-            raise HTTPException(400, "Early voting is not open")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.early_not_open'))
 
         if _has_user_early_voted(db, st, user.id):
-            raise HTTPException(400, "You have already voted in this early vote")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.early_already'))
 
         ballot = ProposalEarlyBallot(
             event_id=st.event_id,
@@ -6973,7 +6973,7 @@ def pfloor_formal_open(kind: str, id: int, request: Request, event_id: int):
         adopted_by_consensus = (evote and not evote.is_open and evote.no == 0 and (evote.yes > 0))
 
         if adopted_by_consensus:
-            raise HTTPException(400, "Early vote has already accepted the proposal, no formal vote needed.")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.consensus_no_formal'))
         
         # If not adopted by consensus, open the formal vote
         v = _get_or_create_formal_vote(db, st)
@@ -7013,7 +7013,7 @@ def pfloor_formal_vote(kind: str, id: int, request: Request, event_id: int, choi
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     choice = (choice or "").upper()
     if choice not in ("YES", "NO", "ABSTAIN"):
-        raise HTTPException(400, "choice must be YES/NO/ABSTAIN")
+        raise HTTPException(400, translate(request_locale(request), 'vote.error.choice_formal'))
 
     with get_session() as db:
         _require_event_access(db=db, user=user, event_id=event_id)
@@ -7036,7 +7036,7 @@ def pfloor_formal_vote(kind: str, id: int, request: Request, event_id: int, choi
 
         v = _get_or_create_formal_vote(db, st)
         if not v.is_open:
-            raise HTTPException(400, "Voting is not open")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.formal_not_open'))
 
         # one ballot per user per formal vote → LOCK
         existing = db.exec(
@@ -7046,7 +7046,7 @@ def pfloor_formal_vote(kind: str, id: int, request: Request, event_id: int, choi
             )
         ).first()
         if existing:
-            raise HTTPException(400, "You have already cast your formal vote")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.formal_already'))
 
         # record ballot
         ballot = ProposalFormalBallot(
@@ -7129,7 +7129,7 @@ def pfloor_formal_close(kind: str, id: int, request: Request, event_id: int):
         adopted_by_consensus = (evote and not evote.is_open and evote.no == 0 and (evote.yes > 0))
 
         if adopted_by_consensus:
-            raise HTTPException(400, "Early vote has already accepted the proposal, no need to close formal vote.")
+            raise HTTPException(400, translate(request_locale(request), 'vote.error.consensus_no_close'))
 
         v = _get_or_create_formal_vote(db, st)
         v.is_open = False

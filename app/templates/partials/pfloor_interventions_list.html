@@ -9,6 +9,6 @@
   {{ render_node(R, user_map, none, can_speak, user) }}
 {% else %}
   <li data-empty-message class="text-slate-500 px-4 py-4">
-    No interventions yet. Be the first to post.
+    {{ t('floor.empty') }} {{ t('floor.first') }}
   </li>
 {% endfor %}

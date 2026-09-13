@@ -1,14 +1,15 @@
+{% from 'macros/vote_labels.html' import result_label, status_label with context %}
 {% set IS_CHAIR = flags.IS_CHAIR %}
 {% set IS_PRESIDENT = flags.IS_PRESIDENT %}
 {% set KIND = 'amendment' if mode == 'AMENDMENT' else 'draft' %}
 {% set ITEM_ID = amendment.id if mode == 'AMENDMENT' else draft.id %}
-<p class="mt-4 text-sm" role="status">Draft status: {{ draft.status.value|default(draft.status) }}</p>
+<p class="mt-4 text-sm" role="status">{{ t('proposal_floor.draft_status') }} {{ status_label(draft.status) }}</p>
       <!-- Early voting (consensus) -->
        {% set early_done = 0 %}
         <section class="pf-vote-section mt-5">
-        <h3 class="font-semibold">Early voting (consensus check)</h3>
+        <h3 class="font-semibold">{{ t('vote.early_heading') }}</h3>
         <p class="text-xs text-slate-500">
-            Adopted by consensus if no “No” votes. (Abstentions not counted.)
+            {{ t('vote.consensus_help') }}
         </p>
 
         {% set can_vote = early_vote and early_vote.is_open and not HAS_EARLY_VOTED %}
@@ -24,8 +25,8 @@
         data-log-action="CLICK_CAST_EARLY_VOTE_YES"
         data-target-type="{{ KIND }}"
         data-target-id="{{ ITEM_ID }}"
-        data-hint="Vote Yes in the consensus check. If there are no No votes, the item may pass by consensus."
-        data-hint-side="right">Yes</button>
+        data-hint="{{ t('vote.early_yes_hint') }}"
+        data-hint-side="right">{{ t('vote.yes') }}</button>
             </form>
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
             data-log-action="CAST_EARLY_VOTE"
@@ -36,8 +37,8 @@
         data-log-action="CLICK_CAST_EARLY_VOTE_NO"
         data-target-type="{{ KIND }}"
         data-target-id="{{ ITEM_ID }}"
-        data-hint="Vote No in the consensus check. A No vote prevents adoption by consensus."
-        data-hint-side="right">No</button>
+        data-hint="{{ t('vote.early_no_hint') }}"
+        data-hint-side="right">{{ t('vote.no') }}</button>
             </form>
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
             data-log-action="CAST_EARLY_VOTE"
@@ -48,17 +49,17 @@
         data-log-action="CLICK_CAST_EARLY_VOTE_ABSTAIN"
         data-target-type="{{ KIND }}"
         data-target-id="{{ ITEM_ID }}"
-        data-hint="Abstain from the consensus check. Abstentions are recorded but not counted as Yes or No."
-        data-hint-side="right">Abstain</button>
+        data-hint="{{ t('vote.early_abstain_hint') }}"
+        data-hint-side="right">{{ t('vote.abstain') }}</button>
             </form>
             {% else %}
             <p class="text-xs text-slate-400">
                 {% if not early_vote %}
-                Early voting has not been opened yet.
+                {{ t('vote.early_unopened') }}
                 {% elif not early_vote.is_open %}
-                Early voting is closed.
+                {{ t('vote.early_closed') }}
                 {% elif HAS_EARLY_VOTED %}
-                You have already cast your early vote.
+                {{ t('vote.early_recorded') }}
                 {% endif %}
             </p>
             {% endif %}
@@ -67,8 +68,8 @@
             {% if early_vote.is_open %}
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/close">
               <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm text-xs"
-              data-hint="Close the early consensus check and calculate whether consensus was reached."
-              data-hint-side="right">Close</button>
+              data-hint="{{ t('vote.early_close_hint') }}"
+              data-hint-side="right">{{ t('vote.close_action') }}</button>
             </form>
             {% else %}
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/open"
@@ -76,8 +77,8 @@
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
             <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm text-xs"
-            data-hint="Open the early consensus check so members can vote Yes, No, or Abstain."
-            data-hint-side="right">Open</button>
+            data-hint="{{ t('vote.early_open_hint') }}"
+            data-hint-side="right">{{ t('vote.open_action') }}</button>
             </form>
             {% endif %}
             {% endif %}
@@ -85,25 +86,25 @@
 
         {% if early_vote %}
             <div class="mt-2 text-sm text-slate-700">
-            Early vote:
-            <strong>{{ early_vote.yes }}</strong> Yes •
-            <strong>{{ early_vote.no }}</strong> No •
-            <strong>{{ early_vote.abstain }}</strong> Abstain
+            {{ t('vote.early') }}:
+            <strong>{{ early_vote.yes }}</strong> {{ t('vote.yes') }} •
+            <strong>{{ early_vote.no }}</strong> {{ t('vote.no') }} •
+            <strong>{{ early_vote.abstain }}</strong> {{ t('vote.abstain') }}
             <span class="text-xs text-slate-500">
-                ({{ 'open' if early_vote.is_open else 'closed' }})
+                ({{ t('vote.open_lower') if early_vote.is_open else t('vote.closed_lower') }})
             </span>
 
             {% if not early_vote.is_open %}
                 <div class="text-xs mt-1">
-                Result:
+                {{ t('vote.result') }}
                 {% if early_vote.no == 0 and early_vote.yes > 0 %}
-                    <span class="text-emerald-700 font-medium">Adopted by consensus</span>
+                    <span class="text-emerald-700 font-medium">{{ t('vote.adopted_consensus') }}</span>
                     {% set early_done = 1 %}
                 {% elif early_vote.yes == 0 and early_vote.no > 0 %}
-                <span class="text-emerald-700 font-medium">Rejected by consensus</span>
+                <span class="text-emerald-700 font-medium">{{ t('vote.rejected_consensus') }}</span>
                     {% set early_done = 1 %}
                 {% else %}
-                    <span class="text-slate-600">No consensus</span>
+                    <span class="text-slate-600">{{ t('vote.no_consensus') }}</span>
                     {% set early_done = 0 %}
                 {% endif %}
                 </div>
@@ -114,9 +115,9 @@
 
       {% if amendment_cards and amendment_cards|length > 0 %}
       <section class="pf-vote-section mt-5">
-        <h3 class="font-semibold">Amendments</h3>
+        <h3 class="font-semibold">{{ t('proposal_floor.amendments') }}</h3>
         <p class="text-xs text-slate-500">
-          Adopted by consensus if no “No” votes. (Abstentions not counted.)
+          {{ t('vote.consensus_help') }}
         </p>
 
         <div class="mt-3 space-y-4">
@@ -131,9 +132,9 @@
                   <div class="text-xs text-slate-500">#{{ am.am_no }}</div>
                 </div>
                 <span class="text-xs text-slate-500">
-                  {{ v.kind or 'No vote yet' }}
+                  {{ t('vote.formal') if v.kind == 'Formal vote' else t('vote.early') if v.kind == 'Early vote' else v.kind or t('vote.no_vote') }}
                   {% if v.exists %}
-                    — {{ 'open' if v.is_open else 'closed' }}
+                    — {{ t('vote.open_lower') if v.is_open else t('vote.closed_lower') }}
                   {% endif %}
                 </span>
               </div>
@@ -144,32 +145,32 @@
                 <a
   class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm text-sm"
   href="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}"
-  data-hint="Open this amendment's discussion and voting page."
+  data-hint="{{ t('proposal_floor.amendment_link_hint') }}"
   data-hint-side="right"
 >
-  View amendment floor / vote
+  {{ t('proposal_floor.amendment_link') }}
 </a>
               </div>
 
               <div class="mt-2 text-sm text-slate-700">
                 {% if v.exists %}
-                  <strong>{{ v.yes }}</strong> Yes •
-                  <strong>{{ v.no }}</strong> No •
-                  <strong>{{ v.abstain }}</strong> Abstain
+                  <strong>{{ v.yes }}</strong> {{ t('vote.yes') }} •
+                  <strong>{{ v.no }}</strong> {{ t('vote.no') }} •
+                  <strong>{{ v.abstain }}</strong> {{ t('vote.abstain') }}
 
-                  <span class="text-xs text-slate-500">• Result:</span>
+                  <span class="text-xs text-slate-500">• {{ t('vote.result') }}</span>
 
                   {% if 'Adopted' in v.result %}
-                    <span class="text-emerald-700 font-medium">{{ v.result }}</span>
+                    <span class="text-emerald-700 font-medium">{{ result_label(v.result) }}</span>
                   {% elif 'Rejected' in v.result %}
-                    <span class="text-rose-700 font-medium">{{ v.result }}</span>
+                    <span class="text-rose-700 font-medium">{{ result_label(v.result) }}</span>
                   {% elif v.result == 'Voting open' %}
-                    <span class="text-blue-700 font-medium">{{ v.result }}</span>
+                    <span class="text-blue-700 font-medium">{{ result_label(v.result) }}</span>
                   {% else %}
-                    <span class="text-slate-600">{{ v.result }}</span>
+                    <span class="text-slate-600">{{ result_label(v.result) }}</span>
                   {% endif %}
                 {% else %}
-                  <span class="text-slate-500">No vote has been opened for this amendment yet.</span>
+                  <span class="text-slate-500">{{ t('vote.amendment_unopened') }}</span>
                 {% endif %}
               </div>
             </div>
@@ -182,9 +183,9 @@
       {% set formal_locked = HAS_FORMAL_VOTED or (formal_vote and not formal_vote.is_open) %}
       {% if not early_done %}
       <section class="pf-vote-section mt-5">
-        <h3 class="font-semibold">Formal voting</h3>
+        <h3 class="font-semibold">{{ t('vote.formal_heading') }}</h3>
         <p class="text-xs text-slate-500">
-          Simple majority of Yes vs No. Ties rejected. Abstentions are not counted.
+          {{ t('vote.majority_help') }}
         </p>
         <div class="mt-2 flex flex-wrap gap-2">
 
@@ -200,10 +201,10 @@
   data-log-action="CLICK_CAST_FORMAL_VOTE_YES"
   data-target-type="{{ KIND }}"
   data-target-id="{{ ITEM_ID }}"
-  data-hint="Vote Yes in the formal vote. Formal voting uses Yes versus No majority."
+  data-hint="{{ t('vote.formal_yes_hint') }}"
   data-hint-side="right"
 >
-  Yes
+  {{ t('vote.yes') }}
 </button>
           </form>
 
@@ -217,10 +218,10 @@
   data-log-action="CLICK_CAST_FORMAL_VOTE_NO"
   data-target-type="{{ KIND }}"
   data-target-id="{{ ITEM_ID }}"
-  data-hint="Vote No in the formal vote. If No votes are greater than or equal to Yes votes, the item is rejected."
+  data-hint="{{ t('vote.formal_no_hint') }}"
   data-hint-side="right"
 >
-  No
+  {{ t('vote.no') }}
 </button>
           </form>
 
@@ -234,21 +235,21 @@
   data-log-action="CLICK_CAST_FORMAL_VOTE_ABSTAIN"
   data-target-type="{{ KIND }}"
   data-target-id="{{ ITEM_ID }}"
-  data-hint="Abstain from the formal vote. Abstentions are recorded but not counted in Yes versus No."
+  data-hint="{{ t('vote.formal_abstain_hint') }}"
   data-hint-side="right"
 >
-  Abstain
+  {{ t('vote.abstain') }}
 </button>
           </form>
 
           {% else %}
           {% if formal_vote and not formal_vote.is_open %}
-          <p class="text-xs text-slate-400">Formal voting is closed.</p>
+          <p class="text-xs text-slate-400">{{ t('vote.formal_closed') }}</p>
           {% elif HAS_FORMAL_VOTED %}
-          <p class="text-xs text-slate-400">You have already cast your formal vote.</p>
+          <p class="text-xs text-slate-400">{{ t('vote.formal_recorded') }}</p>
           {% elif not formal_vote.is_open %}
           <p class="text-xs text-slate-400">
-            Formal vote is not opened yet.
+            {{ t('vote.formal_unopened') }}
           </p>
           {% endif %}
           {% endif %}
@@ -257,8 +258,8 @@
             {% if formal_vote.is_open %}
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/close">
               <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm"
-        data-hint="Close the formal vote and calculate the final Yes versus No result."
-        data-hint-side="right">Close</button>
+        data-hint="{{ t('vote.formal_close_hint') }}"
+        data-hint-side="right">{{ t('vote.close_action') }}</button>
             </form>
             {% else %}
             <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/open"
@@ -266,8 +267,8 @@
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
             <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm"
-            data-hint="Open formal voting for this draft or amendment."
-            data-hint-side="right">Open</button>
+            data-hint="{{ t('vote.formal_open_hint') }}"
+            data-hint-side="right">{{ t('vote.open_action') }}</button>
             </form>
             {% endif %}
           {% endif %}
@@ -275,21 +276,21 @@
 
         {% if formal_vote %}
           <div class="mt-2 text-sm text-slate-700">
-            Formal vote:
-            <strong>{{ formal_vote.yes }}</strong> Yes •
-            <strong>{{ formal_vote.no }}</strong> No •
-            <strong>{{ formal_vote.abstain }}</strong> Abstain
+            {{ t('vote.formal') }}:
+            <strong>{{ formal_vote.yes }}</strong> {{ t('vote.yes') }} •
+            <strong>{{ formal_vote.no }}</strong> {{ t('vote.no') }} •
+            <strong>{{ formal_vote.abstain }}</strong> {{ t('vote.abstain') }}
             <span class="text-xs text-slate-500">
-              ({{ 'open' if formal_vote.is_open else 'closed' }})
+              ({{ t('vote.open_lower') if formal_vote.is_open else t('vote.closed_lower') }})
             </span>
             {% if not formal_vote.is_open %}
               {% set counted = (formal_vote.yes + formal_vote.no) %}
               <div class="text-xs mt-1">
-                Counted: {{ counted }} • Result:
+                {{ t('vote.counted', count=counted) }} • {{ t('vote.result') }}
                 {% if formal_vote.yes > formal_vote.no %}
-                  <span class="text-emerald-700 font-medium">Accepted</span>
+                  <span class="text-emerald-700 font-medium">{{ t('vote.accepted') }}</span>
                 {% else %}
-                  <span class="text-rose-700 font-medium">Rejected</span>
+                  <span class="text-rose-700 font-medium">{{ t('vote.rejected') }}</span>
                 {% endif %}
               </div>
             {% endif %}
@@ -309,8 +310,8 @@
           data-log-action="CLICK_CLOSE_PFLOOR_DISCUSSION"
           data-target-type="{{ KIND }}"
           data-target-id="{{ ITEM_ID }}"
-          data-hint="End the proposal floor discussion after voting has finished."
-          data-hint-side="right">Close discussion</button>
+          data-hint="{{ t('proposal_floor.close_discussion_hint') }}"
+          data-hint-side="right">{{ t('proposal_floor.close_discussion') }}</button>
           </form>
         {% endif %}
       </section>

@@ -535,6 +535,58 @@ class PollingTests(unittest.TestCase):
         self.client.cookies.set('session','3')
         return self.voting_html('/events/10/proposal-floor/amendment/50')
 
+    def test_proposal_vote_polling_keeps_japanese_and_result_rules(self):
+        self.client.cookies.set('ui_locale','en')
+        vote=self.vote('Formal',yes=2,no=2,abstain=100)
+        def poll():
+            response=self.client.get(self.floor+'/floor/state',headers={'X-UI-Language':'ja'})
+            self.assertEqual(response.status_code,200)
+            return response.json()['voting_html']
+        html=poll()
+        for choice,label in [('YES','賛成'),('NO','反対'),('ABSTAIN','棄権')]:
+            self.assertIn('value="'+choice+'"',html);self.assertIn(label,html)
+        self.assertIn('上程済み',html)
+        self.add('ProposalFormalBallot',id=1,formal_vote_id=vote.id,user_id=2,choice='ABSTAIN')
+        html=poll()
+        self.assertIn('正式投票は記録済みです。',html)
+        self.assertNotIn('/formal/vote"',html)
+        vote.is_open=False
+        self.assertIn('否決',poll()) # Tie, regardless of abstentions.
+        vote.yes=3
+        self.assertIn('採択',poll())
+        self.assertEqual((vote.yes,vote.no,vote.abstain),(3,2,100))
+        self.assertEqual(self.draft.status,'TABLED')
+        self.draft.status='ADOPTED'
+        self.assertIn('草案の状態： 採択',poll())
+        self.assertEqual(self.draft.status,'ADOPTED')
+        self.client.cookies.set('ui_locale','ja')
+        english=self.client.get(self.floor+'/floor/state',headers={'X-UI-Language':'en'}).json()['voting_html']
+        self.assertIn('Draft status: ADOPTED',english)
+
+    def test_japanese_consensus_preserves_zero_votes_and_abstention_rules(self):
+        self.client.cookies.set('ui_locale','ja')
+        vote=self.vote('Early',is_open=False,abstain=100)
+        for yes,no,label in [(1,0,'合意により採択'),(0,1,'合意により否決'),
+                             (0,0,'合意に至りませんでした'),(1,1,'合意に至りませんでした')]:
+            vote.yes=yes;vote.no=no
+            html=self.voting_html()
+            self.assertIn(label,html)
+            self.assertEqual((vote.yes,vote.no,vote.abstain),(yes,no,100))
+        self.assertEqual(self.draft.status,'TABLED')
+
+    def test_japanese_amendment_poll_preserves_formal_priority_and_scope(self):
+        self.vote('Early',draft_id=None,amendment_id=50,is_open=False,yes=5,no=0)
+        formal=self.vote('Formal',draft_id=None,amendment_id=50,is_open=False,yes=2,no=2,abstain=50)
+        self.client.cookies.set('ui_locale','ja')
+        html=self.voting_html()
+        self.assertIn('否決',html)
+        self.assertIn('L.1/Amend.1',html)
+        self.assertEqual(formal.no,2)
+        self.add('ProposalFormalBallot',id=1,formal_vote_id=formal.id,user_id=1,choice='PRIVATE_CHOICE')
+        html=self.voting_html('/events/10/proposal-floor/amendment/50')
+        self.assertNotIn('PRIVATE_CHOICE',html)
+        self.assertNotIn('/draft/40/formal/vote',html)
+
     def test_logging_exemptions_are_explicit(self):
         check=self.ns['_is_shared_poll_read']
         for path in [self.room_url,self.general+'/floor/state',self.general+'/interventions/head',

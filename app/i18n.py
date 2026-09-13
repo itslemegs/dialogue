@@ -14,6 +14,7 @@ CATALOGUES = MappingProxyType({
     )) for locale in SUPPORTED_LOCALES
 })
 JS_KEYS = (
+    'proposal_floor.summary_unavailable', 'proposal_floor.ror_invited_target',
     'floor.accepted',
     'floor.ahead',
     'floor.closed',

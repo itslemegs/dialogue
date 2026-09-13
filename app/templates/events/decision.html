@@ -1,8 +1,9 @@
+{% from 'macros/vote_labels.html' import result_label, status_label with context %}
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Decision</h1>
+    <h1 class="text-2xl font-bold">{{ t('event.decision') }}</h1>
 
     {% if event %}
       <div class="text-sm text-slate-600 text-right">
@@ -13,27 +14,22 @@
 
   {% if not event %}
     <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-      No upcoming or live event.
+      {{ t('event.none') }}
     </div>
   {% elif (not results_drafts) and (not results_amendments) %}
     <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-      No tabled draft resolutions or amendments for this event yet.
+      {{ t('decision.none') }}
     </div>
   {% else %}
 
     <p class="mb-4 text-sm text-slate-600">
-      This page summarizes the outcome and vote tallies for all
-      <span class="font-semibold">tabled draft resolutions (L documents)</span>
-      and their
-      <span class="font-semibold">amendments</span>
-      in this event. Final adoption of drafts is decided on the Proposal Floor;
-      this page is read-only.
+      {{ t('decision.description') }}
     </p>
 
     {# ===================== DRAFT RESOLUTIONS (L docs) ===================== #}
     {% if results_drafts %}
       <h2 class="mt-6 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Tabled draft resolutions (L documents)
+        {{ t('decision.drafts') }}
       </h2>
 
       <div class="space-y-4">
@@ -59,23 +55,23 @@
                   {{ d.l_number or ("L/" ~ d.id) }}
                 </div>
                 <h3 class="text-lg font-semibold">
-                  {{ d.title or "Untitled draft resolution" }}
+                  {{ d.title or t('decision.untitled_draft') }}
                 </h3>
 
                 <p class="mt-1 text-xs text-slate-500">
-                  Sponsor ID: {{ d.sponsor_id }}
+                  {{ t('decision.sponsor_id') }} {{ d.sponsor_id }}
                   {% if d.cosigners_json %}
-                    · Cosigners: {{ d.cosigners_json|length }}
+                    · {{ t('decision.cosigners') }} {{ d.cosigners_json|length }}
                   {% endif %}
                 </p>
               </div>
 
               <div class="flex flex-col items-start sm:items-end gap-1">
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
-                  {{ outcome }}
+                  {{ result_label(outcome) }}
                 </span>
                 <p class="text-xs text-slate-500">
-                  Status: {{ d.status.value }}
+                  {{ t('decision.status') }} {{ status_label(d.status) }}
                 </p>
               </div>
             </div>
@@ -84,28 +80,28 @@
             {% if evote %}
               <div class="mt-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Early voting (consensus test)
+                  {{ t('vote.early_test') }}
                   {% if evote.is_open %}
                     <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
-                      still open
+                      {{ t('vote.still_open') }}
                     </span>
                   {% else %}
                     <span class="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      closed
+                      {{ t('vote.closed_lower') }}
                     </span>
                   {% endif %}
                 </div>
                 <div class="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
                   <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">Yes</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.yes') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ evote.yes or 0 }}</div>
                   </div>
                   <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">No</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.no') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ evote.no or 0 }}</div>
                   </div>
                   <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">Abstain</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.abstain') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ evote.abstain or 0 }}</div>
                   </div>
                 </div>
@@ -116,28 +112,28 @@
             {% if fvote %}
               <div class="mt-4 border-t pt-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Formal voting
+                  {{ t('vote.formal_heading') }}
                   {% if fvote.is_open %}
                     <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
-                      still open
+                      {{ t('vote.still_open') }}
                     </span>
                   {% else %}
                     <span class="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                      closed
+                      {{ t('vote.closed_lower') }}
                     </span>
                   {% endif %}
                 </div>
                 <div class="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
                   <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">Yes</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.yes') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ fvote.yes or 0 }}</div>
                   </div>
                   <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">No</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.no') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ fvote.no or 0 }}</div>
                   </div>
                   <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">Abstain</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.abstain') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ fvote.abstain or 0 }}</div>
                   </div>
                 </div>
@@ -151,7 +147,7 @@
     {# =========================== AMENDMENTS =========================== #}
     {% if results_amendments %}
     <h2 class="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        Amendments
+        {{ t('proposal_floor.amendments') }}
     </h2>
 
     <div class="space-y-4">
@@ -178,27 +174,27 @@
                 </div>
 
                 <h3 class="text-lg font-semibold">
-                {{ a.label or "Untitled amendment" }}
+                {{ a.label or t('decision.untitled_amendment') }}
                 </h3>
 
                 <p class="mt-1 text-xs text-slate-500">
                 {% if d %}
-                    On draft: {{ d.l_number or ("L/" ~ d.id) }}
+                    {{ t('proposal_floor.on_draft') }} {{ d.l_number or ("L/" ~ d.id) }}
                 {% else %}
-                    Draft ID: {{ a.draft_id }}
+                    {{ t('decision.draft_id') }} {{ a.draft_id }}
                 {% endif %}
-                · Submitted by ID: @{{ (a.submitted_by_id in user_map) and user_map[a.submitted_by_id].handle or '—' }}
+                · {{ t('decision.submitted_by') }} @{{ (a.submitted_by_id in user_map) and user_map[a.submitted_by_id].handle or '—' }}
                 </p>
             </div>
 
             <div class="flex flex-col items-start sm:items-end gap-1">
                 <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
-                {{ outcome }}
+                {{ result_label(outcome) }}
                 </span>
 
                 {% if v %}
                 <p class="text-xs text-slate-500">
-                    Vote: {{ 'open' if v.is_open else 'closed' }}
+                    {{ t('vote.label') }} {{ t('vote.open_lower') if v.is_open else t('vote.closed_lower') }}
                 </p>
                 {% endif %}
             </div>
@@ -215,49 +211,49 @@
             {% if v %}
             <div class="mt-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Amendment vote (consensus check)
+                {{ t('vote.amendment_check') }}
                 {% if v.is_open %}
                     <span class="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">
-                    still open
+                    {{ t('vote.still_open') }}
                     </span>
                 {% else %}
                     <span class="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-                    closed
+                    {{ t('vote.closed_lower') }}
                     </span>
                 {% endif %}
                 </div>
 
                 <div class="mt-2 grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
                 <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">Yes</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.yes') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ v.yes or 0 }}</div>
                 </div>
                 <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">No</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.no') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ v.no or 0 }}</div>
                 </div>
                 <div class="rounded-xl border bg-slate-50 px-3 py-2">
-                    <div class="text-xs text-slate-500">Abstain</div>
+                    <div class="text-xs text-slate-500">{{ t('vote.abstain') }}</div>
                     <div class="mt-1 text-base font-semibold">{{ v.abstain or 0 }}</div>
                 </div>
                 </div>
 
                 {% if not v.is_open %}
                 <div class="mt-2 text-sm text-slate-700">
-                    Result:
+                    {{ t('vote.result') }}
                     {% if (v.no or 0) == 0 and (v.yes or 0) > 0 %}
-                    <span class="text-emerald-700 font-medium">Adopted by consensus</span>
+                    <span class="text-emerald-700 font-medium">{{ t('vote.adopted_consensus') }}</span>
                     {% elif (v.yes or 0) == 0 and (v.no or 0) == 0 %}
-                    <span class="text-slate-600">No votes cast</span>
+                    <span class="text-slate-600">{{ t('vote.none_cast') }}</span>
                     {% else %}
-                    <span class="text-rose-700 font-medium">Not adopted</span>
+                    <span class="text-rose-700 font-medium">{{ t('vote.not_adopted') }}</span>
                     {% endif %}
                 </div>
                 {% endif %}
             </div>
             {% else %}
             <div class="mt-4 text-sm text-slate-500">
-                No vote record yet.
+                {{ t('vote.no_record') }}
             </div>
             {% endif %}
         </div>

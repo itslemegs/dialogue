@@ -234,8 +234,8 @@
   function floor(options) {
     const list = document.getElementById(options.list);
     const votes = document.getElementById(options.voting || '');
-    const renderQueue = queueRenderer(options.generalFloor);
-    const tr = (key, fallback, params = {}) => options.generalFloor ? window.UII18n.t(key, params) : fallback;
+    const renderQueue = queueRenderer(options.generalFloor || options.proposalFloor);
+    const tr = (key, fallback, params = {}) => (options.generalFloor || options.proposalFloor) ? window.UII18n.t(key, params) : fallback;
     let revision = null, permissions = null, votingHTML = null, recognition = null;
     const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
     function show(id, visible) {

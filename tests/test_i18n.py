@@ -297,7 +297,9 @@ class RequestTests(unittest.TestCase):
         for name in ['base.html','home.html','dashboard.html','login.html','register.html','macros/user_flair.html','events_menu.html','events/propose_agenda.html',
                      'events/review_agenda.html','events/view_agenda.html','events/unlock_event.html',
                      'events/general_floor.html','events/general_floor_item.html','macros/interventions.html',
-                     'partials/interventions_list.html']:
+                     'partials/interventions_list.html','events/proposal_floor.html','events/proposal_floor_item.html',
+                     'events/decision.html','partials/pfloor_vote_panel.html','macros/interventions-prop.html',
+                     'partials/pfloor_interventions_list.html']:
             source = (ROOT/'app/templates'/name).read_text()
             for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)", source):
                 self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
@@ -529,10 +531,113 @@ class RequestTests(unittest.TestCase):
             self.assertEqual(payload[key],label)
         self.assertEqual(i18n.translate('ja','floor.ror.invited_target',target=17),'議長から発言#17への答弁を依頼されました。')
         source=(ROOT/'app/static/js/deliberation-polling.js').read_text()
-        self.assertIn('options.generalFloor ? window.UII18n.t(key, params) : fallback',source)
+        self.assertIn('(options.generalFloor || options.proposalFloor) ? window.UII18n.t(key, params) : fallback',source)
         self.assertIn('generalFloor: true',(ROOT/'app/templates/events/general_floor_item.html').read_text())
         self.assertNotIn('generalFloor: true',(ROOT/'app/templates/events/proposal_floor_item.html').read_text())
         self.assertEqual(i18n.translate('ja','roles.chairman'),'chairman')
+
+    def proposal_floor_context(self, chair=False):
+        ctx=self.general_floor_context(chair)
+        draft=SimpleNamespace(id=40,status='TABLED',title='Authored proposal 日本語',l_number='L.1',
+            sponsor_id=2,cosigners_json=[],recalling='Authored clause 日本語')
+        vote=SimpleNamespace(is_open=True,yes=2,no=1,abstain=7)
+        ctx.update(mode='DRAFT',draft=draft,amendment=None,amendment_cards=[],
+            pfloor=SimpleNamespace(is_open=True,event_id=41,proposal_id=8),
+            early_vote=vote,formal_vote=SimpleNamespace(is_open=True,yes=2,no=1,abstain=7),
+            HAS_EARLY_VOTED=False,HAS_FORMAL_VOTED=False,can_speak=chair,
+            rows=[dict(draft=draft,proposal=SimpleNamespace(title='Authored agenda 日本語'),amendments=[])])
+        return ctx
+
+    def test_phase5_pages_and_ballot_values_in_both_locales(self):
+        import re
+        for chair in [False,True]:
+            ctx=self.proposal_floor_context(chair)
+            for locale,heading in [('en','Proposal Floor'),('ja','提案審議フロア')]:
+                for name in ['events/proposal_floor.html','events/proposal_floor_item.html']:
+                    html=self.render_phase2(name,locale,**ctx)
+                    self.assertIn(heading,html)
+                    self.assertIn('Authored proposal 日本語',html)
+                html=self.render_phase2('events/proposal_floor_item.html',locale,**ctx)
+                self.assertIn('Authored clause 日本語',html)
+                self.assertIn('単純過半数' if locale=='ja' else 'Simple majority',html)
+                self.assertEqual('/early/close"' in html,chair)
+                self.assertEqual('/formal/close"' in html,chair)
+                forms=re.findall(r'<form[^>]*>.*?</form>',html,re.S)
+                for value,en,ja in [('YES','Yes','賛成'),('NO','No','反対'),('ABSTAIN','Abstain','棄権')]:
+                    ballots=[f for f in forms if f'name="choice" value="{value}"' in f]
+                    self.assertEqual(len(ballots),2)
+                    self.assertTrue(all((ja if locale=='ja' else en) in f for f in ballots))
+                    self.assertNotIn(f'name="choice" value="{ja}"',html)
+            self.assertEqual(ctx['draft'].status,'TABLED')
+            self.assertEqual(ctx['early_vote'].abstain,7)
+
+    def test_phase5_status_and_result_mapping_does_not_mutate_raw_values(self):
+        from enum import Enum
+        template=self.templates.env.from_string(
+            "{% from 'macros/vote_labels.html' import status_label,result_label with context %}"
+            "{{ status_label(status) }}|{{ result_label(result) }}")
+        class Status(str,Enum):
+            TABLED='TABLED';ADOPTED='ADOPTED';WITHDRAWN='WITHDRAWN';REINTRODUCED='REINTRODUCED'
+        for raw,label in [('TABLED','上程済み'),('ADOPTED','採択'),('WITHDRAWN','撤回'),('REINTRODUCED','再提出'),('REJECTED','否決')]:
+            for value in [raw]+([Status(raw)] if raw!='REJECTED' else []):
+                html=template.render(request=request('ja'),status=value,result='Rejected')
+                self.assertEqual(html,label+'|否決')
+                self.assertEqual(value,raw)
+        self.assertEqual(template.render(request=request('ja'),status='UNKNOWN',result='<script>new</script>'),
+                         'UNKNOWN|&lt;script&gt;new&lt;/script&gt;')
+        self.assertEqual(template.render(request=request('en'),status='ADOPTED',result='Adopted'),'ADOPTED|Adopted')
+
+    def test_phase5_amendment_result_classification_uses_original_english(self):
+        ctx=self.proposal_floor_context()
+        am=SimpleNamespace(id=50,label='Authored amendment',am_no=1,body_markdown='Original amendment text')
+        for result,label,color in [('Adopted','採択','text-emerald-700'),('Rejected','否決','text-rose-700'),
+                                  ('Adopted by consensus','合意により採択','text-emerald-700'),
+                                  ('Voting open','投票受付中','text-blue-700'),('No consensus','合意に至りませんでした','text-slate-600')]:
+            summary=dict(result=result,kind='Formal vote',exists=True,is_open=False,yes=2,no=1,abstain=9)
+            ctx['amendment_cards']=[dict(am=am,vote_summary=summary)]
+            html=self.render_phase2('partials/pfloor_vote_panel.html','ja',**ctx)
+            self.assertIn(label,html)
+            import re
+            self.assertRegex(html,rf'<span class="{color}[^"]*">{label}</span>')
+            self.assertEqual(summary['result'],result)
+            self.assertIn('Original amendment text',html)
+
+    def test_phase5_decision_page_preserves_outcomes_and_authored_titles(self):
+        ctx=self.proposal_floor_context()
+        ctx['draft'].status=SimpleNamespace(value='ADOPTED')
+        item=dict(draft=ctx['draft'],outcome='Adopted',early_vote=ctx['early_vote'],formal_vote=ctx['formal_vote'])
+        for locale,label in [('en','Adopted'),('ja','採択')]:
+            html=self.render_phase2('events/decision.html',locale,results_drafts=[item],results_amendments=[],**ctx)
+            self.assertIn(label,html)
+            self.assertIn('Authored proposal 日本語',html)
+            self.assertIn('bg-emerald-100 text-emerald-800',html)
+        self.assertEqual(item['outcome'],'Adopted')
+        self.assertEqual(ctx['draft'].status.value,'ADOPTED')
+
+    def test_phase5_vote_actions_reject_japanese_values_and_keep_permissions(self):
+        from fastapi import HTTPException
+        from unittest.mock import Mock
+        names=['pfloor_early_vote','pfloor_formal_vote','pfloor_early_open','pfloor_early_close',
+               'pfloor_formal_open','pfloor_formal_close','pfloor_close_discussion']
+        nodes=[n for n in ast.parse((ROOT/'app/main.py').read_text()).body if isinstance(n,ast.FunctionDef) and n.name in names]
+        for n in nodes:n.decorator_list=[]
+        db=Mock(side_effect=AssertionError('Invalid/unauthorized vote accessed database'))
+        ns=dict(Request=Request,Form=Form,HTTPException=HTTPException,get_session=db,
+                current_user=lambda req:SimpleNamespace(id=2),effective_flags=lambda u:dict(IS_CHAIR=False,IS_PRESIDENT=False),
+                translate=i18n.translate,request_locale=i18n.request_locale)
+        exec(compile(ast.Module(body=nodes,type_ignores=[]),'isolated_vote_guards','exec'),ns)
+        for locale in ['en','ja']:
+            for name in names:
+                if name.endswith('_vote'):
+                    for choice in ['賛成','反対','棄権']:
+                        with self.assertRaises(HTTPException) as raised:
+                            ns[name](kind='draft',id=40,event_id=41,request=request(locale),choice=choice)
+                        self.assertEqual(raised.exception.status_code,400)
+                else:
+                    with self.assertRaises(HTTPException) as raised:
+                        ns[name](kind='draft',id=40,event_id=41,request=request(locale))
+                    self.assertEqual(raised.exception.status_code,403)
+        db.assert_not_called()
 
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden

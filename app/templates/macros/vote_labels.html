@@ -1,0 +1,11 @@
+{# Presentation only: never use these labels to classify results or validate votes. #}
+{% macro result_label(value) -%}
+  {%- set keys = {'Adopted': 'vote.adopted', 'Rejected': 'vote.rejected', 'Adopted by consensus': 'vote.adopted_consensus', 'Rejected by consensus': 'vote.rejected_consensus', 'No consensus': 'vote.no_consensus', 'Voting open': 'vote.open', 'No vote yet': 'vote.no_vote', 'Not adopted': 'vote.not_adopted', 'Pending': 'decision.pending', 'Withdrawn': 'decision.withdrawn', 'Reintroduced': 'decision.reintroduced'} -%}
+  {{- t(keys[value]) if value in keys else value -}}
+{%- endmacro -%}
+
+{% macro status_label(value) -%}
+  {%- set raw = value.value|default(value) -%}
+  {%- set keys = {'TABLED': 'proposal_status.tabled', 'ADOPTED': 'proposal_status.adopted', 'REJECTED': 'proposal_status.rejected', 'WITHDRAWN': 'proposal_status.withdrawn', 'REINTRODUCED': 'proposal_status.reintroduced'} -%}
+  {{- t(keys[raw]) if raw in keys else raw -}}
+{%- endmacro -%}

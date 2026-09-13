@@ -1,58 +1,79 @@
-{% macro message(n, depth=0) %}
-{% set m = n.node %}
-{% set author = user_map.get(m.user_id) %}
-{% set handle = author.handle if author else 'unknown' %}
-{% set mine = user and m.user_id == user.id %}
+{% import "macros/user_flair.html" as uf with context %}
 
-<li
-  data-post-id="{{ m.id }}"
-  class="room-message {% if mine %}is-mine{% endif %} {% if depth > 0 %}is-reply{% endif %}">
+{#
+  Proposal-room chat is displayed as one chronological conversation.
+  Historical parent/reply relations remain in the database, but are not
+  presented as threaded replies in this interface.
+#}
 
-  <div class="room-message-row">
-    <div class="room-message-content">
+{% set collected = namespace(items=[]) %}
 
-      <div class="room-message-meta">
-        <span class="room-message-author">@{{ handle }}</span>
-        <span aria-hidden="true">·</span>
-        <span>{{ m.created_at|jst }}</span>
+{% macro collect_messages(nodes) -%}
+  {% for n in nodes %}
+    {% set collected.items = collected.items + [n.node] %}
+    {% if n.children %}
+      {% set _ = collect_messages(n.children) %}
+    {% endif %}
+  {% endfor %}
+{%- endmacro %}
+
+{% set _ = collect_messages(threads) %}
+{% set messages = collected.items|sort(attribute='created_at') %}
+{% set date_state = namespace(last='') %}
+
+{% for m in messages %}
+  {% set author = user_map.get(m.user_id) %}
+  {% set mine = user and m.user_id == user.id %}
+  {% set author_roles = author.roles | map(attribute='name') | list if author and author.roles else [] %}
+  {% set day_key = m.created_at|jst("%Y-%m-%d") %}
+
+  <li
+    data-post-id="{{ m.id }}"
+    class="room-message {% if mine %}is-mine{% endif %}">
+
+    {% if day_key != date_state.last %}
+      <div class="room-date-separator">
+        <span>{{ m.created_at|jst("%a, %B %-d, %Y") }}</span>
       </div>
+      {% set date_state.last = day_key %}
+    {% endif %}
 
-      <div class="room-message-bubble">{{ m.body }}</div>
+    <div class="room-message-row">
+      <div class="room-message-content">
 
-      {% if depth == 0 %}
-      <div class="room-message-actions">
-        <button
-          type="button"
-          class="room-reply-button"
-          data-room-reply="{{ m.id }}">
-          Reply
-        </button>
+        <div class="room-message-meta">
+          <span class="room-message-author">
+            {{ uf.flair_for_user(
+              u=author,
+              roles_list=author_roles,
+              handle_text="@" ~ (author.handle if author and author.handle else "unknown")
+            ) }}
+          </span>
+        </div>
+
+        <div class="room-message-line">
+          <div class="room-message-bubble">{{ m.body }}</div>
+          <span class="room-message-time">
+            {{ m.created_at|jst("%-I:%M %p") }}
+          </span>
+        </div>
+
       </div>
-      {% endif %}
-
     </div>
-  </div>
+  </li>
 
-  <ul
-    data-reply-list
-    class="room-replies {% if not n.children %}hidden{% endif %}">
-    {% for child in n.children %}
-      {{ message(child, depth + 1) }}
-    {% endfor %}
-  </ul>
-</li>
-{% endmacro %}
-
-{% for node in threads %}
-  {{ message(node) }}
 {% else %}
-<li data-empty-message class="room-empty-chat">
-  <div class="room-empty-chat-inner">
-    <div class="room-empty-icon" aria-hidden="true">✦</div>
-    <div class="font-semibold text-slate-600">Start the discussion</div>
-    <div class="mt-1 text-xs">
-      Share an idea, question, or suggestion for the draft.
+
+  <li data-empty-message class="room-empty-chat">
+    <div class="room-empty-chat-inner">
+      <div class="room-empty-icon" aria-hidden="true">✦</div>
+      <div class="font-semibold text-slate-600">
+        Start the discussion
+      </div>
+      <div class="mt-1 text-xs">
+        Share an idea, question, or suggestion for the draft.
+      </div>
     </div>
-  </div>
-</li>
+  </li>
+
 {% endfor %}

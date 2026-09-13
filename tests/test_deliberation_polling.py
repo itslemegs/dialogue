@@ -361,9 +361,17 @@ class PollingTests(unittest.TestCase):
         )
 
         room = self.client.get(self.room_url).json()
-        self.assertIn('2026-01-02 09:00 JST', room['html'])
-        self.assertIn('@author', room['html'])
-        self.assertNotIn('#68', room['html'])
+        html = room['html']
+
+        # Room chat uses a date separator plus compact JST time.
+        self.assertIn('Fri, January 2, 2026', html)
+        self.assertIn('9:00 AM', html)
+        self.assertIn('@author', html)
+
+        # Internal sequence IDs and reply-thread labels stay hidden.
+        self.assertNotIn('#68', html)
+        self.assertNotIn('Replying to', html)
+        self.assertNotIn('data-room-reply', html)
 
         # General/Proposal Floor templates must not expose internal numbering.
         for relative in (

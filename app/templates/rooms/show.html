@@ -251,24 +251,7 @@
     > .room-message-actions {
     justify-content: flex-end;
   }
-  .room-reply-button {
-    display: inline-flex;
-    align-items: center;
-    gap: .25rem;
-    padding: .16rem .4rem;
-    border-radius: 999px;
-    color: #6366f1;
-    font-size: .72rem;
-    font-weight: 650;
-    transition:
-      background-color .15s ease,
-      color .15s ease;
-  }
-  .room-reply-button:hover {
-    background: rgba(99, 102, 241, .08);
-    color: #4338ca;
-  }
-  .room-replies {
+.room-replies {
     position: relative;
     margin: .55rem 0 0 1rem;
     padding: .1rem 0 .1rem .9rem;
@@ -403,7 +386,6 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .room-reply-button,
     .room-send-button,
     .room-composer-box {
       transition: none;
@@ -412,6 +394,157 @@
 </style>
 
 
+
+
+<style>
+  /*
+   * Proposal-room chat refinement:
+   * compact bubbles, flat chronology, date separators.
+   */
+
+  .room-message-content {
+    width: fit-content;
+    max-width: min(72%, 34rem);
+  }
+
+  .room-message-line {
+    display: flex;
+    align-items: flex-end;
+    gap: .55rem;
+  }
+
+  .room-message.is-mine
+    > .room-message-row
+    > .room-message-content
+    > .room-message-line {
+    flex-direction: row-reverse;
+  }
+
+  .room-message-meta {
+    margin: 0 .25rem .28rem;
+    gap: .3rem;
+  }
+
+  .room-message.is-mine
+    > .room-message-row
+    > .room-message-content
+    > .room-message-meta {
+    justify-content: flex-end;
+  }
+
+  .room-message-author .user-with-flair {
+    gap: .3rem !important;
+  }
+
+  .room-message-author .handle {
+    color: #475569;
+    font-size: .76rem;
+    font-weight: 750;
+  }
+
+  .room-message.is-mine .room-message-author .handle {
+    color: #4f46e5;
+  }
+
+  .room-message-author .badge-icon {
+    width: 15px;
+    height: 15px;
+    object-fit: contain;
+  }
+
+  .room-message-bubble {
+    display: inline-block;
+    width: fit-content;
+    min-width: 4.5rem;
+    max-width: 100%;
+
+    padding: .68rem .85rem;
+
+    border-radius: 7px 17px 17px 17px;
+
+    font-size: .88rem;
+    line-height: 1.45;
+  }
+
+  .room-message.is-mine
+    > .room-message-row
+    > .room-message-content
+    > .room-message-line
+    > .room-message-bubble {
+    border-radius: 17px 7px 17px 17px;
+  }
+
+  .room-message-time {
+    flex: 0 0 auto;
+    margin-bottom: .22rem;
+
+    color: #94a3b8;
+    font-size: .68rem;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .room-date-separator {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+
+    width: 100%;
+    margin: .25rem 0 1rem;
+
+    color: #64748b;
+    font-size: .70rem;
+    font-weight: 650;
+    text-align: center;
+  }
+
+  .room-date-separator::before,
+  .room-date-separator::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 1px;
+    background:
+      linear-gradient(
+        90deg,
+        transparent,
+        rgba(203, 213, 225, .85)
+      );
+  }
+
+  .room-date-separator::after {
+    background:
+      linear-gradient(
+        90deg,
+        rgba(203, 213, 225, .85),
+        transparent
+      );
+  }
+
+  .room-date-separator span {
+    flex: 0 0 auto;
+
+    padding: .32rem .65rem;
+    border: 1px solid rgba(226, 232, 240, .9);
+    border-radius: 999px;
+
+    background: rgba(255, 255, 255, .82);
+    box-shadow: 0 2px 8px rgba(15, 23, 42, .035);
+  }
+
+  @media (max-width: 767px) {
+    .room-message-content {
+      max-width: 82%;
+    }
+
+    .room-message-line {
+      gap: .4rem;
+    }
+
+    .room-message-time {
+      font-size: .64rem;
+    }
+  }
+</style>
 
 <h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
 <div class="text-slate-500 text-sm mb-4">Agenda: {{ proposal.title }}</div>
@@ -449,7 +582,7 @@ Delete room
 
         <div class="room-chat-subtitle mt-1">
 
-          Messages refresh automatically
+          Live discussion · Times shown in JST
 
         </div>
 

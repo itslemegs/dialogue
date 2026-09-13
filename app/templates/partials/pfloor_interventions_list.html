@@ -8,7 +8,5 @@
 {% for R in threads %}
   {{ render_node(R, user_map, none, can_speak, user) }}
 {% else %}
-  <li data-empty-message class="text-slate-500 px-4 py-4">
-    {{ t('floor.empty') }} {{ t('floor.first') }}
-  </li>
+  <li data-empty-message class="p-8 text-center text-slate-500"><div class="text-3xl mb-2">💬</div><div class="font-medium text-slate-700">{{ t('floor.empty') }}</div><div class="text-sm">{{ t('floor.first') }}</div></li>
 {% endfor %}

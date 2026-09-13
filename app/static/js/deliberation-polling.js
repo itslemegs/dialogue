@@ -167,9 +167,9 @@
     return keys[value] ? window.UII18n.t(keys[value]) : value;
   }
 
-  function queueRenderer(generalFloor) {
+  function queueRenderer(generalFloor, initialSpeakers) {
     const ui = document.getElementById('admin-queue-ui');
-    const state = {filter: 'ALL', showCount: 10, compact: false, speakers: []};
+    const state = {filter: 'ALL', showCount: 10, compact: false, speakers: initialSpeakers || []};
     function render() {
       if (!ui) return;
       const active = state.speakers.filter(s => s.status === 'SPEAKING')
@@ -228,21 +228,45 @@
     }));
     document.getElementById('btn-more')?.addEventListener('click', () => { state.showCount += 20; render(); });
     document.getElementById('toggle-compact')?.addEventListener('click', () => { state.compact = !state.compact; render(); });
-    return speakers => { state.speakers = speakers; render(); };
+    let snapshot = initialSpeakers ? JSON.stringify(initialSpeakers) : null;
+    return speakers => {
+      const next = JSON.stringify(speakers);
+      if (next === snapshot) return;
+      state.speakers = speakers;
+      render();
+      snapshot = next;
+    };
   }
 
   function floor(options) {
     const list = document.getElementById(options.list);
     const votes = document.getElementById(options.voting || '');
-    const renderQueue = queueRenderer(options.generalFloor || options.proposalFloor);
+    const renderQueue = queueRenderer(options.generalFloor || options.proposalFloor, options.initialState?.speakers);
     const tr = (key, fallback, params = {}) => (options.generalFloor || options.proposalFloor) ? window.UII18n.t(key, params) : fallback;
-    let revision = null, permissions = null, votingHTML = null, recognition = null;
-    const text = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    let revision = options.initialRevision ?? null;
+    let permissions = options.initialState ? JSON.stringify([options.initialState.can_speak, options.initialState.can_manage]) : null;
+    let votingHTML = options.initialVoting ?? null;
+    let recognition = options.initialState?.current_req_id ?? null;
+    // The initial DOM already represents this snapshot. A state read is still
+    // immediate, but unchanged state must not initialize/rearrange the UI again.
+    const floorKey = data => JSON.stringify([data.is_open, data.can_speak, data.can_manage,
+      data.current_req_id, data.current_user_id, data.current_kind,
+      data.current_target_intervention_id, data.current_target_local_no, data.speakers]);
+    let initialFloor = options.initialState ? floorKey(options.initialState) : null;
+    const text = (id, value) => { const el = document.getElementById(id); if (el && el.textContent !== value) el.textContent = value; };
     function show(id, visible) {
       const el = document.getElementById(id);
-      if (el) { el.classList.toggle('hidden', !visible); el.style.display = visible ? '' : 'none'; }
+      if (el) {
+        el.classList.toggle('hidden', !visible);
+        const display = visible ? '' : 'none';
+        if (el.style.display !== display) el.style.display = display;
+      }
     }
-    function applyFloor(data) {
+    function applyFloor(data, reconcileActions = false) {
+      const nextFloor = floorKey(data);
+      const alreadyRendered = nextFloor === initialFloor;
+      initialFloor = null;
+      if (!reconcileActions && alreadyRendered) return;
       const speakers = data.speakers || [];
       const current = speakers.find(s => s.status === 'SPEAKING');
       const queued = speakers.filter(s => s.status === 'QUEUED');
@@ -274,7 +298,7 @@
       // A lost turn must not erase or hide an unfinished intervention.
       show('composer-box', data.can_speak || !!body?.value || !!target?.value || !!composer?.contains(document.activeElement));
       show('composer-locked', !data.can_speak);
-      composer?.querySelectorAll('button[type="submit"], button:not([type])').forEach(button => { button.disabled = !data.can_speak; });
+      composer?.querySelectorAll('button[type="submit"], button:not([type])').forEach(button => { if (button.disabled !== !data.can_speak) button.disabled = !data.can_speak; });
       if (recognition !== data.current_req_id && recognized && !body?.value && target && !target.value) {
         if (data.current_kind === 'ROR' && data.current_target_intervention_id) {
           target.value = data.current_target_intervention_id;
@@ -326,7 +350,7 @@
         if (!marker || !current()) throw new Error('Missing/obsolete discussion revision');
         const complete = reconcilePosts(list, fresh);
         window.wireReplyLinks?.();
-        applyFloor(data);
+        applyFloor(data, true);
         if (complete) {
           revision = marker.dataset.discussionRevision;
           permissions = nextPermissions;

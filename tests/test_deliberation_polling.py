@@ -156,7 +156,8 @@ class PollingTests(unittest.TestCase):
             'pfloor_interventions_fragment','pfloor_interventions_head','pfloor_state','_pfi_scope_where',
             '_get_early_vote','_get_formal_vote','_has_user_early_voted','_has_user_formal_voted',
             '_pf_user_has_floor','_pfloor_load_speakers','_to_aware_utc','_is_shared_poll_read',
-            '_format_jst','experiment_session_log_middleware']
+            '_format_jst','experiment_session_log_middleware',
+            'show_general_floor_item','proposal_floor_draft','proposal_floor_amendment']
         tree = ast.parse((ROOT/'app/main.py').read_text())
         definitions = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef,ast.AsyncFunctionDef))}
         nodes = []
@@ -199,6 +200,179 @@ class PollingTests(unittest.TestCase):
                         is_open=True,yes=2,no=1,abstain=3)
         defaults.update(values)
         return self.add('Proposal'+kind+'Vote',**defaults)
+
+    def initial_floor_page(self, proposal=False, amendment=False, locale='en', role='member', populated=False, recognized=False):
+        # Reuse existing persisted state in the read-only DB double; full-page
+        # get-or-create helpers are stubbed only here, never in polling handlers.
+        if not getattr(self, '_initial_setup', False):
+            self._initial_setup = True
+            self.link_general()
+            self.initial_general = self.add('FloorState',id=60,question_id=60,is_open=True,
+                speaking_time_sec=120,current_speaker_request_id=None)
+            self.initial_proposal = self.add('ProposalFloorState',id=70,event_id=10,proposal_id=20,
+                draft_id=40,amendment_id=None,is_open=True,speaking_time_sec=120,current_speaker_request_id=None)
+            self.initial_amendment = self.add('ProposalFloorState',id=80,event_id=10,proposal_id=20,
+                draft_id=None,amendment_id=50,is_open=True,speaking_time_sec=120,current_speaker_request_id=None)
+            self.templates.env.globals['url_for'] = lambda name, **params: '/static/'+params.get('path','')
+            for field in ['recalling','noting','welcoming','expressing_regret','expressing_deep_concern',
+                          'emphasizing','decides','requests','calls_upon','encourages']:
+                setattr(self.draft,field,'')
+            self.draft.sponsor_id=1
+        state = self.initial_amendment if amendment else self.initial_proposal if proposal else self.initial_general
+        user_id = 3 if role == 'chair' else 2
+        model = 'ProposalSpeakerRequest' if proposal else 'SpeakerRequest'
+        if populated and not any(type(row) is self.models[model] for row in self.rows):
+            for idx in range(1,13):
+                self.add(model,id=idx,question_id=60,event_id=10,proposal_id=20,
+                    draft_id=None if amendment else 40,amendment_id=50 if amendment else None,
+                    user_id=2 if idx==1 else 1,position=idx,kind=['GENERAL','ROR','ROR_ALL'][idx%3],
+                    status='SPEAKING' if recognized and idx==1 else 'QUEUED',created_at=self.now)
+            if recognized: state.current_speaker_request_id=1
+        request=Request({'type':'http','method':'GET','path':self.floor,'headers':[
+            (b'cookie',f'session={user_id}; ui_locale=en'.encode()),(b'x-ui-language',locale.encode())]})
+        request.state.help_ctx={}
+        self.client.cookies.set('session',str(user_id))
+        with patch.dict(self.ns, ensure_general_floor_question=lambda db,prop:self.db.get(self.models['Question'],60),
+                        get_or_create_floor=lambda db,qid:self.initial_general,
+                        _pfloor_get_or_create_state=lambda db,**scope:state):
+            if amendment:
+                response=self.ns['proposal_floor_amendment'](event_id=10,amendment_id=50,request=request)
+                base='/events/10/proposal-floor/amendment/50'
+            elif proposal:
+                response=self.ns['proposal_floor_draft'](event_id=10,draft_id=40,request=request)
+                base=self.floor
+            else:
+                response=self.ns['show_general_floor_item'](event_id=10,pid=20,request=request)
+                base=self.general
+        polled=self.client.get(base+'/floor/state',headers={'X-UI-Language':locale}).json()
+        return response,polled,base
+
+    def floor_dom(self, html):
+        from html.parser import HTMLParser
+        class Parser(HTMLParser):
+            def __init__(self):
+                super().__init__(); self.root=dict(tag='root',attrs={},children=[],text=''); self.stack=[self.root]
+            def handle_starttag(self,tag,attrs):
+                node=dict(tag=tag,attrs=dict(attrs),children=[],text='')
+                self.stack[-1]['children'].append(node)
+                if tag not in ['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']:
+                    self.stack.append(node)
+            def handle_endtag(self,tag):
+                for index in range(len(self.stack)-1,0,-1):
+                    if self.stack[index]['tag']==tag:
+                        self.stack=self.stack[:index];break
+            def handle_data(self,data):
+                for node in self.stack: node['text']+=data
+        parser=Parser();parser.feed(html)
+        def visit(node):
+            yield node
+            for child in node['children']:yield from visit(child)
+        nodes=list(visit(parser.root))
+        return parser.root,{node['attrs']['id']:node for node in nodes if 'id' in node['attrs']}
+
+    def test_initial_floor_pages_match_first_state_and_canonical_empty_fragments(self):
+        for proposal,amendment in [(False,False),(True,False),(True,True)]:
+            for locale in ['en','ja']:
+                response,data,base=self.initial_floor_page(proposal,amendment,locale)
+                ctx=response.context
+                for key,value in ctx['initial_floor'].items(): self.assertEqual(data[key],value,key)
+                self.assertEqual(ctx['discussion_revision'],data['discussion_revision'])
+                html=response.body.decode();dom,ids=self.floor_dom(html)
+                fragment=self.client.get(base+'/interventions/fragment',headers={'X-UI-Language':locale}).text
+                def empty(source):return re.search(r'<li data-empty-message.*?</li>',source,re.S)[0]
+                self.assertEqual(empty(html),empty(fragment))
+                self.assertIn('text-center',empty(html))
+                self.assertNotIn('Loading',ids['floor-open-badge']['text'])
+                self.assertNotIn('読み込み中',ids['floor-open-badge']['text'])
+                self.assertTrue(ids['qb-left']['text'])
+                self.assertTrue(ids['qb-now']['text'])
+                self.assertNotIn('display:none',ids['btn-request-floor']['attrs'].get('style',''))
+                self.assertIn('display:none',ids['now-playing']['attrs']['style'])
+                self.assertIn('lg:flex',ids['now-playing']['attrs']['class'])
+                self.assertIn('display:none',ids['composer-box']['attrs']['style'])
+                if proposal:
+                    self.assertEqual(ids['pf-voting']['text'],self.floor_dom('<div id="vote">'+data['voting_html']+'</div>')[1]['vote']['text'])
+
+        self.initial_general.is_open=False
+        for locale in ['en','ja']:
+            response,data,_=self.initial_floor_page(locale=locale)
+            _,ids=self.floor_dom(response.body.decode())
+            from app.i18n import translate
+            self.assertEqual(ids['floor-open-badge']['text'],translate(locale,'floor.closed'))
+            self.assertIn('display:none',ids['btn-request-floor']['attrs']['style'])
+            self.assertFalse(data['is_open'])
+
+    def test_initial_proposal_discussion_scope_and_permissions_match_fragments(self):
+        self.add('ProposalIntervention',id=1,event_id=10,proposal_id=20,draft_id=40,amendment_id=None,
+                 parent_id=None,by_user=1,local_no=1,body='Draft root',created_at=self.now)
+        self.add('ProposalIntervention',id=2,event_id=10,proposal_id=20,draft_id=40,amendment_id=None,
+                 parent_id=1,by_user=2,local_no=2,body='Draft reply',created_at=self.now)
+        self.add('ProposalIntervention',id=3,event_id=10,proposal_id=20,draft_id=None,amendment_id=50,
+                 parent_id=None,by_user=1,local_no=1,body='Amendment only',created_at=self.now)
+        for amendment in [False,True]:
+            response,data,base=self.initial_floor_page(True,amendment,'ja')
+            html=response.body.decode();fragment=self.client.get(base+'/interventions/fragment',headers={'X-UI-Language':'ja'}).text
+            for source in [html,fragment]:
+                self.assertIn('Amendment only' if amendment else 'Draft root',source)
+                self.assertNotIn('Draft root' if amendment else 'Amendment only',source)
+                self.assertIn('value="ROR"',source)
+                if not amendment:self.assertIn('Draft reply',source)
+            self.assertEqual(response.context['discussion_revision'],data['discussion_revision'])
+        for role,visible in [('member',False),('chair',True)]:
+            response,_,_=self.initial_floor_page(True,False,'ja',role)
+            _,ids=self.floor_dom(response.body.decode())
+            self.assertEqual('form-call-next' in ids,visible)
+            self.assertEqual('display:none' not in ids['composer-box']['attrs']['style'],visible)
+
+    def test_initial_proposal_content_keeps_poll_visibility_restrictions(self):
+        self.initial_floor_page(True)
+        for amendment in [False,True]:
+            for submitted, at in [(False,self.now),(True,None),(True,self.now+timedelta(days=1))]:
+                self.draft.is_submitted=submitted
+                self.draft.submitted_at=at
+                with self.assertRaises(HTTPException) as denied:
+                    self.initial_floor_page(True,amendment)
+                self.assertEqual(denied.exception.status_code,403)
+        self.draft.is_submitted=True
+        self.draft.submitted_at=self.now-timedelta(days=1)
+
+    def test_initial_poll_lifecycle_executes_without_dom_replacement_or_queue_loading(self):
+        import shutil,subprocess
+        from app.i18n import CATALOGUES
+        if not shutil.which('node'):self.skipTest('Node is required for the dependency-free JS lifecycle check')
+        fixtures=[]
+        # Each independent fixture gets its own DB double, including >10 queued
+        # rows, current recognition and both privileged/member layouts.
+        for proposal,amendment in [(False,False),(True,False),(True,True)]:
+            for locale in ['en','ja']:
+                for role,populated,recognized in [('member',False,False),('member',True,True),('chair',True,False)]:
+                    case=PollingTests();case.setUp()
+                    try:
+                        response,data,_=case.initial_floor_page(proposal,amendment,locale,role,populated,recognized)
+                        html=response.body.decode();dom,ids=case.floor_dom(html)
+                        self.assertNotIn('display:none',ids['reply-chip']['attrs'].get('style',''))
+                        if proposal:self.assertIn('  wireReplyLinks();',html)
+                        if role=='chair':
+                            table=ids['table-nextup']
+                            self.assertEqual(len(table['children'][0]['children']),10)
+                            self.assertNotIn('hidden',ids['btn-more']['attrs'])
+                        if recognized:
+                            self.assertNotIn('display:none',ids['recognized-banner']['attrs']['style'])
+                            self.assertNotIn('display:none',ids['composer-box']['attrs']['style'])
+                        # Read the literal seeds emitted by the actual page.
+                        state=json.loads(re.search(r'initialState: (.*),\n',html)[1])
+                        revision=json.loads(re.search(r'initialRevision: (.*),\n',html)[1])
+                        voting=json.loads(re.search(r'initialVoting: (.*)\n',html)[1]) if proposal else None
+                        if proposal:self.assertEqual(voting,data['voting_html'])
+                        fixtures.append(dict(dom=dom,locale=locale,catalogue=dict(CATALOGUES[locale]),
+                            state=state,revision=revision,voting=voting,proposal=proposal,
+                            userId=response.context['user'].id,list='interventions' if proposal else 'threads-container'))
+                    finally:
+                        case.tearDown();case.doCleanups();case.client.close()
+        result=subprocess.run(['node','tests/floor_initial_lifecycle.js'],input=json.dumps(fixtures),
+                              text=True,capture_output=True,cwd=ROOT,timeout=30)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn('PASS: 18 initial/poll lifecycles',result.stdout)
 
     def test_general_fragment_has_authoritative_item_context_and_keys(self):
         self.link_general(); self.intervention(1); self.intervention(2,1)
@@ -737,6 +911,7 @@ class PollingTests(unittest.TestCase):
                 item=self.ns['_general_floor_item'](self.prop,q),floor=st,pfloor=st,
                 threads=[],user_map={user.id:user},role_map={},speakers=[],
                 can_speak=user_id==3,current_req=None,last_any_id=0,last_child_id=0,
+                initial_floor=self.ns['_floor_snapshot'](self.db,st,[],user),discussion_revision="0:0",
                 cos_list=[],early_vote=None,formal_vote=None,HAS_EARLY_VOTED=False,
                 HAS_FORMAL_VOTED=False,amendment_cards=[])
             for name,mode in [('events/general_floor_item.html','DRAFT'),

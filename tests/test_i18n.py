@@ -458,6 +458,9 @@ class RequestTests(unittest.TestCase):
             threads=[dict(node=post,children=[])], user_map={2:user}, role_map={2:['chairman' if chair else 'member']},
             flags=dict(IS_CHAIR=chair,IS_PRESIDENT=False,IS_ADMIN=False,IS_MEMBER=True),
             can_speak=chair,last_child_id=0,last_any_id=1,discussion_revision='1:1')
+        context['initial_floor'] = dict(is_open=opened, can_speak=chair, can_manage=chair,
+            current_req_id=None, current_user_id=None, current_kind=None,
+            current_target_intervention_id=None, current_target_local_no=None, speakers=[])
         return context
 
     def test_phase4_general_floor_participant_and_chair_presentation(self):
@@ -542,7 +545,7 @@ class RequestTests(unittest.TestCase):
         draft=SimpleNamespace(id=40,status='TABLED',title='Authored proposal 日本語',l_number='L.1',
             sponsor_id=2,cosigners_json=[],recalling='Authored clause 日本語')
         vote=SimpleNamespace(is_open=True,yes=2,no=1,abstain=7)
-        ctx.update(mode='DRAFT',draft=draft,amendment=None,amendment_cards=[],
+        ctx.update(event_id=41,kind='draft',item_id=40,mode='DRAFT',draft=draft,amendment=None,amendment_cards=[],
             pfloor=SimpleNamespace(is_open=True,event_id=41,proposal_id=8),
             early_vote=vote,formal_vote=SimpleNamespace(is_open=True,yes=2,no=1,abstain=7),
             HAS_EARLY_VOTED=False,HAS_FORMAL_VOTED=False,can_speak=chair,

@@ -2,6 +2,7 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% import "macros/floor_initial.html" as initial with context %}
 {% set IS_ADMIN = flags.IS_ADMIN %}
 {% set IS_CHAIR = flags.IS_CHAIR %}
 {% set IS_PRESIDENT = flags.IS_PRESIDENT %}
@@ -891,9 +892,8 @@
         {% endif %}
       </div>
 
-      <div id="pf-voting">
-        {% include "partials/pfloor_vote_panel.html" %}
-      </div>
+      {% set initial_voting %}{% include "partials/pfloor_vote_panel.html" %}{% endset %}
+      <div id="pf-voting">{{ initial_voting }}</div>
     </section>
   </aside>
 
@@ -921,7 +921,7 @@
      class="pf-scroll"
      data-list-url="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions/fragment"
      data-head-url="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions/head">
-  <div class="p-8 text-center text-slate-500"><div class="text-3xl mb-2">💬</div><div class="font-medium text-slate-700">{{ t('proposal_floor.loading_discussion') }}</div></div>
+  {% include "partials/pfloor_interventions_list.html" %}
 </div>
     </section>
   </main>
@@ -934,14 +934,14 @@
           <div class="pf-kicker mb-2">{{ t('floor.queue.title') }}</div>
           <h3 class="pf-panel-title">{{ t('floor.speakers') }}</h3>
         </div>
-        <span id="floor-open-badge" class="px-2.5 py-1 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold truncate max-w-[50%]">{{ t('common.loading') }}</span>
+        <span id="floor-open-badge" class="px-2.5 py-1 rounded-full {{ 'bg-emerald-100 text-emerald-700' if initial_floor.is_open else 'bg-slate-200 text-slate-600' }} text-xs font-semibold truncate max-w-[50%]">{{ t('floor.open') if initial_floor.is_open else t('floor.closed') }}</span>
       </div>
 
       <!-- Queue brief -->
       <div id="queue-brief" class="mt-4 text-sm flex flex-wrap gap-2 text-slate-700 w-full max-w-full shrink-0">
-        <span id="qb-now"    class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
-        <span id="qb-ahead"  class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
-        <span id="qb-left"   class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate"></span>
+        <span id="qb-now"    class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate">{{ initial.label('qb-now') }}</span>
+        <span id="qb-ahead"  class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate">{{ initial.label('qb-ahead') }}</span>
+        <span id="qb-left"   class="px-2.5 py-1 rounded-full bg-slate-50 text-xs font-medium truncate">{{ initial.label('qb-left') }}</span>
       </div>
 
       <!-- Request / Withdraw -->
@@ -949,10 +949,10 @@
         <form id="btn-request-floor"
               method="post"
               action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/register"
-              class="hidden w-full sm:w-auto"
+              class="{{ 'hidden' if not initial.visible('btn-request-floor') else '' }} w-full sm:w-auto"
               data-log-action="PFLOOR_REGISTER_SPEAKER"
               data-target-type="{{ KIND }}"
-              data-target-id="{{ ITEM_ID }}">
+              data-target-id="{{ ITEM_ID }}" {{ initial.display('btn-request-floor') }}>
           <input type="hidden" name="kind_req" value="GENERAL">
           <button class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
         data-log-action="CLICK_PFLOOR_REGISTER_SPEAKER"
@@ -966,11 +966,11 @@
           id="btn-withdraw"
           method="post"
           action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/withdraw"
-          class="hidden w-full sm:w-auto"
+          class="{{ 'hidden' if not initial.visible('btn-withdraw') else '' }} w-full sm:w-auto"
           data-log-action="PFLOOR_WITHDRAW_REQUEST"
           data-target-type="{{ KIND }}"
           data-target-id="{{ ITEM_ID }}"
-        >
+         {{ initial.display('btn-withdraw') }}>
         <button
         class="px-3.5 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
         data-log-action="CLICK_PFLOOR_WITHDRAW_REQUEST"
@@ -999,10 +999,10 @@
   </button>
           </form>
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/call_next" id="form-call-next" style="display:none" class="w-full sm:w-auto"
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/call_next" id="form-call-next" class="w-full sm:w-auto"
                 data-log-action="PFLOOR_CALL_NEXT"
                 data-target-type="{{ KIND }}"
-                data-target-id="{{ ITEM_ID }}">
+                data-target-id="{{ ITEM_ID }}" {{ initial.display('form-call-next') }}>
                 <button id="btn-call-next"
                 class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
                 data-log-action="CLICK_PFLOOR_CALL_NEXT"
@@ -1016,12 +1016,11 @@
             method="post"
             action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/finish_current"
             id="form-finish-current"
-            style="display:none"
             class="w-full sm:w-auto"
             data-log-action="PFLOOR_FINISH_CURRENT"
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}"
-          >
+           {{ initial.display('form-finish-current') }}>
           <button
           id="btn-finish-current"
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
@@ -1057,23 +1056,23 @@
 
       <!-- Admin queue UI -->
           <div class="mt-4 space-y-3 w-full max-w-full" id="admin-queue-ui">
-            <div id="admin-now" class="text-sm px-2.5 py-1 inline-block rounded-full bg-emerald-100 text-emerald-700 max-w-full truncate font-semibold"></div>
+            <div id="admin-now" class="text-sm px-2.5 py-1 inline-block rounded-full bg-emerald-100 text-emerald-700 max-w-full truncate font-semibold">{{ initial.label('admin-now') }}</div>
             <div class="flex gap-2 text-xs">
               <button type="button"
         class="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
-        data-filter="ALL"
+        data-filter="ALL" aria-pressed="true"
         data-hint="{{ t('floor.hint.all') }}"
         data-hint-side="top">{{ t('floor.queue.all') }}</button>
 
 <button type="button"
         class="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
-        data-filter="QUEUED"
+        data-filter="QUEUED" aria-pressed="false"
         data-hint="{{ t('floor.hint.waiting') }}"
         data-hint-side="top">{{ t('floor.queue.waiting') }}</button>
 
 <button type="button"
         class="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-slate-100 border border-slate-200"
-        data-filter="DONE"
+        data-filter="DONE" aria-pressed="false"
         data-hint="{{ t('floor.hint.done') }}"
         data-hint-side="top">{{ t('floor.queue.done') }}</button>
 
@@ -1086,14 +1085,14 @@
             <div id="admin-nextup" class="border border-slate-200 rounded-2xl w-full overflow-x-auto">
               <div class="px-3 py-2 text-xs font-semibold text-slate-500 border-b bg-slate-50/70">{{ t('floor.queue.next') }}</div>
               <table class="w-full min-w-full text-sm table-auto" id="table-nextup">
-                <tbody class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words"></tbody>
+                <tbody class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words">{{ initial.rows() }}</tbody>
               </table>
               <button type="button"
         class="w-full text-sm px-3 py-2 text-blue-700 hover:underline"
         id="btn-more"
         data-hint="{{ t('floor.hint.more') }}"
         data-hint-side="top"
-        hidden>{{ t('floor.queue.more') }}</button>
+        {% if initial.active|length <= 10 %}hidden{% endif %}>{{ t('floor.queue.more') }}</button>
             </div>
 
             <details class="mt-4">
@@ -1106,7 +1105,7 @@
                       <th class="text-right">{{ t('floor.queue.requested') }}</th>
                     </tr>
                   </thead>
-                  <tbody id="speaker-history" class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words"></tbody>
+                  <tbody id="speaker-history" class="[&>tr>td]:align-top [&>tr>td]:px-2 [&>tr>td]:py-1 [&>tr>td]:whitespace-normal [&>tr>td]:break-words">{{ initial.rows(true) }}</tbody>
                 </table>
               </div>
             </details>
@@ -1119,7 +1118,7 @@
 
     <!-- Speaking field (privileged can always post) -->
     <section class="pf-card p-4 pf-right-composer">
-        <div id="recognized-banner" class="mb-2 text-sm text-emerald-700 hidden">
+        <div id="recognized-banner" class="mb-2 text-sm text-emerald-700 {{ 'hidden' if not initial.visible('recognized-banner') else '' }}" {{ initial.display('recognized-banner') }}>
             {{ t('floor.recognized') }}
         </div>
 
@@ -1127,19 +1126,19 @@
         <form id="composer-box"
                 method="post"
                 action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions"
-                class="space-y-2 hidden"
+                class="space-y-2 {{ 'hidden' if not initial.visible('composer-box') else '' }}"
                 data-log-action="POST_PFLOOR_INTERVENTION"
                 data-target-type="{{ KIND }}"
-                data-target-id="{{ ITEM_ID }}">
+                data-target-id="{{ ITEM_ID }}" {{ initial.display('composer-box') }}>
             <div class="flex items-center gap-2">
-            <input type="hidden" name="relates_to_id" id="relates_to_id">
-            <span id="reply-chip" class="hidden text-xs px-2 py-1 rounded bg-slate-100 text-slate-700"></span>
+            <input type="hidden" name="relates_to_id" id="relates_to_id" value="{{ initial_floor.current_target_intervention_id if initial.recognized and initial_floor.current_kind == 'ROR' and initial_floor.current_target_intervention_id else '' }}">
+            <span id="reply-chip" class="{{ 'hidden' if not initial.visible('reply-chip') else '' }} text-xs px-2 py-1 rounded bg-slate-100 text-slate-700">{{ initial.label('reply-chip') }}</span>
             </div>
 
             <textarea name="body" rows="3" placeholder="{{ t('floor.body_placeholder') }}" class="border p-3 rounded-2xl w-full" required></textarea>
 
             <div class="flex items-center gap-2">
-              <button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm"
+              <button {% if not initial_floor.can_speak %}disabled{% endif %} class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold shadow-sm"
               data-log-action="CLICK_POST_PFLOOR_INTERVENTION"
               data-target-type="{{ KIND }}"
               data-target-id="{{ ITEM_ID }}"
@@ -1154,7 +1153,7 @@
             </div>
         </form>
 
-        <div id="composer-locked" class="text-sm text-slate-600">
+        <div id="composer-locked" class="text-sm text-slate-600" {{ initial.display('composer-locked') }}>
             {{ t('floor.composer_locked') }}
         </div>
     </section>
@@ -1242,9 +1241,9 @@
   <div class="flex items-end justify-between gap-4">
     <!-- Mini now-speaking chip -->
     <div id="now-playing"
-         class="hidden lg:flex items-center gap-3 bg-black/80 text-white rounded-full px-4 py-2 shadow-lg backdrop-blur pointer-events-auto">
+         class="{{ 'hidden' if not initial.visible('now-playing') else '' }} lg:flex items-center gap-3 bg-black/80 text-white rounded-full px-4 py-2 shadow-lg backdrop-blur pointer-events-auto" {{ initial.display('now-playing') }}>
       <div class="animate-pulse w-2 h-2 rounded-full bg-emerald-400"></div>
-      <div id="np-text" class="text-sm">{{ t('floor.now_empty') }}</div>
+      <div id="np-text" class="text-sm">{{ initial.label('np-text') }}</div>
     </div>
 
     <!-- Notifications -->
@@ -1259,11 +1258,14 @@
   const ITEM_ID = {{ ITEM_ID }};
   const floorPoll = DeliberationPolling.floor({
     userId: CURRENT_USER_ID,
+      initialState: {{ initial_floor|tojson }},
+      initialRevision: {{ discussion_revision|tojson }},
     proposalFloor: true,
     url: `/events/{{ event.id }}/proposal-floor/${KIND}/${ITEM_ID}/floor/state`,
     fragmentUrl: `/events/{{ event.id }}/proposal-floor/${KIND}/${ITEM_ID}/interventions/fragment`,
     list: "interventions",
-    voting: "pf-voting"
+    voting: "pf-voting",
+    initialVoting: {{ initial_voting|tojson }}
   });
   function refreshFloor() { floorPoll.refresh(); }
 
@@ -1313,7 +1315,8 @@
     }
   };
 
-  // Kick everything off
+  // Server-rendered posts need their handlers before the first state read.
+  wireReplyLinks();
 
 </script>
 

@@ -1,0 +1,57 @@
+{# Initial presentation of the same _floor_snapshot consumed by applyFloor(). #}
+{% set state = initial_floor %}
+{% set queued = state.speakers|selectattr('status', 'equalto', 'QUEUED')|list %}
+{% set speaking = state.speakers|selectattr('status', 'equalto', 'SPEAKING')|list %}
+{% set current = speaking|first %}
+{% set mine = queued|selectattr('user_id', 'equalto', user.id)|first %}
+{% set recognized = state.current_user_id == user.id %}
+{% set history = state.speakers|selectattr('status', 'in', ['DONE', 'WITHDRAWN'])|sort(attribute='created_at', reverse=true)|list %}
+{% set active = speaking + queued %}
+
+{% macro visible(id) -%}
+  {%- set visibility = {
+    'btn-request-floor': state.is_open and not recognized and not state.can_manage,
+    'btn-withdraw': mine and not state.can_manage,
+    'btn-ror-all': not recognized and not state.can_manage,
+    'form-call-next': queued|length > 0,
+    'form-finish-current': current,
+    'recognized-banner': recognized,
+    'now-playing': current,
+    'composer-box': state.can_speak,
+    'composer-locked': not state.can_speak,
+    'reply-chip': recognized and state.current_kind in ['ROR', 'ROR_ALL'] and (state.current_kind == 'ROR_ALL' or state.current_target_intervention_id)
+  } -%}
+  {{- '1' if visibility[id] else '' -}}
+{%- endmacro %}
+
+{% macro display(id) -%}
+  {# Inline display also wins over responsive utilities such as lg:flex. #}
+  style="{{ '' if visible(id) else 'display:none' }}"
+{%- endmacro %}
+
+{% macro label(id) -%}
+  {%- if id in ['qb-now', 'np-text'] -%}
+    {{- t('floor.now', handle=current.handle) if current else t('floor.now_empty') -}}
+  {%- elif id == 'admin-now' -%}
+    {{- t('floor.current', handle=current.handle, id=current.id) if current else t('floor.none_speaking') -}}
+  {%- elif id == 'qb-ahead' -%}
+    {{- t('floor.ahead', count=queued|selectattr('position', 'lt', mine.position)|list|length if mine else '—') -}}
+  {%- elif id == 'qb-left' -%}
+    {{- t('floor.remaining', count=queued|length) -}}
+  {%- elif id == 'reply-chip' and visible(id) -%}
+    {{- t('floor.ror.all') if state.current_kind == 'ROR_ALL' else t('floor.reply_to', target='#' ~ (state.current_target_local_no or state.current_target_intervention_id)) -}}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro rows(history_rows=false) -%}
+  {% set keys = {'GENERAL':'floor.queue.general', 'ROR':'floor.queue.ror', 'ROR_ALL':'floor.ror.all', 'CHAIR':'floor.queue.chair', 'SPEAKING':'floor.queue.speaking', 'QUEUED':'floor.queue.queued', 'DONE':'floor.queue.done', 'WITHDRAWN':'floor.queue.withdrawn'} %}
+  {% for speaker in (history if history_rows else active[:10]) %}
+    <tr data-request-id="{{ speaker.id }}" class="border-t">
+      <td class="py-1">{{ speaker.position }}</td>
+      <td class="py-1 font-medium">{{ '@' ~ speaker.handle if speaker.handle else '' }}</td>
+      <td><span class="px-2 py-0.5 rounded text-xs {{ 'bg-fuchsia-100 text-fuchsia-700' if speaker.kind in ['ROR', 'ROR_ALL'] else 'bg-slate-100 text-slate-700' }}">{{ t(keys[speaker.kind]) if speaker.kind in keys else speaker.kind }}</span></td>
+      <td><span class="px-2 py-0.5 rounded text-xs {{ {'SPEAKING':'bg-emerald-100 text-emerald-700', 'QUEUED':'bg-amber-100 text-amber-700', 'DONE':'bg-slate-200 text-slate-700', 'WITHDRAWN':'bg-rose-100 text-rose-700'}.get(speaker.status, 'bg-slate-100 text-slate-600') }}">{{ t(keys[speaker.status]) if speaker.status in keys else speaker.status }}</span></td>
+      <td class="text-right text-slate-500">{{ speaker.created_at|jst }}</td>
+    </tr>
+  {% endfor %}
+{%- endmacro %}

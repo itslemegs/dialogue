@@ -2502,6 +2502,7 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
             can_speak = True
 
         speakers = ordered_speakers(db, q.id)
+        initial_floor = _floor_snapshot(db, fs, speakers, user)
 
         last_child_id = db.exec(
             select(func.max(Intervention.id)).where(
@@ -2535,6 +2536,8 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
             "speakers": speakers,
             "can_speak": can_speak,
             "current_req": cur_req,
+            "initial_floor": initial_floor,
+            "discussion_revision": _rows_revision(ints),
             "last_child_id": int(last_child_id),
             "last_any_id": int(last_any_id),
         },
@@ -5636,6 +5639,9 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
                 status_code=303,
             )
 
+        # Initial discussion/state must obey the same visibility policy as polling.
+        _, _, _, _, scope, _ = _pfloor_poll_context(db, user, event.id, "draft", d.id)
+
         voting = _pfloor_voting_context(db, st, user, d, "DRAFT")
 
         can_speak = _pf_user_has_floor(db, state=st, user_id=user.id)
@@ -5645,9 +5651,13 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
 
         q = ensure_general_floor_question(db, prop)
 
-        users = db.exec(select(User)).all()
+        users = db.exec(select(User).options(selectinload(User.roles))).all()
         user_map = {u.id: u for u in users}
         speakers = _pfloor_load_speakers(db, st)
+        initial_floor = _floor_snapshot(db, st, speakers, user, proposal_floor=True)
+        rows = db.exec(select(ProposalIntervention).where(_pfi_scope_where(**scope)).order_by(ProposalIntervention.created_at.asc(), ProposalIntervention.id.asc())).all()
+        threads = _thread_rows(rows, "parent_id")
+        role_map = {u.id: sorted({r.name for r in (u.roles or [])}) for u in users}
 
 
     return templates.TemplateResponse(request, "events/proposal_floor_item.html",
@@ -5662,6 +5672,14 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
             "amendment": None,
             "pfloor": st,
             **voting,
+            "initial_floor": initial_floor,
+            "discussion_revision": _rows_revision(rows),
+            "last_any_id": max((row.id for row in rows), default=0),
+            "threads": threads,
+            "role_map": role_map,
+            "event_id": event.id,
+            "kind": "draft",
+            "item_id": d.id,
             "speakers": speakers,
             "user_map": user_map,
             "can_speak": can_speak,
@@ -5694,6 +5712,9 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
                 status_code=303,
             )
 
+        # Initial discussion/state must obey the same visibility policy as polling.
+        _, _, _, _, scope, _ = _pfloor_poll_context(db, user, event.id, "amendment", am.id)
+
         voting = _pfloor_voting_context(db, st, user, d, "AMENDMENT")
 
         can_speak = _pf_user_has_floor(db, state=st, user_id=user.id)
@@ -5703,9 +5724,14 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
 
         q = ensure_general_floor_question(db, prop)
 
-        users = db.exec(select(User)).all()
+        users = db.exec(select(User).options(selectinload(User.roles))).all()
         user_map = {u.id: u for u in users}
         speakers = _pfloor_load_speakers(db, st)
+        initial_floor = _floor_snapshot(db, st, speakers, user, proposal_floor=True)
+        rows = db.exec(select(ProposalIntervention).where(_pfi_scope_where(**scope)).order_by(ProposalIntervention.created_at.asc(), ProposalIntervention.id.asc())).all()
+        threads = _thread_rows(rows, "parent_id")
+        role_map = {u.id: sorted({r.name for r in (u.roles or [])}) for u in users}
+
 
     return templates.TemplateResponse(request, "events/proposal_floor_item.html",
         {
@@ -5719,6 +5745,14 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
             "amendment": am,
             "pfloor": st,
             **voting,
+            "initial_floor": initial_floor,
+            "discussion_revision": _rows_revision(rows),
+            "last_any_id": max((row.id for row in rows), default=0),
+            "threads": threads,
+            "role_map": role_map,
+            "event_id": event.id,
+            "kind": "amendment",
+            "item_id": am.id,
             "speakers": speakers,
             "user_map": user_map,
             "can_speak": can_speak,

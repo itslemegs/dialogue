@@ -185,7 +185,7 @@
             for (let i = 0; i < 5; i++) row.appendChild(document.createElement('td'));
           }
           const values = [speaker.position, speaker.handle ? '@' + speaker.handle : '', speaker.kind, speaker.status,
-            new Date(speaker.created_at).toLocaleString()];
+            window.formatJstTimestamp(speaker.created_at)];
           values.forEach((value, i) => {
             const cell = row.children[i];
             if (i === 2 || i === 3) {

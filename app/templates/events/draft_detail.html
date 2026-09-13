@@ -62,7 +62,7 @@
     <!-- {% if agenda_id %}<a href="/questions/{{ agenda_id }}" class="text-blue-700 underline ml-1">view</a>{% endif %} -->
     • Main sponsor: <span class="font-medium">{{ sponsor_name }}</span>
     • Status: <span class="font-medium">{{ draft.status }}</span>
-    • Submitted: {{ draft.submitted_at.strftime("%Y-%m-%d %H:%M") }}
+    • Submitted: {{ draft.submitted_at|jst }}
   </div>
 
   {# quick language buttons #}
@@ -342,7 +342,7 @@
           >
             <div class="flex items-center justify-between">
               <div class="font-medium">{{ a.label }}</div>
-              <div class="text-xs text-slate-500">{{ a.created_at.strftime("%Y-%m-%d %H:%M") }}</div>
+              <div class="text-xs text-slate-500">{{ a.created_at|jst }}</div>
             </div>
 
             <div class="mt-1 text-sm line-clamp-2 text-slate-600">

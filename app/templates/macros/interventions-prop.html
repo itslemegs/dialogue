@@ -54,7 +54,7 @@
         <div class="flex items-center gap-2 text-sm">
           {{ uf.flair_for_user(u=author, roles_list=author_roles) }}
           <span class="text-slate-400">•</span>
-          <span class="text-slate-500">{{ it.created_at.strftime("%Y-%m-%d %H:%M") }} UTC</span>
+          <span class="text-slate-500">{{ it.created_at|jst }}</span>
           <!-- <span class="ml-auto text-xs px-2 py-0.5 rounded bg-slate-100">{{ it.point_key }}</span> -->
         </div>
 
@@ -92,9 +92,7 @@
   </form>
 {% endif %}
 
-          <span class="text-slate-400 text-xs">#{{ it.local_no or it.id }}</span>
           {% if it.parent_id %}
-  <span class="text-slate-400 text-xs">↩︎ to #{{ it.parent_id }}</span>
 {% endif %}
         </div>
 

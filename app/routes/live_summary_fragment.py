@@ -1,5 +1,7 @@
 from app.ai_features import require_ai_features
 import logging
+from datetime import timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -55,7 +57,15 @@ async def api_live_summary(
             return {
                 "ok": True,
                 "scope_key": row.scope_key,
-                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                "updated_at": (
+                    row.updated_at.replace(
+                        tzinfo=timezone.utc
+                    ).astimezone(
+                        ZoneInfo("Asia/Tokyo")
+                    ).strftime("%Y-%m-%d %H:%M JST")
+                    if row.updated_at
+                    else None
+                ),
                 "summary": row.summary or "",
             }
 

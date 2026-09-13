@@ -38,7 +38,7 @@
 >
   {{ draft.l_number or "L" }} — {{ draft.title or "(Untitled)" }}
 </a>
-    • Submitted: {{ amend.created_at.strftime("%Y-%m-%d %H:%M") }}
+    • Submitted: {{ amend.created_at|jst }}
   </div>
 
   <section class="rounded-2xl border bg-white p-6 whitespace-pre-wrap"

@@ -4,8 +4,7 @@
   <div class="border-b px-4 py-3" id="pfi-{{ it.id }}">
     <div class="text-sm text-slate-600">
       <span class="font-medium">@{{ u.handle if u else ('user' ~ it.by_user) }}</span>
-      <span class="text-xs text-slate-400">#{{ it.local_no }}</span>
-      <a href="#" class="ml-2 text-xs text-indigo-600" data-reply-to="{{ it.id }}" data-reply-label="#{{ it.local_no }}">Reply</a>
+      <a href="#" class="ml-2 text-xs text-indigo-600" data-reply-to="{{ it.id }}" data-reply-label="message">Reply</a>
     </div>
     <div class="mt-1 whitespace-pre-wrap text-slate-800">{{ it.body }}</div>
 

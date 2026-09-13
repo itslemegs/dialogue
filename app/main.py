@@ -193,6 +193,34 @@ async def ai_disabled_response(request: Request, exc: AIFeaturesDisabled):
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _format_jst(value, fmt="%Y-%m-%d %H:%M JST"):
+    """Format stored UTC timestamps for user-facing JST display."""
+    if value in (None, ""):
+        return ""
+
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return value
+
+    try:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(
+            ZoneInfo("Asia/Tokyo")
+        ).strftime(fmt)
+    except Exception:
+        return str(value)
+
+
+
+
 # init_db()
 
 
@@ -201,6 +229,7 @@ from starlette.templating import Jinja2Templates
 templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["getattr"] = getattr
 templates.env.globals["ai_features_enabled"] = AI_FEATURES_ENABLED
+templates.env.filters["jst"] = _format_jst
 
 # ----- helpers: MUST be above routes -----
 EMPTY_FLAGS = {"IS_ADMIN": False, "IS_PRESIDENT": False, "IS_CHAIR": False, "IS_INVITED": False, "IS_MEMBER": False}
@@ -2564,7 +2593,7 @@ async def api_live_summary(
         row = await refresh_summary_if_needed(db, scope)
         return {
             "scope_key": row.scope_key,
-            "updated_at": row.updated_at.isoformat(),
+            "updated_at": _format_jst(row.updated_at),
             "summary": row.summary,
         }
 

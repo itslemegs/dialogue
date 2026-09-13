@@ -12,7 +12,8 @@
       .badge-icon { vertical-align: text-bottom; }
       .user-with-flair .handle { font-weight: 600; }
     </style>    
-  </head>
+    <script src="/static/js/jst-time.js"></script>
+</head>
   <div id="toast-root" class="fixed top-4 right-4 z-50 space-y-2"></div>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
   <script>
@@ -37,7 +38,7 @@
           el.innerHTML = `
             <div class="text-sm font-semibold mb-1">${it.type === 'FLOOR' ? 'You have the floor' : 'Notice'}</div>
             <div class="text-sm text-slate-700">${it.message}</div>
-            <div class="text-xs text-slate-500 mt-1">${new Date(it.ts).toLocaleString()}</div>
+            <div class="text-xs text-slate-500 mt-1">${window.formatJstTimestamp(it.ts)}</div>
             <div class="mt-2 text-right">
               <button class="px-2 py-1 text-xs bg-slate-800 text-white rounded">OK</button>
             </div>`;

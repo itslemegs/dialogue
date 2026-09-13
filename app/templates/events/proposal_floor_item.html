@@ -1274,7 +1274,7 @@
       el.addEventListener('click', (ev) => {
         ev.preventDefault();
         const targetId = el.getAttribute('data-reply-to');
-        const label    = el.getAttribute('data-reply-label') || ('#' + targetId);
+        const label    = el.getAttribute('data-reply-label') || 'message';
         const inp = document.getElementById('relates_to_id');
         const chip = document.getElementById('reply-chip');
         if (inp) inp.value = targetId || '';
@@ -1555,7 +1555,7 @@
 </button>
               </div>
   
-              <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
+              <div class="text-xs text-slate-500 mt-1">${window.formatJstTimestamp(n.ts)}</div>
             </div>
           `;
         }).join('');

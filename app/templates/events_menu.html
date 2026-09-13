@@ -176,7 +176,7 @@
           year:"numeric", month:"short", day:"2-digit",
           hour:"2-digit", minute:"2-digit"
         }).format(dt);
-      } catch(_) { return dt.toLocaleString(); }
+      } catch(_) { return window.formatJstTimestamp(dt); }
     }
   
     function setLocked(card, locked, reasonText) {

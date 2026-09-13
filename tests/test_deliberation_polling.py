@@ -153,7 +153,7 @@ class PollingTests(unittest.TestCase):
             'pfloor_interventions_fragment','pfloor_interventions_head','pfloor_state','_pfi_scope_where',
             '_get_early_vote','_get_formal_vote','_has_user_early_voted','_has_user_formal_voted',
             '_pf_user_has_floor','_pfloor_load_speakers','_to_aware_utc','_is_shared_poll_read',
-            'experiment_session_log_middleware']
+            '_format_jst','experiment_session_log_middleware']
         tree = ast.parse((ROOT/'app/main.py').read_text())
         definitions = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef,ast.AsyncFunctionDef))}
         nodes = []
@@ -162,6 +162,7 @@ class PollingTests(unittest.TestCase):
         module = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')],level=0)]+nodes,type_ignores=[])
         ast.fix_missing_locations(module)
         exec(compile(module, 'isolated_polling', 'exec'), self.ns)
+        self.templates.env.filters['jst'] = self.ns['_format_jst']
         self.ns['ordered_speakers'] = lambda db,qid: [r for r in self.rows if type(r) is self.models['SpeakerRequest'] and r.question_id==qid]
         self.ns['_pfloor_queue_order'] = lambda: (self.models['ProposalSpeakerRequest'].position.asc(),)
         self.app = FastAPI()
@@ -329,6 +330,51 @@ class PollingTests(unittest.TestCase):
             'Co-signing closed after submission.',
             submitted['draft_html'],
         )
+
+    def test_jst_display_and_internal_message_numbers_are_hidden(self):
+        # Stored UTC timestamps are displayed as JST.
+        self.assertEqual(
+            self.ns['_format_jst'](
+                datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc)
+            ),
+            '2026-01-02 09:00 JST',
+        )
+
+        # Naive datetimes in this codebase are UTC as well.
+        self.assertEqual(
+            self.ns['_format_jst'](
+                datetime(2026, 1, 2, 0, 0)
+            ),
+            '2026-01-02 09:00 JST',
+        )
+
+        # Proposal-room messages must show JST but not their local sequence ID.
+        self.add(
+            'ProposalMessage',
+            id=68,
+            room_id=30,
+            user_id=1,
+            local_no=68,
+            parent_id=None,
+            body='Number visibility test',
+            created_at=datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc),
+        )
+
+        room = self.client.get(self.room_url).json()
+        self.assertIn('2026-01-02 09:00 JST', room['html'])
+        self.assertIn('@author', room['html'])
+        self.assertNotIn('#68', room['html'])
+
+        # General/Proposal Floor templates must not expose internal numbering.
+        for relative in (
+            'app/templates/macros/interventions.html',
+            'app/templates/macros/interventions-prop.html',
+            'app/templates/partials/proposal_interventions_list.html',
+        ):
+            source = (ROOT / relative).read_text()
+            self.assertNotIn('#{{ it.local_no', source)
+            self.assertNotIn('↩', source)
+            self.assertNotIn('to #', source)
 
     def test_room_access_and_relations(self):
         self.client.cookies.clear();self.assertEqual(self.client.get(self.room_url).status_code,401)

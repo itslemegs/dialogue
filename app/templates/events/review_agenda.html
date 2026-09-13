@@ -29,7 +29,7 @@
                   </div>
                 {% endif %}
                 <div class="mt-2 text-xs text-slate-500">
-                  Proposed {{ p.created_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                  Proposed {{ p.created_at|jst }}
                   • Proposer: {% if p.proposer %}{{ p.proposer.handle }}{% else %}<em>Anonymous</em>{% endif %}
                 </div>
               </div>
@@ -94,7 +94,7 @@
                 <div class="font-medium">{{ p.title }}</div>
                 <div class="mt-1 text-sm text-slate-700 line-clamp-3">{{ p.background }}</div>
                 <div class="mt-1 text-xs text-slate-500">
-                  {{ p.status|capitalize }} {{ p.decided_at.strftime('%Y-%m-%d %H:%M UTC') if p.decided_at else '' }}
+                  {{ p.status|capitalize }} {{ (p.decided_at|jst) if p.decided_at else '' }}
                   {% if p.notes %} • Note: {{ p.notes }}{% endif %}
                 </div>
               </div>

@@ -20,7 +20,7 @@
           <a href="/drafts/{{ d.id }}" class="block rounded-xl border bg-white p-4 hover:shadow-sm transition">
             <div class="flex items-center justify-between">
               <div class="text-base font-semibold">{{ d.l_number }} — {{ d.title }}</div>
-              <div class="text-xs text-slate-500">{{ d.submitted_at.strftime("%Y-%m-%d %H:%M") }}</div>
+              <div class="text-xs text-slate-500">{{ d.submitted_at|jst }}</div>
             </div>
             <div class="mt-1 text-sm text-slate-600">
               Agenda item: <span class="font-medium">{{ d.agenda_label }}</span>
@@ -44,7 +44,7 @@
         <li class="rounded-xl border bg-white p-4">
           <div class="flex items-center justify-between">
             <div class="text-base font-semibold">{{ d.l_number }} — {{ d.title }}</div>
-            <div class="text-xs text-slate-500">{{ d.submitted_at.strftime("%Y-%m-%d %H:%M") }}</div>
+            <div class="text-xs text-slate-500">{{ d.submitted_at|jst }}</div>
           </div>
           <div class="mt-1 text-sm text-slate-600">
             Agenda item: <span class="font-medium">{{ d.agenda_label }}</span>

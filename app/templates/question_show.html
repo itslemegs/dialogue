@@ -310,7 +310,7 @@ class="hidden lg:flex items-center gap-3 fixed bottom-4 left-4 z-40 bg-black/80 
             else if (s.status === 'DONE')       statusBadge = 'bg-slate-200 text-slate-700';
             else if (s.status === 'WITHDRAWN')  statusBadge = 'bg-rose-100 text-rose-700';
 
-            const ts = new Date(s.created_at).toLocaleString();
+            const ts = window.formatJstTimestamp(s.created_at);
 
             return `
                 <tr class="border-t">
@@ -436,7 +436,7 @@ class="hidden lg:flex items-center gap-3 fixed bottom-4 left-4 z-40 bg-black/80 
           if (relField && chip){
             if (data.current_kind === 'ROR' && data.current_target_intervention_id){
               relField.value = data.current_target_intervention_id;
-              chip.textContent = `Replying to #${data.current_target_intervention_id}`;
+              chip.textContent = "Replying to message";
               chip.classList.remove('hidden');
             } else if (data.current_kind === 'ROR_ALL') {
               relField.value = '';  // no single target
@@ -639,7 +639,7 @@ if (np && npText) {
               <button class="px-2 py-1 rounded bg-rose-600 text-white text-sm js-invite-act"
                       data-act="decline" data-iid="${n.payload.invite_id}">Decline</button>
             </div>
-            <div class="text-xs text-slate-500 mt-1">${new Date(n.ts).toLocaleString()}</div>
+            <div class="text-xs text-slate-500 mt-1">${window.formatJstTimestamp(n.ts)}</div>
           </div>
         `).join('');
       }

@@ -2,7 +2,7 @@
 
 {% if getattr(draft, 'is_submitted', False) %}
   <div class="mt-2 p-2 rounded bg-emerald-50 text-emerald-700">
-    Submitted as <strong>{{ getattr(draft, 'l_number', '') }}</strong> at {{ getattr(draft, 'submitted_at', '') }}
+    Submitted as <strong>{{ getattr(draft, 'l_number', '') }}</strong> at {{ getattr(draft, 'submitted_at', None)|jst }}
   </div>
 {% endif %}
 

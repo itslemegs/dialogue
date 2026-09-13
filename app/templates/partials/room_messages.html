@@ -2,8 +2,8 @@
 {% set m = n.node %}
 <li data-post-id="{{ m.id }}" class="{{ 'p-3' if depth == 0 else 'pl-2' }}">
   <div class="text-slate-600 text-sm">
-    #{{ m.local_no }} • @{{ user_map[m.user_id].handle if user_map.get(m.user_id) }}
-    {% if depth == 0 %}<span class="text-xs text-slate-400">{{ m.created_at }}</span>{% endif %}
+    @{{ user_map[m.user_id].handle if user_map.get(m.user_id) }}
+    {% if depth == 0 %}<span class="text-xs text-slate-400">{{ m.created_at|jst }}</span>{% endif %}
   </div>
   <div class="whitespace-pre-wrap mt-1">{{ m.body }}</div>
   {% if depth == 0 %}

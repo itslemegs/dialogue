@@ -2,19 +2,19 @@
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Review Agenda</h1>
+    <h1 class="text-2xl font-bold">{{ t('agenda.review') }}</h1>
     {% if event %}<div class="text-sm text-slate-600"><span class="font-medium">{{ event.title }}</span></div>{% endif %}
   </div>
 
   {% if ok %}
-    <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3">✅ Saved.</div>
+    <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3">{{ t('common.saved') }}</div>
   {% endif %}
   {% if err %}
-    <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3">⚠️ {{ err }}</div>
+    <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3">⚠️ {{ t('review.error_missing') if err == 'Proposal not found' else err }}</div>
   {% endif %}
 
   <section class="mb-10">
-    <h2 class="text-lg font-semibold mb-3">Pending</h2>
+    <h2 class="text-lg font-semibold mb-3">{{ t('agenda.status.pending') }}</h2>
     {% if pending and pending|length %}
       <ul class="space-y-4">
         {% for p in pending %}
@@ -29,8 +29,8 @@
                   </div>
                 {% endif %}
                 <div class="mt-2 text-xs text-slate-500">
-                  Proposed {{ p.created_at|jst }}
-                  • Proposer: {% if p.proposer %}{{ p.proposer.handle }}{% else %}<em>Anonymous</em>{% endif %}
+                  {{ t('agenda.proposed_at', time=p.created_at|jst) }}
+                  • {{ t('agenda.proposer') }} {% if p.proposer %}{{ p.proposer.handle }}{% else %}<em>{{ t('common.anonymous') }}</em>{% endif %}
                 </div>
               </div>
               <div class="shrink-0 w-56">
@@ -45,7 +45,7 @@
                   <textarea
                     name="notes"
                     rows="3"
-                    placeholder="Notes (optional)"
+                    placeholder="{{ t('review.notes_optional') }}"
                     class="w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                   ></textarea>
 
@@ -58,7 +58,7 @@
                       data-target-type="agenda_proposal"
                       data-target-id="{{ p.id }}"
                     >
-                      Accept
+                      {{ t('common.approve') }}
                     </button>
 
                     <button
@@ -69,7 +69,7 @@
                       data-target-type="agenda_proposal"
                       data-target-id="{{ p.id }}"
                     >
-                      Reject
+                      {{ t('common.reject') }}
                     </button>
                   </div>
                 </form>
@@ -79,12 +79,12 @@
         {% endfor %}
       </ul>
     {% else %}
-      <div class="rounded-xl border bg-white p-6 text-slate-500">No pending proposals.</div>
+      <div class="rounded-xl border bg-white p-6 text-slate-500">{{ t('review.none_pending') }}</div>
     {% endif %}
   </section>
 
   <section>
-    <h2 class="text-lg font-semibold mb-3">Recently decided</h2>
+    <h2 class="text-lg font-semibold mb-3">{{ t('review.recent') }}</h2>
     {% if decided and decided|length %}
       <ul class="space-y-3">
         {% for p in decided %}
@@ -94,21 +94,21 @@
                 <div class="font-medium">{{ p.title }}</div>
                 <div class="mt-1 text-sm text-slate-700 line-clamp-3">{{ p.background }}</div>
                 <div class="mt-1 text-xs text-slate-500">
-                  {{ p.status|capitalize }} {{ (p.decided_at|jst) if p.decided_at else '' }}
-                  {% if p.notes %} • Note: {{ p.notes }}{% endif %}
+                  {{ t({'pending': 'agenda.status.pending', 'accepted': 'agenda.status.accepted', 'rejected': 'agenda.status.rejected'}[p.status]) if p.status in ['pending', 'accepted', 'rejected'] else p.status|capitalize }} {{ (p.decided_at|jst) if p.decided_at else '' }}
+                  {% if p.notes %} • {{ t('review.note') }} {{ p.notes }}{% endif %}
                 </div>
               </div>
               <form method="post" action="/events/{{ event.id }}/review-agenda/{{ p.id }}/decision" class="shrink-0">
                 <input type="hidden" name="notes" value="">
                 <button name="action" value="reopen"
-                        class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm">Reopen</button>
+                        class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50 text-sm">{{ t('review.reopen') }}</button>
               </form>
             </div>
           </li>
         {% endfor %}
       </ul>
     {% else %}
-      <div class="rounded-xl border bg-white p-6 text-slate-500">No recent decisions.</div>
+      <div class="rounded-xl border bg-white p-6 text-slate-500">{{ t('review.none_recent') }}</div>
     {% endif %}
   </section>
 </div>

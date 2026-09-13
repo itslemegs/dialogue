@@ -2,7 +2,7 @@
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Event Menu</h1>
+    <h1 class="text-2xl font-bold">{{ t('event.menu') }}</h1>
     {% if event %}
       <div id="event-meta"
            data-start="{{ event.starts_at_iso }}"
@@ -16,7 +16,7 @@
 
   {% if not event %}
     <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-      No upcoming or live event.
+      {{ t('event.none') }}
     </div>
   {% else %}
     <!-- Grid of menu cards -->
@@ -25,15 +25,15 @@
             <a data-key="propose_agenda" href="/events/{{ event.id }}/propose-agenda"
             class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
            <div class="flex items-center justify-between">
-             <div class="text-lg font-semibold">Propose Agenda</div>
+             <div class="text-lg font-semibold">{{ t('agenda.propose') }}</div>
              <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
            </div>
-           <p class="mt-2 text-sm text-slate-500">Open from creation; locks 90 days before start.</p>
+           <p class="mt-2 text-sm text-slate-500">{{ t('event.propose_help') }}</p>
            <div class="mt-4 text-4xl">📝</div>
            <div class="hint mt-3 text-xs text-slate-500"></div>
    
            <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-           <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+           <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
          </a>
    
          {# Review Agenda — president only #}
@@ -41,15 +41,15 @@
          <a data-key="review_agenda" href="/events/{{ event.id }}/review-agenda"
             class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
            <div class="flex items-center justify-between">
-             <div class="text-lg font-semibold">Review Agenda</div>
+             <div class="text-lg font-semibold">{{ t('agenda.review') }}</div>
              <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
            </div>
-           <p class="mt-2 text-sm text-slate-500">Opens 90 days before start; closes 60 days before.</p>
+           <p class="mt-2 text-sm text-slate-500">{{ t('event.review_help') }}</p>
            <div class="mt-4 text-4xl">📋</div>
            <div class="hint mt-3 text-xs text-slate-500"></div>
    
            <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-           <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+           <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
          </a>
          {% endif %}
    
@@ -57,85 +57,85 @@
          <a data-key="view_agenda" href="/events/{{ event.id }}/view-agenda"
             class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
            <div class="flex items-center justify-between">
-             <div class="text-lg font-semibold">View Agenda</div>
+             <div class="text-lg font-semibold">{{ t('agenda.view') }}</div>
              <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
            </div>
-           <p class="mt-2 text-sm text-slate-500">Opens 60 days before start.</p>
+           <p class="mt-2 text-sm text-slate-500">{{ t('event.view_help') }}</p>
            <div class="mt-4 text-4xl">👀</div>
            <div class="hint mt-3 text-xs text-slate-500"></div>
    
            <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-           <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+           <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
          </a>   
 
       <!-- General Floor -->
       <a data-key="general_floor" href="/events/{{ event.id }}/general-floor"
          class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
         <div class="flex items-center justify-between">
-          <div class="text-lg font-semibold">General Floor</div>
+          <div class="text-lg font-semibold">{{ t('event.general_floor') }}</div>
           <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
         </div>
-        <p class="mt-2 text-sm text-slate-500">Opens at event start; never locks.</p>
+        <p class="mt-2 text-sm text-slate-500">{{ t('event.floor_help') }}</p>
         <div class="mt-4 text-4xl">🎤</div>
         <div class="hint mt-3 text-xs text-slate-500"></div>
         <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
       </a>
 
       <!-- Proposal Discussion -->
       <a data-key="proposal_discussion" href="/events/{{ event.id }}/proposal-discussion"
          class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
         <div class="flex items-center justify-between">
-          <div class="text-lg font-semibold">Proposal Discussion</div>
+          <div class="text-lg font-semibold">{{ t('event.proposal_discussion') }}</div>
           <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
         </div>
-        <p class="mt-2 text-sm text-slate-500">Opens at start; locks when voting starts.</p>
+        <p class="mt-2 text-sm text-slate-500">{{ t('event.discussion_help') }}</p>
         <div class="mt-4 text-4xl">💬</div>
         <div class="hint mt-3 text-xs text-slate-500"></div>
         <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
       </a>
 
       <!-- View Tabled Draft Resolution Text -->
       <a data-key="view_draft_resolution" href="/events/{{ event.id }}/view-draft"
         class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
         <div class="flex items-center justify-between">
-          <div class="text-lg font-semibold">View Tabled Draft Resolution Text</div>
+          <div class="text-lg font-semibold">{{ t('event.view_draft') }}</div>
           <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
         </div>
-        <p class="mt-2 text-sm text-slate-500">Opens at event start; never locks.</p>
+        <p class="mt-2 text-sm text-slate-500">{{ t('event.floor_help') }}</p>
         <div class="mt-4 text-4xl">📜</div>
         <div class="hint mt-3 text-xs text-slate-500"></div>
         <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
       </a>
 
       <!-- Proposal Floor -->
       <a data-key="proposal_floor" href="/events/{{ event.id }}/proposal-floor"
          class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
         <div class="flex items-center justify-between">
-          <div class="text-lg font-semibold">Proposal Floor</div>
+          <div class="text-lg font-semibold">{{ t('event.proposal_floor') }}</div>
           <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
         </div>
-        <p class="mt-2 text-sm text-slate-500">Opens when voting starts; locks when voting ends.</p>
+        <p class="mt-2 text-sm text-slate-500">{{ t('event.voting_help') }}</p>
         <div class="mt-4 text-4xl">🗳️</div>
         <div class="hint mt-3 text-xs text-slate-500"></div>
         <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
       </a>
 
       <!-- Decision -->
       <a data-key="decision" href="/events/{{ event.id }}/decision"
          class="group relative rounded-2xl border bg-white p-5 hover:shadow-md transition flex flex-col">
         <div class="flex items-center justify-between">
-          <div class="text-lg font-semibold">Decision</div>
+          <div class="text-lg font-semibold">{{ t('event.decision') }}</div>
           <span class="status-badge text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">…</span>
         </div>
-        <p class="mt-2 text-sm text-slate-500">Opens when voting starts; locks when voting ends.</p>
+        <p class="mt-2 text-sm text-slate-500">{{ t('event.voting_help') }}</p>
         <div class="mt-4 text-4xl">✅</div>
         <div class="hint mt-3 text-xs text-slate-500"></div>
         <div class="lock-overlay pointer-events-none absolute inset-0 hidden bg-white/65 rounded-2xl backdrop-blur-[1px]"></div>
-        <div class="lock-icon absolute top-3 right-3 hidden" title="Locked">🔒</div>
+        <div class="lock-icon absolute top-3 right-3 hidden" title="{{ t('event.locked') }}">🔒</div>
       </a>
     </div>
   {% endif %}
@@ -143,6 +143,7 @@
 
 <script>
   (function () {
+    const tr = window.UII18n.t;
     const meta = document.getElementById('event-meta');
     if (!meta) return;
   
@@ -189,7 +190,7 @@
         overlay?.classList.remove('hidden');
         icon?.classList.remove('hidden');
         card.classList.add('cursor-not-allowed', 'opacity-70');
-        badge.textContent = 'Locked';
+        badge.textContent = tr('event.locked');
         badge.className = 'status-badge text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700';
         hint.textContent = reasonText || '';
         card.addEventListener('click', preventIfLocked);
@@ -197,7 +198,7 @@
         overlay?.classList.add('hidden');
         icon?.classList.add('hidden');
         card.classList.remove('cursor-not-allowed', 'opacity-70');
-        badge.textContent = 'Open';
+        badge.textContent = tr('event.open');
         badge.className = 'status-badge text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700';
         hint.textContent = reasonText || '';
         card.removeEventListener('click', preventIfLocked);
@@ -231,10 +232,10 @@
   
           if (now < lockTime) {
             locked = false;
-            hint = `Locks on ${fmt(lockTime)}`;
+            hint = tr('event.locks_on', {time: fmt(lockTime)});
           } else {
             locked = true;
-            hint = `Locked since ${fmt(lockTime)}`;
+            hint = tr('event.locked_since', {time: fmt(lockTime)});
           }
         }
   
@@ -248,13 +249,13 @@
   
           if (now >= windowOpen) {
             locked = true;
-            hint = `Opens on ${fmt(windowOpen)}`;
+            hint = tr('event.opens_on', {time: fmt(windowOpen)});
           } else if (now >= windowClose) {
             locked = true;
-            hint = `Closed since ${fmt(windowClose)}`;
+            hint = tr('event.closed_since', {time: fmt(windowClose)});
           } else {
             locked = false;
-            hint = `Closes on ${fmt(windowClose)}`;
+            hint = tr('event.closes_on', {time: fmt(windowClose)});
           }
         }
   
@@ -265,10 +266,10 @@
   
           if (now <= openTime) {
             locked = false;
-            hint = `Opened at ${fmt(openTime)}`;
+            hint = tr('event.opened_at', {time: fmt(openTime)});
           } else {
             locked = true;
-            hint = `Opens on ${fmt(openTime)}`;
+            hint = tr('event.opens_on', {time: fmt(openTime)});
           }
         }
   
@@ -277,10 +278,10 @@
           opensAt = start;
           if (now <= start) {
             locked = false;
-            hint = `Opened at ${fmt(start)}`;
+            hint = tr('event.opened_at', {time: fmt(start)});
           } else {
             locked = true;
-            hint = `Opens on ${fmt(start)}`;
+            hint = tr('event.opens_on', {time: fmt(start)});
           }
         }
   
@@ -293,16 +294,16 @@
           
           if (now > start) {
             locked = true;
-            hint = `Opens on ${fmt(start)}`;
+            hint = tr('event.opens_on', {time: fmt(start)});
           } else if (lockBeforeVoteStart && now >= lockBeforeVoteStart) {
             locked = true;
-            hint = `Locked 4 days before voting starts (${fmt(lockBeforeVoteStart)})`;
+            hint = tr('event.locked_before_vote', {time: fmt(lockBeforeVoteStart)});
           } else if (vs && now >= vs) {
             locked = true;
-            hint = `Locked since voting started (${fmt(vs)})`;
+            hint = tr('event.locked_vote_start', {time: fmt(vs)});
           } else {
             locked = false;
-            hint = voteStart ? `Locks 4 days before voting starts (${fmt(lockBeforeVoteStart)})` : 'Open';
+            hint = voteStart ? tr('event.locks_before_vote', {time: fmt(lockBeforeVoteStart)}) : tr('event.open');
           }
         }
 
@@ -311,10 +312,10 @@
           opensAt = start;
           if (now <= start) {
             locked = false;
-            hint = `Opened at ${fmt(start)}`;
+            hint = tr('event.opened_at', {time: fmt(start)});
           } else {
             locked = true;
-            hint = `Opens on ${fmt(start)}`;
+            hint = tr('event.opens_on', {time: fmt(start)});
           }
         }
   
@@ -327,16 +328,16 @@
   
           if (!vs || (now >= vs)) {
             locked = false;
-            hint = 'Opens when voting starts';
+            hint = tr('event.opens_voting');
           } else if (now < vs) {
             locked = true;
-            hint = `Opens on ${fmt(vs)}`;
+            hint = tr('event.opens_on', {time: fmt(vs)});
           } else if (ve && now >= ve) {
             locked = true;
-            hint = `Locked since voting ended (${fmt(ve)})`;
+            hint = tr('event.locked_vote_end', {time: fmt(ve)});
           } else {
             locked = false;
-            hint = ve ? `Locks on ${fmt(ve)}` : 'Open';
+            hint = ve ? tr('event.locks_on', {time: fmt(ve)}) : tr('event.open');
           }
         }
   

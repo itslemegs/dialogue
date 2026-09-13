@@ -2,7 +2,7 @@
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">View Agenda</h1>
+    <h1 class="text-2xl font-bold">{{ t('agenda.view') }}</h1>
     {% if event %}
       <div class="text-sm text-slate-600">
         <span class="font-medium">{{ event.title }}</span>
@@ -12,7 +12,7 @@
 
   {% if not event %}
     <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-      No upcoming or live event.
+      {{ t('event.none') }}
     </div>
   {% else %}
     {% if proposals and proposals|length %}
@@ -31,18 +31,18 @@
                   </div>
                 {% endif %}
                 <div class="mt-2 text-xs text-slate-500">
-                  Proposed {{ p.created_at|jst }}
-                  • Proposer:
+                  {{ t('agenda.proposed_at', time=p.created_at|jst) }}
+                  • {{ t('agenda.proposer') }}
                   {% if p.proposer %}
                     {{ p.proposer.handle }}
                   {% else %}
-                    <em>Anonymous</em>
+                    <em>{{ t('common.anonymous') }}</em>
                   {% endif %}
                 </div>
               </div>
               <div class="shrink-0">
                 <span class="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-2 py-0.5 text-xs font-medium">
-                  Accepted
+                  {{ t('agenda.status.accepted') }}
                 </span>
               </div>
             </div>
@@ -51,7 +51,7 @@
       </ul>
     {% else %}
       <div class="rounded-2xl border bg-white p-8 text-slate-500 text-center">
-        No accepted agenda items yet.
+        {{ t('agenda.none_accepted') }}
       </div>
     {% endif %}
   {% endif %}

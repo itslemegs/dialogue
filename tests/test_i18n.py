@@ -31,7 +31,7 @@ def request(locale=None, cookie=None):
 
 
 def isolated_functions():
-    names = {'ui_locale_context', 'set_ui_language'}
+    names = {'ui_locale_context', 'set_ui_language', '_format_jst'}
     nodes = [n for n in ast.parse((ROOT/'app/main.py').read_text()).body
              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in names]
     for node in nodes:
@@ -102,6 +102,7 @@ class RequestTests(unittest.TestCase):
         self.ns = isolated_functions()
         self.templates = Jinja2Templates(directory=str(ROOT/'app/templates'))
         i18n.install_jinja(self.templates.env)
+        self.templates.env.filters['jst'] = self.ns['_format_jst']
         self.templates.env.globals.update(ai_features_enabled=False, getattr=getattr)
         self.templates.env.loader = ChoiceLoader([DictLoader({
             'test-page.html': '{% extends "base.html" %}{% block content %}{{ t("nav.login") }}{% endblock %}',
@@ -293,7 +294,8 @@ class RequestTests(unittest.TestCase):
         for locale in ['en','ja']:
             json.loads((ROOT/f'app/locales/{locale}.json').read_text(), object_pairs_hook=unique)
         import re
-        for name in ['base.html','home.html','dashboard.html','login.html','register.html','macros/user_flair.html']:
+        for name in ['base.html','home.html','dashboard.html','login.html','register.html','macros/user_flair.html','events_menu.html','events/propose_agenda.html',
+                     'events/review_agenda.html','events/view_agenda.html','events/unlock_event.html']:
             source = (ROOT/'app/templates'/name).read_text()
             for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)", source):
                 self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
@@ -336,6 +338,108 @@ class RequestTests(unittest.TestCase):
             self.assertEqual(raised.exception.detail,i18n.translate(locale,'account.already_registered'))
         db.add.assert_not_called()
         db.commit.assert_not_called()
+
+    def phase3_context(self):
+        # Extract the actual enum without importing models/DB or starting the app.
+        from enum import Enum
+        node = next(n for n in ast.parse((ROOT/'app/models.py').read_text()).body
+                    if isinstance(n, ast.ClassDef) and n.name == 'ProposalStatus')
+        ns = {'PyEnum': Enum}
+        exec(compile(ast.Module(body=[node], type_ignores=[]), 'isolated_status', 'exec'), ns)
+        proposal = SimpleNamespace(id=8, title='Authored agenda 日本語', background='Original background\n第二行',
+            source_url='https://example.org/authored', created_at='2026-09-01T00:00:00Z',
+            decided_at='2026-09-01T01:00:00Z', notes='Reviewer-authored note',
+            proposer=SimpleNamespace(handle='author_handle'), status=ns['ProposalStatus'].accepted)
+        event = dict(id=41, title='Authored event 日本語', starts_at_iso='2026-09-01T00:00:00Z',
+            ends_at_iso='2026-09-02T00:00:00Z', stages_json=[{'name':'GENERAL_DEBATE',
+            'kind':'debate', 'start':'2026-09-01T00:00:00Z', 'end':'2026-09-02T00:00:00Z'}])
+        return dict(event=event, user=SimpleNamespace(handle='viewer', roles=[]),
+                    mine=[proposal], pending=[proposal], decided=[proposal], proposals=[proposal])
+
+    def test_phase3_pages_render_both_locales_and_keep_authored_content(self):
+        examples = {'events_menu.html': ('Event Menu', 'イベントメニュー'),
+            'events/propose_agenda.html': ('Agenda title', '議題のタイトル'),
+            'events/review_agenda.html': ('Recently decided', '最近の審査結果'),
+            'events/view_agenda.html': ('View Agenda', '議題を確認'),
+            'events/unlock_event.html': ('Event passcode', 'イベントのパスコード')}
+        context = self.phase3_context()
+        for name, labels in examples.items():
+            outputs = [self.render_phase2(name, locale, **context) for locale in ('en','ja')]
+            for locale, label, html in zip(('en','ja'), labels, outputs):
+                self.assertIn(label, html)
+                self.assertIn(f'<html lang="{locale}">', html)
+                self.assertIn(context['event']['title'].encode(), html.encode())
+                if name in ['events/propose_agenda.html','events/review_agenda.html','events/view_agenda.html']:
+                    for text in [context['mine'][0].title, context['mine'][0].background]:
+                        self.assertIn(text.encode(), html.encode())
+                    self.assertIn('2026-09-01 09:00 JST', html)
+            if name == 'events/review_agenda.html':
+                for html in outputs:
+                    self.assertIn('Reviewer-authored note', html)
+                    self.assertIn('author_handle', html)
+                    for action in ['accept','reject','reopen']:
+                        self.assertIn(f'value="{action}"', html)
+                    self.assertIn('data-log-action="CLICK_ACCEPT_AGENDA"', html)
+                self.assertIn('承認', outputs[1])
+                self.assertIn('却下', outputs[1])
+        self.assertEqual(context['mine'][0].status.value, 'accepted')
+        self.assertEqual(context['event']['stages_json'][0]['name'], 'GENERAL_DEBATE')
+
+    def test_phase3_status_enum_presentation_and_unknown_fallback(self):
+        context = self.phase3_context()
+        enum = type(context['mine'][0].status)
+        for value, en, ja in [('pending','Pending','審査中'), ('accepted','Accepted','承認済み'),
+                              ('rejected','Rejected','却下')]:
+            for status in [value, enum(value)]:
+                context['mine'][0].status = status
+                for locale, label in [('en',en),('ja',ja)]:
+                    html = self.render_phase2('events/propose_agenda.html',locale,**context)
+                    self.assertIn(label,html)
+                    self.assertNotIn('agenda.status.', html)
+                self.assertEqual(context['mine'][0].status,status)
+        context['mine'][0].status = 'future_status'
+        self.assertIn('Future_status', self.render_phase2('events/propose_agenda.html','ja',**context))
+
+    def test_phase3_menu_permissions_links_and_internal_stage_data(self):
+        import re
+        context = self.phase3_context()
+        for flags, allowed in [({},False),({'IS_ADMIN':True},False),
+                               ({'IS_PRESIDENT':True},True),({'IS_CHAIR':True},True)]:
+            outputs = [self.render_phase2('events_menu.html',locale,flags=flags,**context) for locale in ('en','ja')]
+            for html in outputs:
+                self.assertEqual('data-key="review_agenda"' in html, allowed)
+                self.assertIn('GENERAL_DEBATE',html)
+                self.assertIn('General Floor',html)
+                self.assertIn('Proposal Discussion',html)
+                self.assertIn('setInterval(tick, 1000 * 15)',html)
+            # Locale may change labels, never link destinations or gate identifiers.
+            for pattern in [r'data-key="[^"]+"',r'href="/events/[^"]+"',r"data-stages='[^']*'"]:
+                self.assertEqual(re.findall(pattern,outputs[0]),re.findall(pattern,outputs[1]))
+
+    def test_phase3_known_errors_localize_without_translating_arbitrary_text(self):
+        cases = [('events/propose_agenda.html','Missing required fields','必須項目を入力してください。'),
+            ('events/propose_agenda.html','Invalid URL format','URLの形式を確認してください。'),
+            ('events/review_agenda.html','Proposal not found','提案が見つかりません。'),
+            ('events/unlock_event.html','Invalid passcode','パスコードが正しくありません。')]
+        for name, en, ja in cases:
+            for locale, label in [('en',en),('ja',ja)]:
+                self.assertIn(label,self.render_phase2(name,locale,err=en,**self.phase3_context()))
+            html = self.render_phase2(name,'ja',err='<script>custom</script>',**self.phase3_context())
+            self.assertIn('&lt;script&gt;custom&lt;/script&gt;',html)
+
+    def test_phase3_stage_catalogue_and_dynamic_sentences(self):
+        # These pages have no stage-name panel. Pin approved display vocabulary
+        # without adding UI or rewriting the raw stage data used by gating.
+        for key,en,ja in [('opening','Opening','開会'),('general_debate','General Debate','一般討論'),
+                          ('voting','Voting','投票')]:
+            for locale,label in [('en',en),('ja',ja)]:
+                html = self.templates.env.from_string('{{ t(key) }}').render(
+                    request=request(locale),key='event.stage.'+key)
+                self.assertEqual(html,label)
+        payload = json.loads(self.templates.env.from_string('{{ ui_js_catalogue()|tojson }}').render(request=request('ja')))
+        self.assertEqual(payload['event.locked'],'ロック中')
+        self.assertEqual(payload['event.open'],'利用可能')
+        self.assertEqual(i18n.translate('ja','event.opens_on',time='09:00 JST'),'09:00 JSTから利用できます')
 
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden

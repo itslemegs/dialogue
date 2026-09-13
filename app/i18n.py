@@ -18,6 +18,19 @@ JS_KEYS = (
     "dashboard.stage", "dashboard.in_progress", "dashboard.live", "dashboard.upcoming", "dashboard.ended",
     "dashboard.ended_seconds", "dashboard.ended_minutes", "dashboard.ended_hours", "dashboard.ended_days",
     "dashboard.countdown_days", "dashboard.countdown_hours",
+    'event.locked',
+    'event.open',
+    'event.locks_on',
+    'event.locked_since',
+    'event.opens_on',
+    'event.closed_since',
+    'event.closes_on',
+    'event.opened_at',
+    'event.locked_before_vote',
+    'event.locked_vote_start',
+    'event.locks_before_vote',
+    'event.locked_vote_end',
+    'event.opens_voting',
 )
 
 

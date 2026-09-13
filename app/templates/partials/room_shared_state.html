@@ -89,14 +89,19 @@
         </div>
 
         <div class="draft-clause-list">
-          {% set ns = namespace(found=false) %}
           {% for label, name, description in preambular %}
             {% set val = getattr(draft, name, '') %}
-            {% if val %}
-              {% set ns.found = true %}
-              <div class="draft-clause-card">
-                <div class="draft-clause-head">
-                  <span class="draft-clause-label">{{ label }}</span>
+
+            <div class="draft-clause-card {% if not val %}is-empty{% endif %}">
+              <div class="draft-clause-head">
+
+                <span class="draft-clause-label">{{ label }}</span>
+
+                <div class="draft-clause-tools">
+                  {% if not val %}
+                    <span class="draft-empty-chip">Not used</span>
+                  {% endif %}
+
                   <button type="button"
                           class="draft-clause-hint"
                           data-draft-hint="{{ description }}"
@@ -104,16 +109,14 @@
                     ? Guidance
                   </button>
                 </div>
-                <div class="draft-clause-value">{{ val }}</div>
-              </div>
-            {% endif %}
-          {% endfor %}
 
-          {% if not ns.found %}
-            <div class="text-xs text-slate-400">
-              No preambular clause has been added yet.
+              </div>
+
+              {% if val %}
+                <div class="draft-clause-value">{{ val }}</div>
+              {% endif %}
             </div>
-          {% endif %}
+          {% endfor %}
         </div>
       </div>
 
@@ -126,14 +129,19 @@
         </div>
 
         <div class="draft-clause-list">
-          {% set ns = namespace(found=false) %}
           {% for label, name, description in operative %}
             {% set val = getattr(draft, name, '') %}
-            {% if val %}
-              {% set ns.found = true %}
-              <div class="draft-clause-card">
-                <div class="draft-clause-head">
-                  <span class="draft-clause-label">{{ label }}</span>
+
+            <div class="draft-clause-card {% if not val %}is-empty{% endif %}">
+              <div class="draft-clause-head">
+
+                <span class="draft-clause-label">{{ label }}</span>
+
+                <div class="draft-clause-tools">
+                  {% if not val %}
+                    <span class="draft-empty-chip">Not used</span>
+                  {% endif %}
+
                   <button type="button"
                           class="draft-clause-hint"
                           data-draft-hint="{{ description }}"
@@ -141,16 +149,14 @@
                     ? Guidance
                   </button>
                 </div>
-                <div class="draft-clause-value">{{ val }}</div>
-              </div>
-            {% endif %}
-          {% endfor %}
 
-          {% if not ns.found %}
-            <div class="text-xs text-slate-400">
-              No operative clause has been added yet.
+              </div>
+
+              {% if val %}
+                <div class="draft-clause-value">{{ val }}</div>
+              {% endif %}
             </div>
-          {% endif %}
+          {% endfor %}
         </div>
       </div>
 

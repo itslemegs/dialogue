@@ -845,6 +845,210 @@
   }
 </style>
 
+
+<style>
+  /* Sponsor editing workspace */
+
+  .draft-editor-shell {
+    margin: .75rem 1rem 1rem;
+    padding: .9rem;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 17px;
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(248,250,252,.94),
+        rgba(255,255,255,.99)
+      );
+
+    box-shadow:
+      0 8px 24px rgba(15,23,42,.035);
+  }
+
+  .draft-editor-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .8rem;
+
+    padding: .1rem .15rem .7rem;
+  }
+
+  .draft-editor-title {
+    margin-top: .12rem;
+
+    color: #0f172a;
+    font-size: .9rem;
+    font-weight: 800;
+  }
+
+  .draft-editor-description {
+    margin-top: .18rem;
+    max-width: 38rem;
+
+    color: #64748b;
+    font-size: .7rem;
+    line-height: 1.45;
+  }
+
+  .draft-ai-box {
+    border-color: #e2e8f0 !important;
+    border-radius: 14px !important;
+    background: #ffffff !important;
+  }
+
+  .draft-editor-form > .space-y-1 {
+    padding: .8rem;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+
+    background: #ffffff;
+  }
+
+  .draft-editor-form > .rounded-xl {
+    border-color: #e2e8f0;
+    border-radius: 14px;
+
+    background:
+      linear-gradient(
+        180deg,
+        #ffffff,
+        #fbfcfe
+      );
+
+    box-shadow:
+      0 4px 14px rgba(15,23,42,.025);
+  }
+
+  .draft-editor-form input[type="text"],
+  .draft-editor-form textarea,
+  .draft-ai-box textarea {
+    border-color: #dbe3ee !important;
+    border-radius: 11px !important;
+
+    background: #ffffff;
+
+    transition:
+      border-color .12s ease,
+      box-shadow .12s ease,
+      background .12s ease;
+  }
+
+  .draft-editor-form input[type="text"]:focus,
+  .draft-editor-form textarea:focus,
+  .draft-ai-box textarea:focus {
+    outline: none;
+
+    border-color: #818cf8 !important;
+
+    box-shadow:
+      0 0 0 3px rgba(99,102,241,.10);
+  }
+
+  .draft-editor-form label {
+    color: #334155;
+  }
+
+  .draft-editor-form .draft-guidance-hint {
+    display: inline-flex;
+    align-items: center;
+
+    padding: .2rem .46rem;
+
+    border: 1px solid #e0e7ff;
+    border-radius: 999px;
+
+    background: #eef2ff;
+
+    color: #4f46e5;
+
+    font-size: .64rem;
+    font-weight: 750;
+
+    text-decoration: none !important;
+  }
+
+  .draft-editor-form .draft-guidance-hint:hover {
+    border-color: #c7d2fe;
+    background: #e0e7ff;
+    color: #3730a3;
+  }
+
+  .draft-editor-form button[data-log-action="CLICK_SAVE_DRAFT"],
+  .draft-editor-form button[data-log-action="CLICK_SUBMIT_DRAFT_AS_L_DOC"] {
+    border-radius: 10px;
+    padding: .5rem .8rem;
+    font-weight: 700;
+  }
+</style>
+
+
+<style>
+  /* Read-only draft: keep guidance available even for unused clauses */
+
+  .draft-clause-tools {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+  }
+
+  .draft-empty-chip {
+    padding: .16rem .4rem;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+
+    background: #ffffff;
+
+    color: #94a3b8;
+
+    font-size: .60rem;
+    font-weight: 700;
+  }
+
+  .draft-clause-card.is-empty {
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+
+    border-style: dashed;
+
+    background: rgba(248,250,252,.58);
+  }
+
+  .draft-clause-card.is-empty .draft-clause-head {
+    margin-bottom: 0;
+  }
+
+  .draft-clause-card.is-empty .draft-clause-label {
+    color: #64748b;
+  }
+
+  .draft-clause-hint {
+    display: inline-flex;
+    align-items: center;
+
+    padding: .18rem .42rem;
+
+    border: 1px solid transparent;
+    border-radius: 999px;
+
+    transition:
+      background .12s ease,
+      border-color .12s ease;
+  }
+
+  .draft-clause-hint:hover,
+  .draft-clause-hint:focus {
+    border-color: #c7d2fe;
+    background: #eef2ff;
+
+    text-decoration: none;
+  }
+</style>
+
 <h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
 <div class="text-slate-500 text-sm mb-4">Agenda: {{ proposal.title }}</div>
 
@@ -1028,7 +1232,21 @@ Delete room
 
     {% set is_sponsor = (user and user.id == room.sponsor_id) %}
     {% if is_sponsor and not draft.is_submitted %}
-    <div class="mt-2 p-2 rounded border bg-slate-50 space-y-2">
+
+    <div class="draft-editor-shell">
+
+      <div class="draft-editor-heading">
+        <div>
+          <div class="draft-section-kicker">EDITOR WORKSPACE</div>
+          <div class="draft-editor-title">Build the working draft</div>
+          <p class="draft-editor-description">
+            Edit the proposal below. Other participants can review the saved version
+            while you continue drafting.
+          </p>
+        </div>
+      </div>
+
+      <div class="draft-ai-box mt-2 p-2 rounded border bg-slate-50 space-y-2">
       <label class="block text-sm text-slate-600 {% if not ai_features_enabled %}hidden{% endif %}">
         Write freely (plain paragraphs)
       </label>
@@ -1090,7 +1308,7 @@ Delete room
     ></div> -->
     <form method="post"
           action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/save"
-          class="space-y-2 mt-2"
+          class="draft-editor-form space-y-3 mt-3"
           data-log-action="SAVE_DRAFT"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}">
@@ -1316,6 +1534,8 @@ Delete room
   </button>
 </div>
     </form>
+
+    </div>
     {% endif %}
 
     <div id="room-shared-draft-state">

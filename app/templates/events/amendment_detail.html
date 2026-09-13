@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% if translation_disabled %}
-<p role="status" class="mb-4 rounded border bg-amber-50 p-3">Translation is currently disabled. Showing the English original.</p>
+<p role="status" class="mb-4 rounded border bg-amber-50 p-3">{{ t('document.translation_disabled') }}</p>
 {% endif %}
 <div class="max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-2">
@@ -31,14 +31,14 @@
   </div>
 
   <div class="text-sm text-slate-600 mb-6">
-    For:
+    {{ t('document.for') }}
     <a
   class="text-blue-700 underline"
   href="/events/{{ draft.event_id }}/proposal-discussion/{{ draft.proposal_id }}/rooms/{{ draft.room_id }}/drafts/{{ draft.id }}"
 >
-  {{ draft.l_number or "L" }} — {{ draft.title or "(Untitled)" }}
+  {{ draft.l_number or "L" }} — {{ draft.title or t('document.untitled') }}
 </a>
-    • Submitted: {{ amend.created_at|jst }}
+    • {{ t('document.submitted') }} {{ amend.created_at|jst }}
   </div>
 
   <section class="rounded-2xl border bg-white p-6 whitespace-pre-wrap"

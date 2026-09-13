@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% from "macros/vote_labels.html" import status_label with context %}
 {% if translation_disabled %}
-<p role="status" class="mb-4 rounded border bg-amber-50 p-3">Translation is currently disabled. Showing the English original.</p>
+<p role="status" class="mb-4 rounded border bg-amber-50 p-3">{{ t('document.translation_disabled') }}</p>
 {% endif %}
 <style>
   /* Friendly hover/focus hints for draft detail page */
@@ -42,15 +43,15 @@
 <div class="max-w-5xl mx-auto">
   <div class="flex items-center justify-between mb-4">
     <h1 class="text-2xl font-bold">
-      {{ draft.l_number or "(unassigned)" }} — {{ title_show }}
+      {{ draft.l_number or t('proposal_floor.unassigned') }} — {{ title_show }}
     </h1>
     <div>
       {% if can_withdraw %}
-      <form method="post" action="/events/{{ draft.event_id }}/drafts/{{ draft.id }}/withdraw" onsubmit="return confirm('Withdraw this draft?');">
+      <form method="post" action="/events/{{ draft.event_id }}/drafts/{{ draft.id }}/withdraw" onsubmit="return confirm(window.UII18n.t('document.confirm_withdraw'));">
         <button class="px-3 py-1.5 rounded bg-rose-600 text-white text-sm hover:bg-rose-700"
-        data-hint="Withdraw this draft from consideration. Use this only if the draft should no longer proceed."
+        data-hint="{{ t('document.withdraw_hint') }}"
         data-hint-side="left">
-  Withdraw
+  {{ t('document.withdraw') }}
 </button>
       </form>
       {% endif %}
@@ -58,11 +59,11 @@
   </div>
 
   <div class="text-sm text-slate-600 mb-6">
-    Agenda item: <span class="font-medium">{{ agenda_label }}</span>
+    {{ t('document.agenda') }} <span class="font-medium">{{ agenda_label }}</span>
     <!-- {% if agenda_id %}<a href="/questions/{{ agenda_id }}" class="text-blue-700 underline ml-1">view</a>{% endif %} -->
-    • Main sponsor: <span class="font-medium">{{ sponsor_name }}</span>
-    • Status: <span class="font-medium">{{ draft.status }}</span>
-    • Submitted: {{ draft.submitted_at|jst }}
+    • {{ t('document.sponsor') }} <span class="font-medium">{{ sponsor_name }}</span>
+    • {{ t('document.status') }} <span class="font-medium">{{ status_label(draft.status) }}</span>
+    • {{ t('document.submitted') }} {{ draft.submitted_at|jst }}
   </div>
 
   {# quick language buttons #}
@@ -121,11 +122,11 @@
   class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900"
 >
   <div class="font-semibold">
-    Translation is being prepared.
+    {{ t('document.translation_pending') }}
   </div>
 
   <div class="mt-1">
-    The draft will appear automatically when the {{ lang_meta.label }} translation is ready.
+    {{ t('document.translation_ready_notice', language=lang_meta.label) }}
   </div>
 
   <div class="mt-3 h-2 overflow-hidden rounded-full bg-amber-100">
@@ -134,7 +135,7 @@
 
   {% if translation_error %}
   <div class="mt-3 rounded-xl bg-red-50 px-3 py-2 text-red-700">
-    Translation error: {{ translation_error }}
+    {{ t('document.translation_error', error=translation_error) }}
   </div>
   {% endif %}
 </div>
@@ -214,10 +215,13 @@
           });
   
           box.className = "mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800";
-          box.innerHTML = `
-            <div class="font-semibold">Translation failed.</div>
-            <div class="mt-1">${data.error || "Please try again later."}</div>
-          `;
+          const heading = document.createElement('div');
+          heading.className = 'font-semibold';
+          heading.textContent = window.UII18n.t('document.translation_failed');
+          const detail = document.createElement('div');
+          detail.className = 'mt-1';
+          detail.textContent = data.error || window.UII18n.t('document.try_later');
+          box.replaceChildren(heading, detail);
           return;
         }
   
@@ -277,22 +281,22 @@
     {% if T.encourages %}<p><strong>{{ L.encourages }}:</strong> {{ T.encourages|e }}</p>{% endif %}
 
   {% else %}
-    <p class="text-slate-500 text-sm">No structured text stored.</p>
+    <p class="text-slate-500 text-sm">{{ t('document.no_text') }}</p>
   {% endif %}
 </section>
 {% endif %}
 
   <!-- Co-signers -->
   <section class="mt-8">
-    <h2 class="text-lg font-semibold mb-2">Co-signers</h2>
+    <h2 class="text-lg font-semibold mb-2">{{ t('draft.cosigners') }}</h2>
     <div class="text-sm">
       {% if early_cosigns|length == 0 and late_cosigns|length == 0 %}
-        <p class="text-slate-600">No co-signers yet.</p>
+        <p class="text-slate-600">{{ t('draft.cosign.empty') }}</p>
       {% endif %}
 
       {% if early_cosigns|length %}
         <div class="mb-2">
-          <div class="text-slate-500 text-xs uppercase tracking-wide mb-1">Original</div>
+          <div class="text-slate-500 text-xs uppercase tracking-wide mb-1">{{ t('document.original_cosigns') }}</div>
           <ul class="list-disc ml-5">
             {% for c in early_cosigns %}<li>{{ c.name }}</li>{% endfor %}
           </ul>
@@ -301,7 +305,7 @@
 
       {% if late_cosigns|length %}
         <div>
-          <div class="text-slate-500 text-xs uppercase tracking-wide mb-1">Addendum ({{ draft.l_number }}/Add)</div>
+          <div class="text-slate-500 text-xs uppercase tracking-wide mb-1">{{ t('document.addendum', symbol=draft.l_number) }}</div>
           <ul class="list-disc ml-5">
             {% for c in late_cosigns %}
               <li>{{ c.name }}{% if c.created_at %} <span class="text-xs text-slate-400">({{ c.created_at[:10] }})</span>{% endif %}</li>
@@ -314,24 +318,24 @@
     {% if can_cosign %}
       <form method="post" action="/drafts/{{ draft.id }}/cosign" class="mt-3">
         <button class="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
-        data-hint="Add your support to this draft as a co-signer."
+        data-hint="{{ t('document.cosign_hint') }}"
         data-hint-side="top">
-  Co-sign
+  {{ t('document.cosign') }}
 </button>
       </form>
     {% elif already_cosigned %}
       <div class="mt-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 inline-block">
-        You have already co-signed.
+        {{ t('document.cosigned') }}
       </div>
     {% endif %}
   </section>
 
   <!-- Amendments list -->
 <section class="mt-10">
-  <h2 class="text-lg font-semibold mb-2">Amendments</h2>
+  <h2 class="text-lg font-semibold mb-2">{{ t('proposal_floor.amendments') }}</h2>
 
   {% if amends|length == 0 %}
-    <div class="text-sm text-slate-600">No amendments submitted yet.</div>
+    <div class="text-sm text-slate-600">{{ t('amendment.empty') }}</div>
   {% else %}
     <ul class="space-y-2">
       {% for a in amends %}
@@ -357,29 +361,29 @@
 
 <!-- Amendment form / builder -->
 <section class="mt-8">
-  <h3 class="text-base font-semibold mb-2">Propose an Amendment</h3>
+  <h3 class="text-base font-semibold mb-2">{{ t('amendment.propose') }}</h3>
 
   <p class="text-sm text-slate-600 mb-3">
-    Use the builder to compose UN-style edits. Add multiple operations; the system will compile them before submission.
+    {{ t('amendment.intro') }}
   </p>
 
   <div
   id="amend-tool"
   class="rounded-2xl border bg-white p-4 space-y-4"
   data-generate-endpoint="/events/{{ draft.event_id }}/proposal-discussion/{{ draft.proposal_id }}/rooms/{{ draft.room_id }}/drafts/{{ draft.id }}/amend/generate-json"
-  data-hint="Use this builder to create ADD, REMOVE, or REPLACE operations."
+  data-hint="{{ t('amendment.builder_hint') }}"
   data-hint-side="top"
 >
     <div class="grid gap-1 text-sm text-slate-700">
-      <div>Agenda item: <span class="font-medium">{{ agenda_label }}</span></div>
-      <div>Resolution number: <span class="font-medium">{{ draft.l_number or "—" }}</span></div>
+      <div>{{ t('document.agenda') }} <span class="font-medium">{{ agenda_label }}</span></div>
+      <div>{{ t('document.number') }} <span class="font-medium">{{ draft.l_number or "—" }}</span></div>
     </div>
 
     <!-- Plain-language AI helper -->
     <div class="rounded-2xl border bg-slate-50 p-4 space-y-3">
       <label for="am_plain_text"
        class="block text-sm font-medium text-slate-700 {% if not ai_features_enabled %}hidden{% endif %}">
-        Describe your amendment in plain language
+        {{ t('amendment.ai.describe') }}
       </label>
 
       <textarea
@@ -387,8 +391,8 @@
   class="w-full border rounded-xl p-3 text-sm {% if not ai_features_enabled %}hidden{% endif %}"
   rows="5"
   {% if not ai_features_enabled %}disabled{% endif %}
-  placeholder="Example: Replace the operative clause starting with “Encourages Member States…” so that it also includes support for developing countries. Then add a new operative clause requesting technical reports and training workshops."
-  data-hint="Describe the amendment normally. The AI will convert it into formal ADD, REMOVE, or REPLACE operations."
+  placeholder="{{ t('amendment.ai.example') }}"
+  data-hint="{{ t('amendment.ai.hint') }}"
   data-hint-side="bottom"
 ></textarea>
 
@@ -396,15 +400,15 @@
   <button
     type="button"
     id="am_btn_generate"
-    {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
+    {% if not ai_features_enabled %}disabled title="{{ t('floor.ai_disabled') }}"{% endif %}
     class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700 disabled:opacity-60"
     data-log-action="CLICK_GENERATE_AMENDMENT_WITH_AI"
     data-target-type="proposal_draft"
     data-target-id="{{ draft.id }}"
-    data-hint="Ask the AI to draft amendment operations from your plain-language description. Review before submitting."
+    data-hint="{{ t('amendment.ai.generate_hint') }}"
     data-hint-side="top"
   >
-    {% if ai_features_enabled %}Generate amendment operations{% else %}AI features are currently disabled{% endif %}
+    {% if ai_features_enabled %}{{ t('amendment.ai.generate') }}{% else %}{{ t('floor.ai_disabled') }}{% endif %}
   </button>
 
   <div id="am_ai_status" class="text-xs text-slate-500"></div>
@@ -412,62 +416,58 @@
 
 {% if not ai_features_enabled %}
   <div class="text-sm text-slate-500 rounded border border-slate-200 bg-white px-3 py-2">
-    AI-assisted amendment generation is currently disabled.
-    You can still create amendment operations manually below.
+    {{ t('amendment.ai.disabled') }}
   </div>
 {% endif %}
 
 <div class="text-xs text-slate-500 {% if not ai_features_enabled %}hidden{% endif %}">
-  Tip: include clause numbers if you know them, such as “replace operative 4(a).”
-  Otherwise use wording like “starting with…”.
+  {{ t('amendment.ai.tip') }}
 </div>
     </div>
 
     <!-- Manual builder -->
     <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
-      <div class="font-semibold text-indigo-900 mb-2">How amendments work</div>
+      <div class="font-semibold text-indigo-900 mb-2">{{ t('amendment.guidance') }}</div>
 
       <div class="grid md:grid-cols-2 gap-3">
         <div>
-          <div class="font-medium text-slate-800">Preambular</div>
+          <div class="font-medium text-slate-800">{{ t('draft.preambular') }}</div>
           <div class="text-xs text-slate-600">
-            Changes the background, reasoning, or concerns —
-            <strong>why</strong> the proposal is needed.
+            {{ t('amendment.preambular_help') }}
           </div>
         </div>
 
         <div>
-          <div class="font-medium text-slate-800">Operative</div>
+          <div class="font-medium text-slate-800">{{ t('draft.operative') }}</div>
           <div class="text-xs text-slate-600">
-            Changes an action, request, recommendation, or decision —
-            <strong>what</strong> the proposal asks to happen.
+            {{ t('amendment.operative_help') }}
           </div>
         </div>
       </div>
 
       <div class="border-t border-indigo-100 mt-3 pt-3 grid md:grid-cols-3 gap-2 text-xs">
         <div>
-          <strong>ADD</strong><br>
-          Insert a new clause or piece of text.
+          <strong>{{ t('amendment.action.add') }}</strong><br>
+          {{ t('amendment.add_help') }}
         </div>
 
         <div>
-          <strong>REMOVE</strong><br>
-          Delete an existing clause or piece of text.
+          <strong>{{ t('amendment.action.remove') }}</strong><br>
+          {{ t('amendment.remove_help') }}
         </div>
 
         <div>
-          <strong>REPLACE</strong><br>
-          Replace existing wording with new wording.
+          <strong>{{ t('amendment.action.replace') }}</strong><br>
+          {{ t('amendment.replace_help') }}
         </div>
       </div>
     </div>
     <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div class="flex items-start justify-between gap-3 mb-3">
         <div>
-          <h4 class="text-sm font-semibold text-slate-800">Amendment operations</h4>
+          <h4 class="text-sm font-semibold text-slate-800">{{ t('amendment.operations') }}</h4>
           <p class="text-xs text-slate-500 mt-1">
-            Add each change you want to make. One amendment can contain more than one operation.
+            {{ t('amendment.operations_help') }}
           </p>
         </div>
 
@@ -478,18 +478,17 @@
   data-log-action="CLICK_ADD_AMENDMENT_OPERATION"
   data-target-type="proposal_draft"
   data-target-id="{{ draft.id }}"
-  data-hint="Add another amendment operation, such as ADD, REMOVE, or REPLACE."
+  data-hint="{{ t('amendment.add_operation_hint') }}"
   data-hint-side="left"
 >
-+ Add another operation
+{{ t('amendment.add_operation') }}
 </button>
       </div>
 
       <div id="ops" class="space-y-3"></div>
     </div>
     <div class="mt-3 text-xs text-slate-500">
-      Review all operations before submitting.
-      Your amendment will be created from the changes listed above.
+      {{ t('amendment.review') }}
     </div>
     <form
   id="amend-form"
@@ -507,10 +506,10 @@
   data-log-action="CLICK_SUBMIT_AMENDMENT"
   data-target-type="proposal_draft"
   data-target-id="{{ draft.id }}"
-  data-hint="Submit the amendment after reviewing all operations. The system will compile the operations into amendment text."
+  data-hint="{{ t('amendment.submit_hint') }}"
   data-hint-side="top"
 >
-  Submit Amendment
+  {{ t('amendment.submit') }}
 </button>
     </form>
   </div>
@@ -907,16 +906,38 @@
     }
   
     const CLAUSE_TYPES = [
-      { v: "preambular", label: "Preambular" },
-      { v: "operative", label: "Operative" }
+      { v: "preambular", label: window.UII18n.t('draft.preambular') },
+      { v: "operative", label: window.UII18n.t('draft.operative') }
     ];
   
     const ACTIONS = [
-      { v: "REMOVE", label: "REMOVE" },
-      { v: "ADD", label: "ADD" },
-      { v: "REPLACE", label: "REPLACE" }
+      { v: "REMOVE", label: window.UII18n.t('amendment.action.remove') },
+      { v: "ADD", label: window.UII18n.t('amendment.action.add') },
+      { v: "REPLACE", label: window.UII18n.t('amendment.action.replace') }
     ];
   
+    function displayAmendmentError(message) {
+      const keys = {
+        "Add at least one operation.": "amendment.error.empty_operations",
+        "Amendment generation failed.": "amendment.ai.failed",
+        "Amendment generation timed out in the browser. The server may still be running; please refresh or try again.": "amendment.ai.timeout",
+        "Amendment generation did not return a usable payload.": "amendment.ai.invalid_result",
+        "Amendment instruction is required": "amendment.error.instruction",
+        "Amendment generation job not found": "amendment.error.job",
+        "Draft not submitted yet": "amendment.error.unsubmitted",
+        "Cannot amend a withdrawn draft": "amendment.error.withdrawn",
+        "Cannot amend an adopted draft": "amendment.error.adopted"
+      };
+      if (Object.hasOwn(keys, message)) return window.UII18n.t(keys[message]);
+      let match = /^Operation (\d+): clause type is required\.$/.exec(message);
+      if (match) return window.UII18n.t('amendment.error.clause', {number: match[1]});
+      match = /^Operation (\d+): target is required\.$/.exec(message);
+      if (match) return window.UII18n.t('amendment.error.target', {number: match[1]});
+      match = /^Operation (\d+): (ADD|REPLACE) requires text content\.$/.exec(message);
+      if (match) return window.UII18n.t('amendment.error.content', {number: match[1], action: window.UII18n.t('amendment.action.' + match[2].toLowerCase())});
+      return message;
+    }
+
     function setAIStatus(message, isError = false) {
       aiStatus.textContent = message || "";
       aiStatus.className = "text-xs " + (isError ? "text-rose-600" : "text-slate-500");
@@ -977,20 +998,20 @@
   const target = el("input", {
     class: "w-full border rounded-lg p-2",
     "data-role": "target",
-    placeholder: "Example: operative 4(a), or clause starting with “Encourages…”"
+    placeholder: window.UII18n.t('amendment.target_example')
   });
 
   const content = el("textarea", {
     class: "w-full border rounded-lg p-2",
     "data-role": "content",
     rows: "3",
-    placeholder: "Write the new text here. Leave blank only when removing the entire target."
+    placeholder: window.UII18n.t('amendment.content_placeholder')
   });
 
   const removeBtn = el("button", {
     type: "button",
     class: "text-xs font-medium text-rose-700 hover:underline"
-  }, ["Remove operation"]);
+  }, [window.UII18n.t('amendment.remove_operation')]);
 
   removeBtn.addEventListener("click", () => row.remove());
 
@@ -1001,7 +1022,7 @@
   header.appendChild(
     el("div", {
       class: "text-sm font-semibold text-slate-800",
-      text: "Amendment operation"
+      text: window.UII18n.t('amendment.operation')
     })
   );
 
@@ -1016,7 +1037,7 @@
   actionWrap.appendChild(
     el("div", {
       class: "text-xs font-medium text-slate-600",
-      text: "What do you want to do?"
+      text: window.UII18n.t('amendment.action_prompt')
     })
   );
   actionWrap.appendChild(action);
@@ -1025,7 +1046,7 @@
   typeWrap.appendChild(
     el("div", {
       class: "text-xs font-medium text-slate-600",
-      text: "Which part of the draft?"
+      text: window.UII18n.t('amendment.section_prompt')
     })
   );
   typeWrap.appendChild(clauseType);
@@ -1038,13 +1059,13 @@
   targetWrap.appendChild(
     el("div", {
       class: "text-xs font-medium text-slate-600",
-      text: "Target"
+      text: window.UII18n.t('amendment.target')
     })
   );
   targetWrap.appendChild(
     el("div", {
       class: "text-xs text-slate-500",
-      text: "Identify the existing clause for REMOVE or REPLACE. For ADD, describe where the new clause should go."
+      text: window.UII18n.t('amendment.target_help')
     })
   );
   targetWrap.appendChild(target);
@@ -1054,13 +1075,13 @@
   contentWrap.appendChild(
     el("div", {
       class: "text-xs font-medium text-slate-600",
-      text: "New wording"
+      text: window.UII18n.t('amendment.content')
     })
   );
   contentWrap.appendChild(
     el("div", {
       class: "text-xs text-slate-500",
-      text: "Required for ADD and REPLACE. Leave blank only when removing an entire target."
+      text: window.UII18n.t('amendment.content_help')
     })
   );
   contentWrap.appendChild(content);
@@ -1257,7 +1278,7 @@
         }
   
         const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
-        setAIStatus(`Generating… ${elapsedSec}s`);
+        setAIStatus(window.UII18n.t('draft.ai.elapsed', {seconds: elapsedSec}));
       }
   
       throw new Error(
@@ -1287,7 +1308,7 @@
           operations: operationSummary()
         });
   
-        alert(error);
+        alert(displayAmendmentError(error));
         return;
       }
   
@@ -1300,7 +1321,7 @@
           operations: operationSummary()
         });
   
-        alert("Add at least one operation.");
+        alert(window.UII18n.t('amendment.error.empty_operations'));
         return;
       }
   
@@ -1316,7 +1337,7 @@
       const plain = oneLine(plainEl.value);
   
       if (!plain) {
-        setAIStatus("Please describe your amendment first.", true);
+        setAIStatus(window.UII18n.t('amendment.ai.empty'), true);
   
         logAmend("AMENDMENT_AI_GENERATION_BLOCKED_EMPTY_INPUT", {
           plain_text_chars: 0
@@ -1327,8 +1348,8 @@
   
       const originalText = aiBtn.textContent;
       aiBtn.disabled = true;
-      aiBtn.textContent = "Generating…";
-      setAIStatus("Starting amendment generation…");
+      aiBtn.textContent = window.UII18n.t('draft.ai.generating');
+      setAIStatus(window.UII18n.t('amendment.ai.starting'));
   
       logAmend("AMENDMENT_AI_GENERATION_REQUESTED", {
         plain_text_chars: plain.length
@@ -1391,11 +1412,11 @@
         const ok = fillFromOperations(payload.operations);
   
         if (!ok) {
-          setAIStatus("No operations generated. Try adding clause numbers or clearer target wording.", true);
+          setAIStatus(window.UII18n.t('amendment.ai.no_operations'), true);
           return;
         }
   
-        setAIStatus("Operations generated. Review carefully before submitting.");
+        setAIStatus(window.UII18n.t('amendment.ai.done'));
       } catch (error) {
         const message = error?.message || String(error);
   
@@ -1403,7 +1424,7 @@
           error: message
         });
   
-        setAIStatus("Generation failed: " + message, true);
+        setAIStatus(window.UII18n.t('draft.ai.failed', {error: displayAmendmentError(message)}), true);
       } finally {
         aiBtn.disabled = false;
         aiBtn.textContent = originalText;

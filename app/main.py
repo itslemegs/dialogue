@@ -4247,8 +4247,8 @@ def view_draft_index(event_id: int, request: Request):
 
             return {
                 "id": d.id,
-                "title": d.title or "(Untitled)",
-                "l_number": d.l_number or "(unassigned)",
+                "title": d.title or translate(request_locale(request), 'document.untitled'),
+                "l_number": d.l_number or translate(request_locale(request), 'proposal_floor.unassigned'),
                 "submitted_at": d.submitted_at,
                 "status": d.status,
                 "agenda_id": proposal.id if proposal else d.proposal_id,
@@ -4318,14 +4318,14 @@ def draft_detail(draft_id: int, request: Request):
         d = db.get(ProposalDraft, draft_id)
 
         if not d:
-            raise HTTPException(404, "Draft not found")
+            raise HTTPException(404, translate(request_locale(request), 'document.error.not_found'))
 
         if not d.submitted_at:
-            raise HTTPException(403, "This draft is not visible yet.")
+            raise HTTPException(403, translate(request_locale(request), 'document.error.not_visible'))
 
         if _now_utc() < d.submitted_at + VISIBLE_AFTER:
             return HTMLResponse(
-                "This draft becomes visible 3 days after submission.",
+                translate(request_locale(request), 'document.error.visibility_delay'),
                 status_code=403,
             )
 
@@ -4369,7 +4369,7 @@ def draft_detail(draft_id: int, request: Request):
 
         def name_of(uid: int) -> str:
             u = users_by_id.get(uid)
-            return u.handle if u else f"User#{uid}"
+            return u.handle if u else translate(request_locale(request), 'document.unknown_user', id=uid)
 
         early_view = [
             {
@@ -4577,9 +4577,9 @@ def cosign_draft(draft_id: int, request: Request):
     with get_session() as db:
         d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
         if d.status == ProposalDraftStatus.ADOPTED:
-            raise HTTPException(403, "Cosigning is closed.")
+            raise HTTPException(403, translate(request_locale(request), 'document.error.cosign_closed'))
         if user.id == d.sponsor_id:
-            raise HTTPException(403, "Main sponsor cannot late co-sign.")
+            raise HTTPException(403, translate(request_locale(request), 'document.error.sponsor_cosign'))
         if _already_cosigned(d, user.id):
             return RedirectResponse(f"/drafts/{draft_id}", status_code=303)
         _append_late_cosign(d, user.id)
@@ -4601,7 +4601,7 @@ def withdraw_draft(event_id: int, draft_id: int, request: Request):
             raise HTTPException(404)
 
         if user.id != d.sponsor_id:
-            raise HTTPException(403, "Only the main sponsor can withdraw")
+            raise HTTPException(403, translate(request_locale(request), 'document.error.withdraw_sponsor'))
 
         has_amend = db.exec(
             select(Amendment)
@@ -4609,7 +4609,7 @@ def withdraw_draft(event_id: int, draft_id: int, request: Request):
         ).first() is not None
 
         if has_amend:
-            raise HTTPException(400, "Cannot withdraw: an amendment has been proposed.")
+            raise HTTPException(400, translate(request_locale(request), 'document.error.amendment_exists'))
 
         d.status = ProposalDraftStatus.WITHDRAWN
         d.withdrawn_at = _now_utc()
@@ -4629,7 +4629,7 @@ def reintroduce_draft(draft_id: int, request: Request):
     with get_session() as db:
         d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
         if d.status != ProposalDraftStatus.WITHDRAWN:
-            raise HTTPException(400, "Only withdrawn drafts can be reintroduced")
+            raise HTTPException(400, translate(request_locale(request), 'document.error.reintroduce'))
         d.status = ProposalDraftStatus.REINTRODUCED
         d.reintroduced_by_id = user.id
         d.reintroduced_at = _now_utc()
@@ -4700,6 +4700,7 @@ def _assert_amend_context(
     pid: int,
     rid: int,
     draft_id: int,
+    request: Request | None = None,
 ):
     # Keep this if you already have event-scoped access control.
     _require_event_access(db=db, user=user, event_id=event_id)
@@ -4723,13 +4724,13 @@ def _assert_amend_context(
         raise HTTPException(404)
 
     if not draft.is_submitted:
-        raise HTTPException(400, "Draft not submitted yet")
+        raise HTTPException(400, translate(request_locale(request), 'amendment.error.unsubmitted'))
 
     if getattr(draft, "status", None) == ProposalDraftStatus.WITHDRAWN:
-        raise HTTPException(400, "Cannot amend a withdrawn draft")
+        raise HTTPException(400, translate(request_locale(request), 'amendment.error.withdrawn'))
 
     if getattr(draft, "status", None) == ProposalDraftStatus.ADOPTED:
-        raise HTTPException(400, "Cannot amend an adopted draft")
+        raise HTTPException(400, translate(request_locale(request), 'amendment.error.adopted'))
 
     prop = db.get(AgendaProposal, pid)
 
@@ -4863,6 +4864,27 @@ def amend_generate_json_status(
     
 from app.services.amend_validate import validate_ops
 
+def _amendment_validation_message(request, message):
+    """Localize only known validator messages; retain arbitrary details verbatim."""
+    locale = request_locale(request)
+    if message == "No valid operations found. Use ADD / REMOVE / REPLACE operations.":
+        return translate(locale, 'amendment.error.no_valid')
+    match = re.fullmatch(r"Invalid amendment operation line: (.+)\. Use ADD / REMOVE / REPLACE operations\.", message)
+    if match:
+        return translate(locale, 'amendment.error.invalid_line', line=match[1])
+    match = re.fullmatch(r"Operation (\d+): target is required \(e\.g\., operative 4\(a\) or preambular starting with “Noting”\)\.", message)
+    if match:
+        return translate(locale, 'amendment.error.target_example', number=match[1])
+    match = re.fullmatch(r"Operation (\d+): (ADD|REPLACE) requires quoted text content\.", message)
+    if match:
+        return translate(locale, 'amendment.error.quoted', number=match[1],
+                         action=translate(locale, 'amendment.action.' + match[2].lower()))
+    match = re.fullmatch(r"Operation (\d+): REMOVE has empty quoted content; either omit quotes to remove the whole target or provide the phrase to remove\.", message)
+    if match:
+        return translate(locale, 'amendment.error.remove_empty', number=match[1])
+    return message
+
+
 @app.post("/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}/drafts/{draft_id}/amend")
 def submit_amendment(
     event_id: int,
@@ -4876,12 +4898,12 @@ def submit_amendment(
 
     body_markdown = (body_markdown or "").strip()
     if not body_markdown:
-        raise HTTPException(400, "Amendment text is required")
+        raise HTTPException(400, translate(request_locale(request), 'amendment.error.text'))
 
     try:
         validate_ops(body_markdown)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, _amendment_validation_message(request, str(e)))
 
     with get_session() as db:
         room, draft, prop = _assert_amend_context(
@@ -4891,6 +4913,7 @@ def submit_amendment(
             pid=pid,
             rid=rid,
             draft_id=draft_id,
+            request=request,
         )
 
         last = db.exec(
@@ -4971,6 +4994,7 @@ def view_amendment(
             pid=pid,
             rid=rid,
             draft_id=draft_id,
+            request=request,
         )
 
         amend = db.get(Amendment, amend_id) or (_ for _ in ()).throw(HTTPException(404))
@@ -5034,7 +5058,7 @@ def view_amendment_legacy(amend_id: int, request: Request, lang: str = "en"):
         draft = db.get(ProposalDraft, amend.draft_id) or (_ for _ in ()).throw(HTTPException(404))
 
         if not draft.room_id:
-            raise HTTPException(404, "This amendment is not linked to a proposal room")
+            raise HTTPException(404, translate(request_locale(request), 'amendment.error.room'))
 
         room = db.get(ProposalRoom, draft.room_id) or (_ for _ in ()).throw(HTTPException(404))
 

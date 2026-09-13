@@ -27,7 +27,7 @@ def request(locale=None, cookie=None):
         headers.append((b'x-ui-language', locale.encode()))
     if cookie is not None:
         headers.append((b'cookie', ('ui_locale=' + cookie).encode()))
-    return Request({'type': 'http', 'method': 'GET', 'path': '/', 'headers': headers})
+    return Request({'type': 'http', 'method': 'GET', 'path': '/', 'query_string': b'', 'headers': headers})
 
 
 def isolated_functions():
@@ -300,9 +300,10 @@ class RequestTests(unittest.TestCase):
                      'partials/interventions_list.html','events/proposal_floor.html','events/proposal_floor_item.html',
                      'events/decision.html','partials/pfloor_vote_panel.html','macros/interventions-prop.html',
                      'partials/pfloor_interventions_list.html','proposal_discussion/index.html','rooms/index.html',
-                     'rooms/show.html','partials/room_messages.html','partials/room_shared_state.html']:
+                     'rooms/show.html','partials/room_messages.html','partials/room_shared_state.html',
+                     'events/view_draft_index.html','events/draft_detail.html','events/amendment_detail.html']:
             source = (ROOT/'app/templates'/name).read_text()
-            for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)", source):
+            for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)['\"]\s*(?=[,)])", source):
                 self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
 
     def test_phase2_account_failures_keep_codes_and_uniform_login_errors(self):
@@ -829,6 +830,154 @@ class RequestTests(unittest.TestCase):
             self.assertEqual(raised.exception.status_code, 400)
             draft.is_submitted = False
         self.assertEqual(draft.status, 'TABLED')
+
+    def document_context(self):
+        ctx=self.room_context(sponsor=True,submitted=True)
+        draft=ctx['draft']
+        draft.event_id=10;draft.proposal_id=20;draft.room_id=30;draft.sponsor_id=1
+        amend=SimpleNamespace(id=60,draft_id=40,label='L.1/Amend.1',am_no=1,
+            body_markdown='ADD the following operative 4(a)\n  "Authored 日本語 <literal>"',created_at=draft.submitted_at)
+        ctx.update(amend=amend,amends=[amend],title_show=draft.title,agenda_label=ctx['proposal'].title,
+            sponsor_name=ctx['user'].handle,early_cosigns=[dict(name='Author_Name',created_at=None)],late_cosigns=[],
+            can_withdraw=True,can_cosign=True,already_cosigned=False,lang='en',lang_meta=dict(label='English',dir='ltr'),
+            supported_langs={'en':dict(label='English',dir='ltr'),'ja':dict(label='日本語',dir='ltr')},
+            translation_disabled=False,translation_status='done',translation_error=None,hide_draft_for_translation=False,
+            draft_text={field:getattr(draft,field) for field in ['recalling','noting','welcoming','expressing_regret','expressing_deep_concern','emphasizing','decides','requests','calls_upon','encourages']},
+            ui_labels=dict(recalling='Recalling',decides='Decides'),body_show=amend.body_markdown,
+            active=[dict(id=40,title=draft.title,l_number='L.1',submitted_at=draft.submitted_at,
+                         agenda_label='Authored agenda',sponsor_name='Author_Name',status='REINTRODUCED')],withdrawn=[])
+        return ctx
+
+    def test_phase7_document_and_amendment_pages_preserve_authored_content(self):
+        import re
+        from html import unescape
+        ctx=self.document_context()
+        for name,english,japanese in [('events/view_draft_index.html','Tabled Draft Resolution Texts','上程済み決議草案'),
+                ('events/draft_detail.html','Propose an Amendment','修正案を提案'),
+                ('events/amendment_detail.html','Submitted:','提出日時：')]:
+            outputs=[]
+            for locale,label in [('en',english),('ja',japanese)]:
+                html=self.render_room(name,locale,**ctx);outputs.append(html)
+                self.assertIn(label,html)
+                self.assertIn(ctx['draft'].title,html)
+                self.assertIn('L.1',html)
+            if name.endswith('draft_detail.html'):
+                bodies=[re.search(r'<section id="doc_body".*?</section>',h,re.S)[0] for h in outputs]
+                self.assertEqual(bodies[0],bodies[1])
+                self.assertIn(ctx['draft'].recalling,unescape(bodies[1]))
+                self.assertIn('前文条項',outputs[1]);self.assertIn('主文条項',outputs[1])
+                self.assertIn('修正案を提出',outputs[1])
+            if name.endswith('amendment_detail.html'):
+                for html in outputs:self.assertIn(ctx['amend'].body_markdown,unescape(html))
+                sections=[re.search(r'<section.*?</section>',html,re.S)[0] for html in outputs]
+                self.assertEqual(sections[0],sections[1])
+            for attr in ['action','data-log-action','data-translation-lang','name']:
+                self.assertEqual(re.findall(attr+r'="([^"]+)"',outputs[0]),re.findall(attr+r'="([^"]+)"',outputs[1]))
+        self.assertEqual(ctx['draft'].status,'TABLED')
+        self.assertEqual(ctx['active'][0]['status'],'REINTRODUCED')
+
+    def test_phase7_status_actions_and_translation_shell(self):
+        ctx=self.document_context()
+        for raw,label in [('TABLED','上程済み'),('ADOPTED','採択'),('WITHDRAWN','撤回'),('REINTRODUCED','再提出')]:
+            ctx['draft'].status=raw
+            html=self.render_room('events/draft_detail.html','ja',**ctx)
+            self.assertIn(label,html);self.assertEqual(ctx['draft'].status,raw)
+        denied=self.render_room('events/draft_detail.html','ja',**dict(ctx,can_withdraw=False,can_cosign=False,already_cosigned=True))
+        self.assertNotIn('/withdraw"',denied);self.assertNotIn('/cosign"',denied)
+        self.assertIn('共同署名済み',denied)
+        for name in ['events/draft_detail.html','events/amendment_detail.html']:
+            html=self.render_room(name,'ja',**dict(ctx,translation_disabled=True))
+            self.assertIn('英語の原文を表示しています',html)
+            self.assertIn('data-current-lang="en"',html)
+            self.assertIn('lang=ja',html)  # Document language remains an explicit separate choice.
+        pending=self.render_room('events/draft_detail.html','ja',**dict(ctx,lang='fr',translation_status='pending',
+            hide_draft_for_translation=True,lang_meta=dict(label='Français',dir='ltr')))
+        self.assertIn('翻訳を準備しています',pending)
+        self.assertIn('Françaisの翻訳',pending)
+        self.assertNotIn('id="doc_body"',pending)
+
+    def test_phase7_real_builder_submits_identical_internal_operations(self):
+        import re,shutil,subprocess
+        if not shutil.which('node'):self.skipTest('Node required for builder execution')
+        fixtures=[]
+        for locale in ['en','ja']:
+            html=self.render_room('events/draft_detail.html',locale,ai_features_enabled=False,**self.document_context())
+            html=re.sub(r'<!--.*?-->','',html,flags=re.S)
+            script=next(s for s in re.findall(r'<script[^>]*>(.*?)</script>',html,re.S) if 'function operationSummary()' in s)
+            catalogue=json.loads(self.templates.env.from_string('{{ ui_js_catalogue()|tojson }}').render(request=request(locale)))
+            fixtures.append(dict(locale=locale,script=script,catalogue=catalogue))
+        result=subprocess.run(['node','tests/amendment_i18n.js'],input=json.dumps(fixtures),text=True,capture_output=True,cwd=ROOT,timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    def phase7_functions(self,names,**ns):
+        import copy
+        nodes=[copy.deepcopy(n) for n in ast.parse((ROOT/'app/main.py').read_text()).body
+               if isinstance(n,ast.FunctionDef) and n.name in names]
+        for node in nodes:node.decorator_list=[]
+        ns.update(request_locale=i18n.request_locale,translate=i18n.translate)
+        module=ast.Module(body=[ast.ImportFrom(module='__future__',names=[ast.alias(name='annotations')],level=0)]+nodes,type_ignores=[])
+        exec(compile(ast.fix_missing_locations(module),'isolated_phase7','exec'),ns)
+        return ns
+
+    def test_phase7_validator_accepts_only_existing_operation_syntax(self):
+        import re
+        from app.services.amend_validate import validate_ops,parse_ops
+        from fastapi import HTTPException
+        from unittest.mock import Mock
+        forbidden=Mock(side_effect=AssertionError('Unexpected DB write/AI access'))
+        ns=self.phase7_functions({'submit_amendment','_amendment_validation_message'},Form=Form,HTTPException=HTTPException,
+            current_user=lambda req:SimpleNamespace(id=1),get_session=forbidden,validate_ops=validate_ops,re=re)
+        body='ADD the following operative 4(a)\n  "Authored 日本語"'
+        validate_ops(body);self.assertEqual(parse_ops(body)[0].action,'ADD')
+        for locale in ['en','ja']:
+            for bad in ['',body.replace('ADD','追加'),body.replace('operative','主文条項'),
+                        'REPLACE in the operative 4(a)','REMOVE in the operative 4(a)\n  ""']:
+                with self.assertRaises(HTTPException) as raised:
+                    ns['submit_amendment'](event_id=10,pid=20,rid=30,draft_id=40,request=request(locale),body_markdown=bad)
+                self.assertEqual(raised.exception.status_code,400)
+                if locale=='ja':self.assertRegex(raised.exception.detail,r'[ぁ-んァ-ヶ一-龯]')
+        error='Invalid amendment operation line: User <authored> text. Use ADD / REMOVE / REPLACE operations.'
+        self.assertIn('User <authored> text',ns['_amendment_validation_message'](request('ja'),error))
+        self.assertEqual(ns['_amendment_validation_message'](request('ja'),'arbitrary provider text'),'arbitrary provider text')
+        forbidden.assert_not_called()
+
+    def test_phase7_permissions_keep_codes_and_avoid_persistence(self):
+        from fastapi import HTTPException
+        from unittest.mock import MagicMock
+        ctx=self.document_context();draft=ctx['draft'];draft.cosigners_json=[]
+        db=MagicMock();db.__enter__.return_value=db;db.get.return_value=draft
+        for action in ['add','commit','refresh']:getattr(db,action).side_effect=AssertionError('Unexpected persistence')
+        status=SimpleNamespace(ADOPTED='ADOPTED',TABLED='TABLED',WITHDRAWN='WITHDRAWN',REINTRODUCED='REINTRODUCED')
+        ns=self.phase7_functions({'cosign_draft','withdraw_draft','reintroduce_draft'},HTTPException=HTTPException,
+            current_user=lambda req:SimpleNamespace(id=2),get_session=lambda:db,ProposalDraft=object(),ProposalDraftStatus=status,
+            _require_event_access=lambda **kw:SimpleNamespace(id=10),select=MagicMock(),Amendment=MagicMock())
+        for locale in ['en','ja']:
+            draft.status='ADOPTED'
+            for name,kwargs,code in [('cosign_draft',{},403),('withdraw_draft',dict(event_id=10),403),('reintroduce_draft',{},400)]:
+                with self.assertRaises(HTTPException) as raised:ns[name](draft_id=40,request=request(locale),**kwargs)
+                self.assertEqual(raised.exception.status_code,code)
+            ns['current_user']=lambda req:SimpleNamespace(id=1)
+            draft.status='TABLED';db.exec.return_value.first.return_value=object()
+            with self.assertRaises(HTTPException) as raised:ns['withdraw_draft'](event_id=10,draft_id=40,request=request(locale))
+            self.assertEqual(raised.exception.status_code,400)
+            self.assertEqual(draft.status,'TABLED')
+            ns['current_user']=lambda req:SimpleNamespace(id=2)
+        db.commit.assert_not_called()
+
+    def test_phase7_amendment_read_does_not_translate_for_japanese_ui(self):
+        from fastapi import HTTPException
+        from unittest.mock import MagicMock,Mock
+        ctx=self.document_context();db=MagicMock();db.__enter__.return_value=db;db.get.return_value=ctx['amend']
+        ai=Mock(side_effect=AssertionError('Unexpected document/AI translation'))
+        ns=self.phase7_functions({'view_amendment'},HTTPException=HTTPException,current_user=lambda req:ctx['user'],
+            AI_FEATURES_ENABLED=True,get_session=lambda:db,Amendment=object(),SUPPORTED=ctx['supported_langs'],
+            _assert_amend_context=lambda **kw:(ctx['room'],ctx['draft'],ctx['proposal']),translate_text=ai,
+            translate_lang_meta=lambda lang:ctx['supported_langs'][lang],render=lambda name,req,**values:values)
+        for enabled in [False,True]:
+            ns['AI_FEATURES_ENABLED']=enabled
+            result=ns['view_amendment'](event_id=10,pid=20,rid=30,draft_id=40,amend_id=60,request=request('ja'))
+            self.assertEqual(result['lang'],'en');self.assertEqual(result['body_show'],ctx['amend'].body_markdown)
+        ai.assert_not_called();db.commit.assert_not_called()
 
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden

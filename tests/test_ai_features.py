@@ -300,6 +300,8 @@ class DispatchTests(unittest.TestCase):
 class TemplateTests(unittest.TestCase):
     def test_changed_templates_parse_and_summary_polling_is_conditional(self):
         env = Environment(loader=FileSystemLoader(ROOT/'app/templates'))
+        from app.i18n import install_jinja
+        install_jinja(env)
         names = ['rooms/show.html','events/draft_detail.html','events/amendment_detail.html',
                  'events/general_floor_item.html','events/proposal_floor_item.html']
         for name in names:

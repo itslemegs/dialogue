@@ -384,6 +384,22 @@ class PollingTests(unittest.TestCase):
             self.assertNotIn('↩', source)
             self.assertNotIn('to #', source)
 
+    def test_room_poll_fragment_has_request_and_current_user_context(self):
+        source = (ROOT / 'app/main.py').read_text()
+
+        start = source.index('def room_updates(')
+        end = source.index('\n\nimport sqlalchemy as sa', start)
+        room_source = source[start:end]
+
+        self.assertIn(
+            'request=request,\n                user=user,\n                threads=',
+            room_source,
+        )
+        self.assertIn(
+            'request=request,\n                    user=user,',
+            room_source,
+        )
+
     def test_room_access_and_relations(self):
         self.client.cookies.clear();self.assertEqual(self.client.get(self.room_url).status_code,401)
         self.client.cookies.set('session','4');self.assertEqual(self.client.get(self.room_url).status_code,403)

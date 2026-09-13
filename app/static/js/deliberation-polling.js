@@ -334,10 +334,7 @@
     let revision = '';
     let draftRevision = '';
 
-    list.addEventListener('click', event => {
-      const button = event.target.closest('[data-room-reply]');
-      if (button) document.getElementById('parent_id').value = button.dataset.roomReply;
-    });
+
 
     return watch(options.url, async ({read}) => {
       const params = new URLSearchParams({

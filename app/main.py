@@ -3454,6 +3454,8 @@ def room_updates(
 
             current = _rows_revision(rows)
             html = templates.env.get_template("partials/room_messages.html").render(
+                request=request,
+                user=user,
                 threads=_thread_rows(rows, "parent_id"),
                 user_map={u.id: u for u in users},
             )
@@ -3526,6 +3528,7 @@ def room_updates(
                 draft_html = templates.env.get_template(
                     "partials/room_shared_state.html"
                 ).render(
+                    request=request,
                     user=user,
                     event=event,
                     proposal=prop,

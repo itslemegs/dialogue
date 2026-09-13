@@ -1050,18 +1050,18 @@
 </style>
 
 <h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
-<div class="text-slate-500 text-sm mb-4">Agenda: {{ proposal.title }}</div>
+<div class="text-slate-500 text-sm mb-4">{{ t('proposal_floor.agenda') }} {{ proposal.title }}</div>
 
 {% set can_delete = (room.sponsor_id == user.id) or flags.IS_PRESIDENT or flags.IS_CHAIR or flags.IS_CHAIRMAN %}
 {% if can_delete %}
 <form method="post"
       action="{{ url_for('rooms_delete', event_id=event.id, pid=proposal.id, rid=room.id) }}"
-      onsubmit="return confirm('Delete this room? This will remove chat and draft.');"
+      onsubmit="return confirm(window.UII18n.t('proposal_discussion.confirm_delete_all'));"
       class="inline-block">
       <button class="px-3 py-1 bg-rose-600 text-white rounded"
-      data-hint="Delete this proposal discussion room, including its chat and draft."
+      data-hint="{{ t('proposal_discussion.delete_hint') }}"
       data-hint-side="right">
-Delete room
+{{ t('proposal_discussion.delete_room') }}
 </button>
 </form>
 {% endif %}
@@ -1079,13 +1079,13 @@ Delete room
 
           <span class="room-chat-dot" aria-hidden="true"></span>
 
-          <h3 class="room-chat-title">Discussion</h3>
+          <h3 class="room-chat-title">{{ t('proposal_discussion.discussion') }}</h3>
 
         </div>
 
         <div class="room-chat-subtitle mt-1">
 
-          Live discussion · Times shown in JST
+          {{ t('proposal_discussion.chat_context') }}
 
         </div>
 
@@ -1137,7 +1137,7 @@ Delete room
 
             rows="2"
 
-            placeholder="Write a message to the room…"
+            placeholder="{{ t('proposal_discussion.message_placeholder') }}"
 
             required></textarea>
 
@@ -1155,7 +1155,7 @@ Delete room
 
           data-target-id="{{ room.id }}">
 
-          <span>Send</span>
+          <span>{{ t('common.send') }}</span>
 
           <span aria-hidden="true">↑</span>
 
@@ -1173,27 +1173,27 @@ Delete room
   <section class="md:col-span-7 draft-panel">
     <div class="draft-panel-header">
       <div>
-        <div class="draft-panel-kicker">COLLABORATIVE DRAFT</div>
-        <h3 class="draft-panel-title">Proposal Draft</h3>
+        <div class="draft-panel-kicker">{{ t('draft.collaborative') }}</div>
+        <h3 class="draft-panel-title">{{ t('draft.proposal') }}</h3>
         <p class="draft-panel-subtitle">
-          The room sponsor edits the draft. Everyone can review the structure and drafting guidance.
+          {{ t('draft.editor_notice') }}
         </p>
       </div>
 
       {% if user and user.id == room.sponsor_id and not draft.is_submitted %}
-        <span class="draft-role-chip draft-role-chip-owner">You are editing</span>
+        <span class="draft-role-chip draft-role-chip-owner">{{ t('draft.editing') }}</span>
       {% elif draft.is_submitted %}
-        <span class="draft-role-chip draft-role-chip-submitted">Submitted</span>
+        <span class="draft-role-chip draft-role-chip-submitted">{{ t('draft.submitted') }}</span>
       {% else %}
-        <span class="draft-role-chip">Read-only view</span>
+        <span class="draft-role-chip">{{ t('draft.read_only') }}</span>
       {% endif %}
     </div>
 
     <div class="draft-crash-course">
       <div class="draft-crash-course-head">
         <div>
-          <div class="draft-guide-eyebrow">QUICK DRAFTING GUIDE</div>
-          <div class="draft-guide-title">What a complete proposal needs</div>
+          <div class="draft-guide-eyebrow">{{ t('draft.guide') }}</div>
+          <div class="draft-guide-title">{{ t('draft.guide_structure') }}</div>
         </div>
         <span class="draft-guide-icon" aria-hidden="true">✦</span>
       </div>
@@ -1202,31 +1202,31 @@ Delete room
         <div class="draft-guide-item">
           <span class="draft-guide-number">1</span>
           <div>
-            <strong>A clear title</strong>
-            <p>Tell readers what the proposal is about in one concise phrase.</p>
+            <strong>{{ t('draft.clear_title') }}</strong>
+            <p>{{ t('draft.title_brief') }}</p>
           </div>
         </div>
 
         <div class="draft-guide-item">
           <span class="draft-guide-number">2</span>
           <div>
-            <strong>Preambular clause(s)</strong>
-            <p>Explain <em>why</em> the proposal is needed: context, concerns, or principles.</p>
+            <strong>{{ t('draft.preambular') }}</strong>
+            <p>{{ t('draft.why_brief') }}</p>
           </div>
         </div>
 
         <div class="draft-guide-item">
           <span class="draft-guide-number">3</span>
           <div>
-            <strong>Operative clause(s)</strong>
-            <p>Explain <em>what</em> should happen: a decision, request, recommendation, or action.</p>
+            <strong>{{ t('draft.operative') }}</strong>
+            <p>{{ t('draft.what_brief') }}</p>
           </div>
         </div>
       </div>
 
       <div class="draft-guide-tip">
         <span aria-hidden="true">ⓘ</span>
-        Hover or tap a highlighted clause label for a short explanation of how to use it.
+        {{ t('draft.guidance_tip') }}
       </div>
     </div>
 
@@ -1237,25 +1237,24 @@ Delete room
 
       <div class="draft-editor-heading">
         <div>
-          <div class="draft-section-kicker">EDITOR WORKSPACE</div>
-          <div class="draft-editor-title">Build the working draft</div>
+          <div class="draft-section-kicker">{{ t('draft.workspace') }}</div>
+          <div class="draft-editor-title">{{ t('draft.build') }}</div>
           <p class="draft-editor-description">
-            Edit the proposal below. Other participants can review the saved version
-            while you continue drafting.
+            {{ t('draft.edit_instruction') }}
           </p>
         </div>
       </div>
 
       <div class="draft-ai-box mt-2 p-2 rounded border bg-slate-50 space-y-2">
       <label class="block text-sm text-slate-600 {% if not ai_features_enabled %}hidden{% endif %}">
-        Write freely (plain paragraphs)
+        {{ t('draft.ai.free_text') }}
       </label>
       <textarea id="plain_text"
     class="w-full border rounded p-2 {% if not ai_features_enabled %}hidden{% endif %}"
     rows="6"
     {% if not ai_features_enabled %}disabled{% endif %}
-    placeholder="Explain what the draft should do. No UN format needed."
-    data-hint="Write your idea in normal paragraphs. The AI will convert it into draft sections."
+    placeholder="{{ t('draft.ai.placeholder') }}"
+    data-hint="{{ t('draft.ai.input_hint') }}"
     data-hint-side="left"></textarea>
 
     <div class="flex items-center gap-2 {% if not ai_features_enabled %}hidden{% endif %}">
@@ -1267,14 +1266,14 @@ Delete room
 
       <button type="button"
               id="btn_generate"
-              {% if not ai_features_enabled %}disabled title="AI features are currently disabled"{% endif %}
+              {% if not ai_features_enabled %}disabled title="{{ t('floor.ai_disabled') }}"{% endif %}
               class="px-3 py-1.5 bg-indigo-600 text-white rounded"
               data-log-action="CLICK_GENERATE_DRAFT_WITH_AI"
               data-target-type="proposal_draft"
               data-target-id="{{ draft.id }}"
-              data-hint="Use AI to turn your plain paragraphs into draft sections. Review the result before saving."
+              data-hint="{{ t('draft.ai.generate_hint') }}"
               data-hint-side="top">
-        {% if ai_features_enabled %}Generate draft from paragraphs{% else %}AI features are currently disabled{% endif %}
+        {% if ai_features_enabled %}{{ t('draft.ai.generate') }}{% else %}{{ t('floor.ai_disabled') }}{% endif %}
       </button>
 
       <div id="ai_status" class="text-xs text-slate-500"></div>
@@ -1283,8 +1282,7 @@ Delete room
 
     {% if not ai_features_enabled %}
       <div class="text-sm text-slate-500 rounded border border-slate-200 bg-white px-3 py-2">
-        AI-assisted draft generation is currently disabled.
-        You can continue drafting manually below.
+        {{ t('draft.ai.manual_available') }}
       </div>
     {% endif %}
       <div id="lookup_panel" class="hidden mt-3 border rounded bg-white">
@@ -1315,14 +1313,13 @@ Delete room
           <div class="space-y-1">
             <div class="flex items-center gap-2">
               <label for="draft_title" class="text-sm font-semibold text-slate-700">
-                Title
+                {{ t('draft.title') }}
               </label>
-              <span class="text-[11px] font-medium text-rose-600">Required</span>
+              <span class="text-[11px] font-medium text-rose-600">{{ t('draft.required') }}</span>
             </div>
 
             <p class="text-xs text-slate-500">
-              Give the proposal a short name that tells others what it is about.
-              Example: <em>Improving Transparency for AI-Generated Personas</em>
+              {{ t('draft.title_help') }}
             </p>
 
             <input id="draft_title"
@@ -1332,30 +1329,27 @@ Delete room
                    required
                    class="w-full border rounded-lg p-2"
                    value="{{ draft.title or '' }}"
-                   placeholder="Example: Improving Transparency for AI-Generated Personas" />
+                   placeholder="{{ t('draft.title_example') }}" />
           </div>
 
       <!-- Preambular clauses -->
 <div class="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
   <div>
     <div class="flex items-center gap-2">
-      <h4 class="text-sm font-semibold text-slate-800">Preambular clauses</h4>
-      <span class="text-[11px] font-medium text-rose-600">At least one required</span>
+      <h4 class="text-sm font-semibold text-slate-800">{{ t('draft.preambular') }}</h4>
+      <span class="text-[11px] font-medium text-rose-600">{{ t('draft.one_required') }}</span>
     </div>
 
     <p class="text-xs text-slate-500 mt-1">
-      Explain <strong>why</strong> the proposal is needed: its background,
-      concerns, or circumstances.
+      {{ t('draft.why') }}
     </p>
 
     <p class="text-xs text-slate-500 mt-1">
-      Example:
-      <em>Recognizing the increasing use of AI-generated personas in online communication…</em>
+      {{ t('draft.preambular_example') }}
     </p>
     <p class="text-xs text-indigo-700 mt-2">
-      You do not need to use every opening. Choose one or more that best explain
-      the background or reasons for your proposal.
-      <span class="font-semibold">Hover or tap the highlighted guidance beside a clause if you need help.</span>
+      {{ t('draft.preambular_choice') }}
+      <span class="font-semibold">{{ t('draft.guidance_help') }}</span>
     </p>
   </div>
 
@@ -1363,38 +1357,38 @@ Delete room
     (
       'Recalling',
       'recalling',
-      'Refer back to an earlier agreement, discussion, principle, or event that is relevant to this proposal.',
-      'Example: previous discussions on transparency and digital trust…'
+      t('draft.guidance.recalling'),
+      t('draft.example.recalling')
     ),
     (
       'Noting',
       'noting',
-      'Point out a relevant fact, observation, or situation without strongly judging it.',
-      'Example: the growing use of AI-generated personas in online communication…'
+      t('draft.guidance.noting'),
+      t('draft.example.noting')
     ),
     (
       'Welcoming',
       'welcoming',
-      'Acknowledge a positive development, effort, or action that has already taken place.',
-      'Example: recent efforts to improve disclosure of synthetic content…'
+      t('draft.guidance.welcoming'),
+      t('draft.example.welcoming')
     ),
     (
       'Expressing regret',
       'expressing_regret',
-      'Show disappointment about an undesirable situation or something that has happened.',
-      'Example: the lack of clear disclosure in some online campaigns…'
+      t('draft.guidance.expressing_regret'),
+      t('draft.example.expressing_regret')
     ),
     (
       'Expressing deep concern',
       'expressing_deep_concern',
-      'Highlight a serious problem, risk, or harm that requires attention.',
-      'Example: the potential use of synthetic personas for manipulation…'
+      t('draft.guidance.expressing_deep_concern'),
+      t('draft.example.expressing_deep_concern')
     ),
     (
       'Emphasizing',
       'emphasizing',
-      'Stress a principle or point that is especially important to the proposal.',
-      'Example: the importance of transparency, accountability, and digital trust…'
+      t('draft.guidance.emphasizing'),
+      t('draft.example.emphasizing')
     )
   ] %}
   <div class="space-y-1">
@@ -1408,8 +1402,8 @@ Delete room
               class="draft-guidance-hint text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-300 rounded"
               data-draft-hint="{{ description }}"
               data-draft-hint-side="top"
-              aria-label="Guidance for {{ label }}">
-        ? Hover or tap for guidance
+              aria-label="{{ t('draft.guidance_for', clause=label) }}">
+        {{ t('draft.guidance_hover') }}
       </button>
     </div>
 
@@ -1427,23 +1421,20 @@ Delete room
 <div class="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
   <div>
     <div class="flex items-center gap-2">
-      <h4 class="text-sm font-semibold text-slate-800">Operative clauses</h4>
-      <span class="text-[11px] font-medium text-rose-600">At least one required</span>
+      <h4 class="text-sm font-semibold text-slate-800">{{ t('draft.operative') }}</h4>
+      <span class="text-[11px] font-medium text-rose-600">{{ t('draft.one_required') }}</span>
     </div>
 
     <p class="text-xs text-slate-500 mt-1">
-      Explain <strong>what</strong> you want to happen: an action,
-      recommendation, request, or decision.
+      {{ t('draft.what') }}
     </p>
 
     <p class="text-xs text-slate-500 mt-1">
-      Example:
-      <em>Encourages platforms to clearly disclose AI-generated personas used in public communication…</em>
+      {{ t('draft.operative_example') }}
     </p>
     <p class="text-xs text-indigo-700 mt-2">
-      You do not need to use every opening. Choose one or more depending on the
-      kind of action you want the proposal to take.
-      <span class="font-semibold">Hover or tap the highlighted guidance beside a clause if you need help.</span>
+      {{ t('draft.operative_choice') }}
+      <span class="font-semibold">{{ t('draft.guidance_help') }}</span>
     </p>
   </div>
 
@@ -1451,26 +1442,26 @@ Delete room
     (
       'Decides',
       'decides',
-      'State a concrete decision or action that the group or body itself will take.',
-      'Example: to establish a common guideline for disclosure of AI-generated personas…'
+      t('draft.guidance.decides'),
+      t('draft.example.decides')
     ),
     (
       'Requests',
       'requests',
-      'Formally ask a particular person, organization, or body to take an action.',
-      'Example: platform operators to provide clearer disclosure mechanisms…'
+      t('draft.guidance.requests'),
+      t('draft.example.requests')
     ),
     (
       'Calls upon',
       'calls_upon',
-      'Strongly urge an actor to take action. This is stronger than simply encouraging them.',
-      'Example: relevant organizations to adopt safeguards against deceptive synthetic personas…'
+      t('draft.guidance.calls_upon'),
+      t('draft.example.calls_upon')
     ),
     (
       'Encourages',
       'encourages',
-      'Recommend or support an action without making it sound compulsory.',
-      'Example: researchers and platforms to share best practices on transparency…'
+      t('draft.guidance.encourages'),
+      t('draft.example.encourages')
     )
   ] %}
   <div class="space-y-1">
@@ -1484,8 +1475,8 @@ Delete room
               class="draft-guidance-hint text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline focus:outline-none focus:ring-2 focus:ring-indigo-300 rounded"
               data-draft-hint="{{ description }}"
               data-draft-hint-side="top"
-              aria-label="Guidance for {{ label }}">
-        ? Hover or tap for guidance
+              aria-label="{{ t('draft.guidance_for', clause=label) }}">
+        {{ t('draft.guidance_hover') }}
       </button>
     </div>
 
@@ -1500,16 +1491,13 @@ Delete room
 
 <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 space-y-2">
   <div>
-    <strong class="text-slate-800">1. Save Draft</strong>
-    — saves your latest changes so other participants can read and co-sign them.
-    You can continue editing after saving.
+    <strong class="text-slate-800">1. {{ t('draft.save') }}</strong>
+    {{ t('draft.save_help') }}
   </div>
 
   <div>
-    <strong class="text-slate-800">2. Submit Final Draft</strong>
-    — submits the <strong>last saved version</strong> and assigns its L-number.
-    Save your latest changes before submitting.
-    After submission, the draft can no longer be edited and no new co-signers can join.
+    <strong class="text-slate-800">2. {{ t('draft.submit_final') }}</strong>
+    {{ t('draft.submit_help') }}
   </div>
 </div>
 
@@ -1518,9 +1506,9 @@ Delete room
           data-log-action="CLICK_SAVE_DRAFT"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}"
-          data-hint="Save your draft progress without submitting it to the proposal floor."
+          data-hint="{{ t('draft.save_hint') }}"
           data-hint-side="top">
-    Save Draft
+    {{ t('draft.save') }}
   </button>
 
   <button formaction="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/submit"
@@ -1528,9 +1516,9 @@ Delete room
           data-log-action="CLICK_SUBMIT_DRAFT_AS_L_DOC"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}"
-          data-hint="Submit this draft and assign it an L-number. After submission, editing and co-signing close."
+          data-hint="{{ t('draft.submit_hint') }}"
           data-hint-side="top">
-    Submit Saved Draft
+    {{ t('draft.submit_saved') }}
   </button>
 </div>
     </form>
@@ -1557,11 +1545,11 @@ Delete room
   <aside class="md:col-span-12 lg:col-span-2 lg:sticky lg:top-4 pb-28">
     <div class="bg-white border rounded-lg shadow-sm">
       <div class="px-3 py-2 border-b flex items-center justify-between">
-        <div class="text-sm font-semibold">Live summary</div>
+        <div class="text-sm font-semibold">{{ t('floor.summary') }}</div>
         <div id="liveSummaryUpdated" class="text-[11px] text-slate-500"></div>
       </div>
       <div class="p-3">
-        <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">{% if ai_features_enabled %}Loading…{% else %}AI features are currently disabled{% endif %}</div>
+        <div id="liveSummaryStatus" class="text-xs text-slate-500 mb-2">{% if ai_features_enabled %}{{ t('common.loading') }}{% else %}{{ t('floor.ai_disabled') }}{% endif %}</div>
         <pre id="liveSummaryBody" class="text-sm whitespace-pre-wrap leading-5 text-slate-800"></pre>
       </div>
     </div>
@@ -1582,16 +1570,16 @@ Delete room
     async function tick() {
       if (inflight) return;
       inflight = true;
-      status.textContent = "Updating…";
+      status.textContent = window.UII18n.t('floor.updating');
       try {
         const res = await fetch(url, { headers: { "Accept": "application/json" } });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const data = await res.json();
         body.textContent = data.summary || "";
-        updated.textContent = data.updated_at ? ("Updated " + data.updated_at) : "";
+        updated.textContent = data.updated_at ? window.UII18n.t('floor.updated', {time: data.updated_at}) : "";
         status.textContent = "";
       } catch (e) {
-        status.textContent = "Summary unavailable (endpoint or LLM offline)";
+        status.textContent = window.UII18n.t('floor.summary_unavailable');
       } finally {
         inflight = false;
       }
@@ -2034,7 +2022,7 @@ Delete room
           throw new Error(data.error || "Draft generation failed.");
         }
   
-        setStatus(`Generating… ${Math.floor((i + 1) * 2)}s`);
+        setStatus(window.UII18n.t('draft.ai.elapsed', {seconds: Math.floor((i + 1) * 2)}));
       }
   
       throw new Error("Draft generation is still running. Please try again later.");
@@ -2044,7 +2032,7 @@ Delete room
       const plain = (plainEl.value || "").trim();
   
       if (!plain) {
-        setStatus("Please write something first.", true);
+        setStatus(window.UII18n.t('draft.ai.empty'), true);
   
         logAI("DRAFT_AI_GENERATION_BLOCKED_EMPTY_INPUT", {
           plain_text_chars: 0
@@ -2054,8 +2042,8 @@ Delete room
       }
   
       btn.disabled = true;
-      btn.textContent = "Generating…";
-      setStatus("Starting generation…");
+      btn.textContent = window.UII18n.t('draft.ai.generating');
+      setStatus(window.UII18n.t('draft.ai.starting'));
   
       logAI("DRAFT_AI_GENERATION_REQUESTED", {
         plain_text_chars: plain.length
@@ -2091,13 +2079,13 @@ Delete room
           job_id: startData.job_id
         });
   
-        setStatus("Generating with AI… this may take a while.");
+        setStatus(window.UII18n.t('draft.ai.wait'));
   
         const payload = await pollDraftJob(startData.job_id);
   
         fillDraftFields(payload);
   
-        setStatus("Draft generated. Review, then click Save.");
+        setStatus(window.UII18n.t('draft.ai.done'));
       } catch (e) {
         const message = e?.message || String(e);
   
@@ -2105,10 +2093,22 @@ Delete room
           error: message
         });
   
-        setStatus("Generation failed: " + message, true);
+        // Localize known presentation errors only; keep raw errors in the log above.
+        const errorKeys = {
+          "Draft generation failed.": "draft.ai.failed_detail",
+          "Draft generation is still running. Please try again later.": "draft.ai.still_running",
+          "Draft generation did not start correctly.": "draft.ai.not_started",
+          "Only the room sponsor can generate the draft": "draft.ai.sponsor_only",
+          "Only the room sponsor can check draft generation": "draft.ai.status_sponsor_only",
+          "Draft already submitted": "draft.error.submitted",
+          "Generation job not found": "draft.ai.job_missing",
+          "Another draft generation is already running. Please wait for it to finish.": "draft.ai.busy"
+        };
+        const errorKey = Object.hasOwn(errorKeys, message) ? errorKeys[message] : null;
+        setStatus(window.UII18n.t('draft.ai.failed', {error: errorKey ? window.UII18n.t(errorKey) : message}), true);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Generate draft from paragraphs";
+        btn.textContent = window.UII18n.t('draft.ai.generate');
       }
     });
   })();

@@ -46,6 +46,7 @@
             {{ uf.flair_for_user(
               u=author,
               roles_list=author_roles,
+              chairman_label=t('floor.chair.label'),
               handle_text="@" ~ (author.handle if author and author.handle else "unknown")
             ) }}
           </span>
@@ -68,10 +69,10 @@
     <div class="room-empty-chat-inner">
       <div class="room-empty-icon" aria-hidden="true">✦</div>
       <div class="font-semibold text-slate-600">
-        Start the discussion
+        {{ t('proposal_discussion.start') }}
       </div>
       <div class="mt-1 text-xs">
-        Share an idea, question, or suggestion for the draft.
+        {{ t('proposal_discussion.empty') }}
       </div>
     </div>
   </li>

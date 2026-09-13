@@ -3286,7 +3286,7 @@ def rooms_create(
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     title = (title or "").strip()
     if not title:
-        raise HTTPException(400, "Title required")
+        raise HTTPException(400, translate(request_locale(request), 'proposal_discussion.error.title'))
 
     with get_session() as db:
         event = _require_event_access(db=db, user=user, event_id=event_id)
@@ -3357,7 +3357,7 @@ def rooms_delete(event_id: int, pid: int, rid: int, request: Request):
             or f.get("IS_CHAIRMAN")
         )
         if not can_delete:
-            raise HTTPException(403, "Not allowed to delete this room")
+            raise HTTPException(403, translate(request_locale(request), 'proposal_discussion.error.delete'))
 
         db.exec(delete(ProposalMessage).where(ProposalMessage.room_id == rid))
         db.exec(delete(ProposalDraft).where(ProposalDraft.room_id == rid))
@@ -3589,7 +3589,7 @@ def room_post_message(
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     body = (body or "").strip()
     if not body:
-        raise HTTPException(400, "Message required")
+        raise HTTPException(400, translate(request_locale(request), 'proposal_discussion.error.message'))
 
     parent: Optional[int] = int(parent_id) if parent_id and parent_id.isdigit() else None
 
@@ -3600,7 +3600,7 @@ def room_post_message(
         if parent is not None:
             p = db.get(ProposalMessage, parent)
             if not p or p.room_id != room_id:
-                raise HTTPException(400, "Invalid parent_id")
+                raise HTTPException(400, translate(request_locale(request), 'proposal_discussion.error.parent'))
 
         msg = ProposalMessage(
             room_id=room_id,
@@ -3681,9 +3681,9 @@ def draft_save(
             db.refresh(draft)
 
         if user.id != room.sponsor_id:
-            raise HTTPException(403, "Only the room sponsor can edit the draft")
+            raise HTTPException(403, translate(request_locale(request), 'draft.error.edit_sponsor'))
         if draft.is_submitted:
-            raise HTTPException(400, "Draft already submitted")
+            raise HTTPException(400, translate(request_locale(request), 'draft.error.submitted'))
 
         draft.title = (title or "").strip() or None
         draft.recalling = recalling or None
@@ -4063,7 +4063,7 @@ def draft_cosign(pid: int, rid: int, request: Request, event_id: int):
     with get_session() as db:
         draft = db.exec(select(ProposalDraft).where(ProposalDraft.room_id == rid)).first() or (_ for _ in ()).throw(HTTPException(404))
         if draft.is_submitted:
-            raise HTTPException(400, "Draft already submitted")
+            raise HTTPException(400, translate(request_locale(request), 'draft.error.submitted'))
 
         # ensure list
         arr = list(draft.cosigners_json or [])
@@ -4114,7 +4114,7 @@ def draft_submit(pid: int, rid: int, request: Request, event_id: int):
         room  = db.get(ProposalRoom, rid) or (_ for _ in ()).throw(HTTPException(404))
         draft = db.exec(select(ProposalDraft).where(ProposalDraft.room_id == rid)).first() or (_ for _ in ()).throw(HTTPException(404))
         if room.proposal_id != pid: raise HTTPException(404)
-        if user.id != room.sponsor_id: raise HTTPException(403, "Only the room sponsor can submit")
+        if user.id != room.sponsor_id: raise HTTPException(403, translate(request_locale(request), 'draft.error.submit_sponsor'))
         if draft.is_submitted:
             return RedirectResponse(
                 url=f"/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}",
@@ -4122,7 +4122,7 @@ def draft_submit(pid: int, rid: int, request: Request, event_id: int):
             )
 
         if not draft.title or not draft.title.strip():
-            raise HTTPException(400, "Title is required to submit draft")
+            raise HTTPException(400, translate(request_locale(request), 'draft.error.title'))
 
         if not any(
             (value or "").strip()
@@ -4137,7 +4137,7 @@ def draft_submit(pid: int, rid: int, request: Request, event_id: int):
         ):
             raise HTTPException(
                 400,
-                "At least one preambular section is required to submit"
+                translate(request_locale(request), 'draft.error.preambular')
             )
 
         if not any(
@@ -4151,13 +4151,13 @@ def draft_submit(pid: int, rid: int, request: Request, event_id: int):
         ):
             raise HTTPException(
                 400,
-                "At least one operative section is required to submit"
+                translate(request_locale(request), 'draft.error.operative')
             )
 
         # get event year
         event = db.get(Event, draft.event_id) or (
             _ for _ in ()
-        ).throw(HTTPException(400, "Event missing"))
+        ).throw(HTTPException(400, translate(request_locale(request), 'draft.error.event')))
 
         event_year = (
             getattr(event, "starts_at", None)

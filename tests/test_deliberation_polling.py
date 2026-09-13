@@ -341,7 +341,7 @@ class PollingTests(unittest.TestCase):
         )
         self.assertIsNotNone(submitted['draft_html'])
         self.assertIn('L.77', submitted['draft_html'])
-        self.assertIn('SUBMITTED', submitted['draft_html'])
+        self.assertIn('Submitted', submitted['draft_html'])
         self.assertIn('2026-01-02 09:00 JST', submitted['draft_html'])
         self.assertIn('Co-signing is closed', submitted['draft_html'])
 
@@ -424,7 +424,7 @@ class PollingTests(unittest.TestCase):
         ).read_text()
 
         # The crash course must sit outside the sponsor-only editor block.
-        crash = room_source.index('QUICK DRAFTING GUIDE')
+        crash = room_source.index("t('draft.guide')")
         sponsor_gate = room_source.index(
             '{% if is_sponsor and not draft.is_submitted %}',
             crash,
@@ -432,11 +432,11 @@ class PollingTests(unittest.TestCase):
         self.assertLess(crash, sponsor_gate)
 
         self.assertIn(
-            'What a complete proposal needs',
+            "t('draft.guide_structure')",
             room_source,
         )
         self.assertIn(
-            'Hover or tap a highlighted clause label',
+            "t('draft.guidance_tip')",
             room_source,
         )
 
@@ -446,13 +446,62 @@ class PollingTests(unittest.TestCase):
             shared_source,
         )
         self.assertIn(
-            'Preambular clauses',
+            "t('draft.preambular')",
             shared_source,
         )
         self.assertIn(
-            'Operative clauses',
+            "t('draft.operative')",
             shared_source,
         )
+
+    def test_phase6_room_poll_pins_japanese_for_messages_and_shared_draft(self):
+        from app.i18n import translate
+        self.client.cookies.set('ui_locale', 'en')
+        self.draft.is_submitted = False
+        self.draft.cosigners_json = []
+        self.draft.recalling = 'Author background 日本語'
+        self.draft.decides = 'Calls upon all participants to...'
+        first = self.client.get(self.room_url, headers={'X-UI-Language': 'ja'}).json()
+        self.assertIn('討議を始めましょう', first['html'])
+        for label in ['保存済み作業草案', '前文条項', '主文条項', '提案者', '共同署名者', '未使用']:
+            self.assertIn(label, first['draft_html'])
+        for key in ['recalling', 'noting', 'decides', 'encourages']:
+            self.assertIn(translate('ja', 'draft.guidance.'+key), first['draft_html'])
+        self.add('ProposalMessage', id=1, room_id=30, user_id=1, local_no=1,
+                 parent_id=None, body='Chat 日本語 <unchanged>', created_at=self.now)
+        self.draft.title = 'New authored title 日本語'
+        self.draft.cosigners_json = [2]
+        second = self.client.get(self.room_url, headers={'X-UI-Language': 'ja'}, params={
+            'revision': first['revision'], 'draft_revision': first['draft_revision']}).json()
+        self.assertIn('Chat 日本語 &lt;unchanged&gt;', second['html'])
+        self.assertIn('@author', second['html'])
+        self.assertIn('共同署名を取り消す', second['draft_html'])
+        for authored in [self.draft.title, self.draft.recalling, self.draft.decides]:
+            self.assertIn(authored, second['draft_html'])
+        self.draft.is_submitted = True
+        third = self.client.get(self.room_url, headers={'X-UI-Language': 'ja'}, params={
+            'revision': second['revision'], 'draft_revision': second['draft_revision']}).json()
+        self.assertIn('提出済み', third['draft_html'])
+        self.assertIn('共同署名の受付は終了しました', third['draft_html'])
+        self.assertNotIn('/draft/cosign"', third['draft_html'])
+        self.assertEqual(self.draft.status, 'TABLED')
+        # A second English document remains English despite a Japanese cookie.
+        self.client.cookies.set('ui_locale', 'ja')
+        english = self.client.get(self.room_url, headers={'X-UI-Language': 'en'}).json()
+        self.assertIn('Preambular clauses', english['draft_html'])
+        self.assertEqual(english['html'], second['html'])  # Authored chat and timestamps unchanged.
+        self.assertEqual(english['draft_revision'], third['draft_revision'])
+        self.assertEqual(english['revision'], second['revision'])
+
+    def test_phase6_room_poll_preserves_sponsor_editor_boundary(self):
+        self.draft.is_submitted = False
+        self.client.cookies.set('session', '1')
+        html = self.client.get(self.room_url, headers={'X-UI-Language': 'ja'}).json()['draft_html']
+        self.assertIn('提案者', html)
+        self.assertNotIn('draft-readonly-document', html)
+        self.assertNotIn('id="draft_title"', html)
+        self.assertNotIn('/draft/cosign"', html)
+        self.ai.assert_not_called()
 
     def test_room_access_and_relations(self):
         self.client.cookies.clear();self.assertEqual(self.client.get(self.room_url).status_code,401)

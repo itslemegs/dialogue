@@ -14,6 +14,25 @@ CATALOGUES = MappingProxyType({
     )) for locale in SUPPORTED_LOCALES
 })
 JS_KEYS = (
+    'proposal_discussion.confirm_delete',
+    'proposal_discussion.confirm_delete_all',
+    'draft.ai.elapsed',
+    'draft.ai.empty',
+    'draft.ai.generating',
+    'draft.ai.starting',
+    'draft.ai.wait',
+    'draft.ai.done',
+    'draft.ai.generate',
+    'draft.ai.failed',
+    'draft.ai.failed_detail',
+    'draft.ai.still_running',
+    'draft.ai.not_started',
+    'draft.ai.sponsor_only',
+    'draft.ai.status_sponsor_only',
+    'draft.error.submitted',
+    'draft.ai.job_missing',
+    'draft.ai.busy',
+
     'proposal_floor.summary_unavailable', 'proposal_floor.ror_invited_target',
     'floor.accepted',
     'floor.ahead',

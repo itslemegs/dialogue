@@ -299,7 +299,8 @@ class RequestTests(unittest.TestCase):
                      'events/general_floor.html','events/general_floor_item.html','macros/interventions.html',
                      'partials/interventions_list.html','events/proposal_floor.html','events/proposal_floor_item.html',
                      'events/decision.html','partials/pfloor_vote_panel.html','macros/interventions-prop.html',
-                     'partials/pfloor_interventions_list.html']:
+                     'partials/pfloor_interventions_list.html','proposal_discussion/index.html','rooms/index.html',
+                     'rooms/show.html','partials/room_messages.html','partials/room_shared_state.html']:
             source = (ROOT/'app/templates'/name).read_text()
             for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)", source):
                 self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
@@ -638,6 +639,193 @@ class RequestTests(unittest.TestCase):
                         ns[name](kind='draft',id=40,event_id=41,request=request(locale))
                     self.assertEqual(raised.exception.status_code,403)
         db.assert_not_called()
+
+    def room_context(self, sponsor=False, submitted=False):
+        from datetime import datetime, timezone
+        people = {uid: SimpleNamespace(id=uid, handle=handle, roles=[])
+                  for uid, handle in [(1, 'Sponsor_日本語'), (2, 'Viewer_EN')]}
+        fields = dict.fromkeys(['recalling', 'noting', 'welcoming', 'expressing_regret',
+            'expressing_deep_concern', 'emphasizing', 'decides', 'requests', 'calls_upon', 'encourages'], '')
+        fields.update(recalling='Authored background 日本語 <unchanged>',
+                      decides='Calls upon all participants to... & 保持')
+        draft = SimpleNamespace(id=40, title='User draft 日本語', is_submitted=submitted,
+            status='TABLED', l_number='L.1', submitted_at=datetime(2026, 1, 2, tzinfo=timezone.utc), **fields)
+        proposal = SimpleNamespace(id=20, title='Authored agenda 日本語')
+        room = SimpleNamespace(id=30, proposal_id=20, title='Authored room 日本語', sponsor_id=1, sponsor=people[1])
+        message = SimpleNamespace(id=50, user_id=1, body='Chat 日本語 <literal> & content',
+                                  created_at=datetime(2026, 1, 2, tzinfo=timezone.utc))
+        return dict(event=SimpleNamespace(id=10, title='Authored event 日本語'),
+            proposal=proposal, proposals=[proposal], room_counts={20: 1}, rooms=[room], room=room,
+            user=people[1 if sponsor else 2], user_map=people, draft=draft, cos_list=[],
+            threads=[SimpleNamespace(node=message, children=[])], flags={})
+
+    def render_room(self, name, locale, **context):
+        req = request(locale)
+        req.state.help_ctx = {}
+        def url_for(name, **params):
+            if name == 'static':
+                return '/static/' + params['path']
+            base = f"/events/{params['event_id']}/proposal-discussion/{params['pid']}/rooms"
+            if name == 'rooms_create':
+                return base
+            return base + f"/{params['rid']}" + ('/delete' if name == 'rooms_delete' else '')
+        self.templates.env.globals['url_for'] = url_for
+        return self.templates.env.get_template(name).render(request=req, **context)
+
+    def test_phase6_room_indexes_and_authored_titles(self):
+        ctx = self.room_context()
+        for locale, heading, create in [('en', 'Proposal Discussion', 'Create room'),
+                                        ('ja', '提案討議', 'ルームを作成')]:
+            index = self.render_room('proposal_discussion/index.html', locale, **ctx)
+            rooms = self.render_room('rooms/index.html', locale, **ctx)
+            self.assertIn(heading, index)
+            self.assertIn(create, rooms)
+            for value in [ctx['proposal'].title, ctx['room'].title, ctx['room'].sponsor.handle]:
+                self.assertIn(value, rooms)
+            self.assertNotIn('/30/delete', rooms)
+            chair = dict(ctx, flags={'IS_CHAIRMAN': True})
+            self.assertIn('/30/delete', self.render_room('rooms/index.html', locale, **chair))
+
+    def test_phase6_editor_labels_inputs_and_permissions(self):
+        import re
+        from html import unescape
+        ctx = self.room_context(sponsor=True)
+        rendered = []
+        for locale, labels in [('en', ['Proposal Draft', 'Preambular clauses', 'Operative clauses', 'Save Draft', 'Send']),
+                ('ja', ['提案草案', '前文条項', '主文条項', '草案を保存', '送信', '編集ワークスペース', '編集中'])]:
+            html = self.render_room('rooms/show.html', locale, ai_features_enabled=False, **ctx)
+            rendered.append(html)
+            for label in labels:
+                self.assertIn(label, html)
+            for field in ['recalling', 'decides']:
+                content = re.search(r'<textarea id="draft_' + field + r'"[^>]*>(.*?)</textarea>', html, re.S)[1]
+                self.assertEqual(unescape(content), getattr(ctx['draft'], field))
+            self.assertIn('name="parent_id" id="parent_id" value=""', html)
+            self.assertIn('name="body"', html)
+            self.assertIn('/draft/save', html)
+            self.assertIn('/draft/submit', html)
+            self.assertNotIn('/draft/cosign"', html)
+        # Form destinations, field names and logging identifiers remain locale-independent.
+        for pattern in [r'\baction="([^"]+)"', r'\bname="([^"]+)"', r'data-log-action="([^"]+)"']:
+            self.assertEqual(re.findall(pattern, rendered[0]), re.findall(pattern, rendered[1]))
+        self.assertEqual(ctx['draft'].status, 'TABLED')
+        member = self.render_room('rooms/show.html', 'ja', **self.room_context())
+        self.assertNotIn('id="draft_title"', member)
+        self.assertIn('閲覧専用', member)
+        self.assertIn('この草案に共同署名する', member)
+        submitted = self.render_room('rooms/show.html', 'ja', **self.room_context(sponsor=True, submitted=True))
+        self.assertNotIn('id="draft_title"', submitted)
+        self.assertIn('提出済み', submitted)
+        self.assertNotIn('/draft/cosign"', submitted)
+
+    def test_phase6_shared_guidance_used_unused_cosign_and_content(self):
+        import re
+        from html import unescape
+        ctx = self.room_context()
+        outputs = [self.render_room('partials/room_shared_state.html', locale, **ctx) for locale in ('en','ja')]
+        for html in outputs:
+            values = [unescape(v) for v in re.findall(r'<div class="draft-clause-value">(.*?)</div>', html, re.S)]
+            self.assertEqual(values, [ctx['draft'].recalling, ctx['draft'].decides])
+            self.assertEqual(html.count('data-draft-hint='), 10)
+        for label in ['保存済み作業草案', '提案者', '共同署名者', '未使用', '前文条項', '主文条項']:
+            self.assertIn(label, outputs[1])
+        for clause in ['recalling', 'noting', 'decides', 'encourages']:
+            self.assertIn(i18n.translate('ja', 'draft.guidance.'+clause), outputs[1])
+        cosigned = self.render_room('partials/room_shared_state.html', 'ja', **dict(ctx, cos_list=[2]))
+        self.assertIn('共同署名を取り消す', cosigned)
+        self.assertIn('/events/10/proposal-discussion/20/rooms/30/draft/cosign', cosigned)
+        self.assertEqual(ctx['cos_list'], [])
+
+    def test_phase6_chat_content_and_role_presentation(self):
+        import re
+        from html import unescape
+        ctx = self.room_context()
+        ctx['user_map'][1].roles = [SimpleNamespace(name='chairman')]
+        for locale, role in [('en', 'chairman'), ('ja', '議長')]:
+            html = self.render_room('partials/room_messages.html', locale, **ctx)
+            self.assertIn(f'alt="{role}"', html)
+            body = re.search(r'<div class="room-message-bubble">(.*?)</div>', html, re.S)[1]
+            self.assertEqual(unescape(body), ctx['threads'][0].node.body)
+            self.assertIn('@Sponsor_日本語', html)
+            self.assertIn('data-post-id="50"', html)
+            self.assertIn('9:00 AM', html)  # Existing JST formatting.
+        self.assertEqual(ctx['user_map'][1].roles[0].name, 'chairman')
+        empty = self.render_room('partials/room_messages.html', 'ja', **dict(ctx, threads=[]))
+        self.assertIn('討議を始めましょう', empty)
+
+    def test_phase6_ai_presentation_and_page_catalogue(self):
+        import re
+        ctx = self.room_context(sponsor=True)
+        for locale, label in [('en', 'Generate draft from paragraphs'), ('ja', '文章から草案を生成')]:
+            html = self.render_room('rooms/show.html', locale, ai_features_enabled=True, **ctx)
+            button = re.search(r'<button[^>]*id="btn_generate"[^>]*>(.*?)</button>', html, re.S)
+            self.assertIn(label, button[1])
+            self.assertNotIn('disabled', button[0])
+            self.assertIn('name="recalling"', html)
+            self.assertIn('fd.append("plain_text", plain)', html)
+        disabled = self.render_room('rooms/show.html', 'ja', ai_features_enabled=False, **ctx)
+        self.assertRegex(disabled, r'id="btn_generate"\s+disabled')
+        self.assertIn('手動での起草を続けられます', disabled)
+        payload = json.loads(self.templates.env.from_string('{{ ui_js_catalogue()|tojson }}').render(request=request('ja')))
+        self.assertEqual(payload['draft.ai.elapsed'], '生成中… {seconds}秒')
+        self.assertEqual(payload['draft.ai.done'], '草案を生成しました。内容を確認してから保存してください。')
+        source = (ROOT/'app/templates/rooms/show.html').read_text()
+        self.assertIn('error: message', source)
+        self.assertIn('throw new Error(data.error || "Draft generation failed.")', source)
+        self.assertIn("window.UII18n.t('draft.ai.failed'", source)
+        self.assertNotIn('草案', source)  # Japanese strings are only in the catalogue.
+
+    def test_phase6_manual_validation_keeps_status_codes_and_has_no_writes(self):
+        from fastapi import HTTPException
+        from unittest.mock import MagicMock
+        import copy
+        tree = ast.parse((ROOT/'app/main.py').read_text())
+        names = {'rooms_create', 'room_post_message', 'draft_submit', 'draft_save', 'draft_cosign'}
+        nodes = [copy.deepcopy(n) for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names]
+        for node in nodes:
+            node.decorator_list = []
+        ctx = self.room_context(sponsor=True)
+        draft, room = ctx['draft'], ctx['room']
+        db = MagicMock()
+        db.__enter__.return_value = db
+        db.get.return_value = room
+        db.exec.return_value.first.return_value = draft
+        forbidden = AssertionError('Unexpected persistence or AI')
+        for action in ['add', 'commit', 'refresh']:
+            getattr(db, action).side_effect = forbidden
+        ns = dict(Request=Request, Form=Form, HTTPException=HTTPException, RedirectResponse=RedirectResponse,
+            current_user=lambda req: ctx['user'], get_session=lambda: db,
+            ProposalDraft=MagicMock(), ProposalRoom=MagicMock(), select=MagicMock(),
+            _require_event_access=lambda **kw: None, _get_event_room_or_404=lambda *a: room,
+            request_locale=i18n.request_locale, translate=i18n.translate)
+        module = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')], level=0)]+nodes, type_ignores=[])
+        exec(compile(ast.fix_missing_locations(module), 'isolated_phase6_validation', 'exec'), ns)
+        for locale in ['en', 'ja']:
+            for name, kwargs, key in [
+                ('rooms_create', dict(title=' '), 'proposal_discussion.error.title'),
+                ('room_post_message', dict(body=' ', room_id=30), 'proposal_discussion.error.message')]:
+                with self.assertRaises(HTTPException) as raised:
+                    ns[name](event_id=10, pid=20, request=request(locale), **kwargs)
+                self.assertEqual(raised.exception.status_code, 400)
+                self.assertEqual(raised.exception.detail, i18n.translate(locale, key))
+            for title, recalling, decides, key in [('', '', '', 'title'), ('Title', '', '', 'preambular'),
+                                                  ('Title', 'Author input', '', 'operative')]:
+                draft.title, draft.recalling, draft.decides = title, recalling, decides
+                with self.assertRaises(HTTPException) as raised:
+                    ns['draft_submit'](event_id=10, pid=20, rid=30, request=request(locale))
+                self.assertEqual(raised.exception.status_code, 400)
+                self.assertEqual(raised.exception.detail, i18n.translate(locale, 'draft.error.'+key))
+            ctx['user'] = ctx['user_map'][2]
+            with self.assertRaises(HTTPException) as raised:
+                ns['draft_save'](event_id=10, pid=20, rid=30, request=request(locale))
+            self.assertEqual(raised.exception.status_code, 403)
+            ctx['user'] = ctx['user_map'][1]
+            draft.is_submitted = True
+            with self.assertRaises(HTTPException) as raised:
+                ns['draft_cosign'](event_id=10, pid=20, rid=30, request=request(locale))
+            self.assertEqual(raised.exception.status_code, 400)
+            draft.is_submitted = False
+        self.assertEqual(draft.status, 'TABLED')
 
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden

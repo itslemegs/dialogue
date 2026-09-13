@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="text-xl font-semibold mb-2">Rooms for: {{ proposal.title }}</h2>
+<h2 class="text-xl font-semibold mb-2">{{ t('proposal_discussion.rooms_for', title=proposal.title) }}</h2>
 
 <form method="post"
       action="{{ url_for('rooms_create', event_id=event.id, pid=proposal.id) }}"
@@ -8,9 +8,9 @@
       data-log-action="CREATE_PROPOSAL_ROOM"
       data-target-type="agenda_proposal"
       data-target-id="{{ proposal.id }}">
-  <input name="title" class="border px-2 py-1 rounded" placeholder="Room title" required>
-  <input name="description" class="border px-2 py-1 rounded" placeholder="Short description">
-  <button class="px-3 py-1 bg-blue-600 text-white rounded" data-log-action="CLICK_CREATE_PROPOSAL_ROOM" data-target-type="agenda_proposal" data-target-id="{{ proposal.id }}">Create room</button>
+  <input name="title" class="border px-2 py-1 rounded" placeholder="{{ t('proposal_discussion.room_title') }}" required>
+  <input name="description" class="border px-2 py-1 rounded" placeholder="{{ t('proposal_discussion.description') }}">
+  <button class="px-3 py-1 bg-blue-600 text-white rounded" data-log-action="CLICK_CREATE_PROPOSAL_ROOM" data-target-type="agenda_proposal" data-target-id="{{ proposal.id }}">{{ t('proposal_discussion.create_room') }}</button>
 </form>
 
 <ul class="space-y-2">
@@ -22,18 +22,18 @@
           {% if can_delete %}
           <form method="post"
                 action="{{ url_for('rooms_delete', event_id=event.id, pid=proposal.id, rid=r.id) }}"
-                onsubmit="return confirm('Delete this room?');"
+                onsubmit="return confirm(window.UII18n.t('proposal_discussion.confirm_delete'));"
                 class="inline-block">
-            <button class="px-2 py-0.5 text-xs bg-rose-600 text-white rounded">Delete</button>
+            <button class="px-2 py-0.5 text-xs bg-rose-600 text-white rounded">{{ t('common.delete') }}</button>
           </form>
           {% endif %}
         </div>
-        <div class="text-sm text-slate-500">Sponsor: @{{ r.sponsor.handle }}</div>
+        <div class="text-sm text-slate-500">{{ t('draft.sponsor') }}: @{{ r.sponsor.handle }}</div>
         <a class="text-indigo-600 hover:underline"
-           href="{{ url_for('rooms_show', event_id=event.id, pid=proposal.id, rid=r.id) }}">Open</a>
+           href="{{ url_for('rooms_show', event_id=event.id, pid=proposal.id, rid=r.id) }}">{{ t('common.open') }}</a>
       </li>      
   {% else %}
-    <li class="text-slate-500">No rooms yet.</li>
+    <li class="text-slate-500">{{ t('proposal_discussion.no_rooms') }}</li>
   {% endfor %}
 </ul>
 {% endblock %}

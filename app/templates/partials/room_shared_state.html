@@ -11,16 +11,16 @@
         {% if submitted %}
           <div class="draft-doc-number">
             {{ getattr(draft, 'l_number', '') }}
-            · SUBMITTED {{ getattr(draft, 'submitted_at', None)|jst }}
+            · {{ t('draft.submitted') }} {{ getattr(draft, 'submitted_at', None)|jst }}
           </div>
         {% else %}
           <div class="draft-doc-number" style="color:#6366f1;">
-            SAVED WORKING DRAFT
+            {{ t('draft.saved_working') }}
           </div>
         {% endif %}
 
         <div class="draft-doc-title">
-          {{ getattr(draft, 'title', '') or 'Untitled proposal' }}
+          {{ getattr(draft, 'title', '') or t('draft.untitled') }}
         </div>
       </div>
 
@@ -28,32 +28,32 @@
         (
           'Recalling',
           'recalling',
-          'Refer back to an earlier agreement, discussion, principle, or event that is relevant to this proposal.'
+          t('draft.guidance.recalling')
         ),
         (
           'Noting',
           'noting',
-          'Point out a relevant fact, observation, or situation without strongly judging it.'
+          t('draft.guidance.noting')
         ),
         (
           'Welcoming',
           'welcoming',
-          'Acknowledge a positive development, effort, or action that has already taken place.'
+          t('draft.guidance.welcoming')
         ),
         (
           'Expressing regret',
           'expressing_regret',
-          'Show disappointment about an undesirable situation or something that has happened.'
+          t('draft.guidance.expressing_regret')
         ),
         (
           'Expressing deep concern',
           'expressing_deep_concern',
-          'Highlight a serious problem, risk, or harm that requires attention.'
+          t('draft.guidance.expressing_deep_concern')
         ),
         (
           'Emphasizing',
           'emphasizing',
-          'Stress a principle or point that is especially important to the proposal.'
+          t('draft.guidance.emphasizing')
         )
       ] %}
 
@@ -61,30 +61,30 @@
         (
           'Decides',
           'decides',
-          'State a concrete decision or action that the group or body itself will take.'
+          t('draft.guidance.decides')
         ),
         (
           'Requests',
           'requests',
-          'Formally ask a particular person, organization, or body to take an action.'
+          t('draft.guidance.requests')
         ),
         (
           'Calls upon',
           'calls_upon',
-          'Strongly urge an actor to take action. This is stronger than simply encouraging them.'
+          t('draft.guidance.calls_upon')
         ),
         (
           'Encourages',
           'encourages',
-          'Recommend or support an action without making it sound compulsory.'
+          t('draft.guidance.encourages')
         )
       ] %}
 
       <div class="draft-document-section">
         <div class="draft-section-heading">
           <div>
-            <div class="draft-section-kicker">WHY</div>
-            <div class="draft-section-title">Preambular clauses</div>
+            <div class="draft-section-kicker">{{ t('draft.why_heading') }}</div>
+            <div class="draft-section-title">{{ t('draft.preambular') }}</div>
           </div>
         </div>
 
@@ -99,14 +99,14 @@
 
                 <div class="draft-clause-tools">
                   {% if not val %}
-                    <span class="draft-empty-chip">Not used</span>
+                    <span class="draft-empty-chip">{{ t('draft.not_used') }}</span>
                   {% endif %}
 
                   <button type="button"
                           class="draft-clause-hint"
                           data-draft-hint="{{ description }}"
                           data-draft-hint-side="top">
-                    ? Guidance
+                    {{ t('draft.guidance_label') }}
                   </button>
                 </div>
 
@@ -123,8 +123,8 @@
       <div class="draft-document-section">
         <div class="draft-section-heading">
           <div>
-            <div class="draft-section-kicker">WHAT HAPPENS</div>
-            <div class="draft-section-title">Operative clauses</div>
+            <div class="draft-section-kicker">{{ t('draft.what_heading') }}</div>
+            <div class="draft-section-title">{{ t('draft.operative') }}</div>
           </div>
         </div>
 
@@ -139,14 +139,14 @@
 
                 <div class="draft-clause-tools">
                   {% if not val %}
-                    <span class="draft-empty-chip">Not used</span>
+                    <span class="draft-empty-chip">{{ t('draft.not_used') }}</span>
                   {% endif %}
 
                   <button type="button"
                           class="draft-clause-hint"
                           data-draft-hint="{{ description }}"
                           data-draft-hint-side="top">
-                    ? Guidance
+                    {{ t('draft.guidance_label') }}
                   </button>
                 </div>
 
@@ -168,51 +168,51 @@
 {% if not submitted and not is_sponsor %}
   <div class="draft-support-box">
     <div class="text-sm font-semibold text-slate-800">
-      Support this draft
+      {{ t('draft.cosign.support') }}
     </div>
 
     <div class="text-xs text-slate-500 mt-1 mb-3">
-      Co-signing supports bringing this draft forward.
-      It is not your final vote on the proposal.
+      {{ t('draft.cosign.explanation') }}
     </div>
 
     <form method="post"
           action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/cosign">
       <button class="px-3 py-1.5 rounded-lg font-semibold text-sm
                      {{ 'bg-fuchsia-700 text-white' if user and (user.id in (cos_list or [])) else 'bg-indigo-600 text-white' }}"
-              data-hint="{{ 'Remove your support from this draft before it is submitted.' if user and (user.id in (cos_list or [])) else 'Add your support as a co-signer before this draft is submitted.' }}"
+              data-hint="{{ t('draft.cosign.remove_hint') if user and (user.id in (cos_list or [])) else t('draft.cosign.add_hint') }}"
               data-hint-side="top">
-        {{ 'Remove co-sign' if user and (user.id in (cos_list or [])) else 'Co-sign this draft' }}
+        {{ t('draft.cosign.remove') if user and (user.id in (cos_list or [])) else t('draft.cosign.add') }}
       </button>
     </form>
   </div>
 {% elif submitted %}
   <div class="draft-support-box text-xs text-slate-500">
-    Co-signing is closed because this draft has been submitted.
+    {{ t('draft.cosign.closed') }}
   </div>
 {% endif %}
 
 
 <div class="draft-support-box">
   <div class="draft-people-row">
-    <span class="text-xs font-semibold text-slate-500">Sponsor</span>
+    <span class="text-xs font-semibold text-slate-500">{{ t('draft.sponsor') }}</span>
 
     {% set sponsor = user_map.get(room.sponsor_id) %}
     {% set sponsor_roles = sponsor.roles | map(attribute='name') | list if sponsor and sponsor.roles else [] %}
 
     <span class="draft-person-chip"
-          data-hint="The main sponsor owns this room draft and can edit it before submission."
+          data-hint="{{ t('draft.sponsor_hint') }}"
           data-hint-side="top">
       {{ uf.flair_for_user(
         u=sponsor,
         roles_list=sponsor_roles,
+        chairman_label=t('floor.chair.label'),
         handle_text="@" ~ (sponsor.handle if sponsor and sponsor.handle else "unknown")
       ) }}
     </span>
   </div>
 
   <div class="draft-people-row mt-2">
-    <span class="text-xs font-semibold text-slate-500">Co-signers</span>
+    <span class="text-xs font-semibold text-slate-500">{{ t('draft.cosigners') }}</span>
 
     {% set ids = (cos_list or []) %}
 
@@ -222,17 +222,18 @@
         {% set signer_roles = signer.roles | map(attribute='name') | list if signer and signer.roles else [] %}
 
         <span class="draft-person-chip"
-              data-hint="This member has co-signed the draft."
+              data-hint="{{ t('draft.cosign.member_hint') }}"
               data-hint-side="top">
           {{ uf.flair_for_user(
             u=signer,
             roles_list=signer_roles,
+            chairman_label=t('floor.chair.label'),
             handle_text="@" ~ (signer.handle if signer and signer.handle else "unknown")
           ) }}
         </span>
       {% endfor %}
     {% else %}
-      <span class="text-xs text-slate-400">No co-signers yet</span>
+      <span class="text-xs text-slate-400">{{ t('draft.cosign.empty') }}</span>
     {% endif %}
   </div>
 </div>

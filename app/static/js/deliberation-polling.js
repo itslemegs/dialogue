@@ -4,6 +4,7 @@
   if (window.DeliberationPolling) return;
   const tasks = new Map();
   const interval = 4000;
+  const uiLocale = document.documentElement.lang === 'ja' ? 'ja' : 'en';
 
   function watch(key, run) {
     if (tasks.has(key)) return tasks.get(key);
@@ -28,7 +29,7 @@
       const timeout = setTimeout(() => controller.abort(), 20000);
       const current = () => !signal.aborted && version === epoch && !stopped && !document.hidden;
       async function read(url, json = true) {
-        const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal});
+        const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', signal, headers: {'X-UI-Language': uiLocale}});
         if (!response.ok) throw new Error(`Polling HTTP ${response.status}`);
         const value = json ? await response.json() : await response.text();
         if (!current()) throw new Error('Obsolete polling response');

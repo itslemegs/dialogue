@@ -16,6 +16,8 @@ from types import SimpleNamespace as N
 import unittest
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+from app.i18n import install_jinja
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -125,6 +127,7 @@ class PollingTests(unittest.TestCase):
         self.db = ReadOnlyDB(self.rows)
         self.ai = Mock(side_effect=AssertionError('Unexpected AI/translation call'))
         self.templates = Jinja2Templates(directory=str(ROOT/'app/templates'))
+        install_jinja(self.templates.env)
         self.templates.env.globals.update(getattr=getattr, ai_features_enabled=False)
         self.ns = dict(self.models, __name__='isolated_polling', Request=Request, HTTPException=HTTPException,
             JSONResponse=JSONResponse, templates=self.templates, select=Query, selectinload=lambda *a: None,

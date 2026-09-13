@@ -1,0 +1,11 @@
+{
+  "nav.home": "Home",
+  "nav.dashboard": "Dashboard",
+  "nav.login": "Login",
+  "nav.logout": "Log out",
+  "nav.back": "Back",
+  "ui.notifications": "Notifications",
+  "ui.language": "Interface language",
+  "ui.unsaved_language": "You have unsaved changes. Switch language and discard them?",
+  "ui.language_selected": "Interface language: {language}"
+}

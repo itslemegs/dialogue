@@ -1,10 +1,12 @@
 {% import "macros/user_flair.html" as uf with context %}
 <!doctype html>
-<html>
+<html lang="{{ ui_locale() }}">
   <head>
     <meta charset="utf-8">
     <title>{{ title or "d¡alogüe." }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script id="ui-i18n-catalogue" type="application/json">{{ ui_js_catalogue()|tojson }}</script>
+    <script src="/static/js/ui-i18n.js"></script>
     <script src="/static/js/deliberation-polling.js"></script>
     <!-- Tailwind via CDN (no build) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,12 +16,12 @@
     </style>    
     <script src="/static/js/jst-time.js"></script>
 </head>
-  <div id="toast-root" class="fixed top-4 right-4 z-50 space-y-2"></div>
+  <div id="toast-root" aria-label="{{ t('ui.notifications') }}" class="fixed top-4 right-4 z-50 space-y-2"></div>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"></script>
   <script>
     async function pollNotifications(){
       try {
-        const res = await fetch('/notifications/pull', { credentials: 'include' });
+        const res = await fetch('/notifications/pull', { credentials: 'include', headers: {'X-UI-Language': window.UII18n.locale} });
         if (!res.ok) return;
         const items = await res.json();
         if (!Array.isArray(items) || !items.length) return;
@@ -42,6 +44,7 @@
             <div class="mt-2 text-right">
               <button class="px-2 py-1 text-xs bg-slate-800 text-white rounded">OK</button>
             </div>`;
+          if (it.type !== 'FLOOR') el.firstElementChild.textContent = window.UII18n.t('ui.notifications');
           el.querySelector('button').onclick = () => root.removeChild(el);
           root.appendChild(el);
           setTimeout(()=>{ if (el.parentNode) root.removeChild(el); }, 8000);
@@ -67,7 +70,7 @@
     <nav class="sticky top-0 z-40 px-4 py-3 bg-white shadow flex justify-between">
   <!-- <body class="bg-slate-50 text-slate-900"> -->
     <!-- <nav class="px-4 py-3 bg-white shadow flex justify-between"> -->
-      <a href="/" class="font-semibold">d¡alogüe.</a>
+      <a href="/" aria-label="{{ t('nav.home') }}" class="font-semibold">d¡alogüe.</a>
       <div>
         {# pick the highest role only #}
         {% set roles_from_flags = [] %}
@@ -87,18 +90,31 @@
           <span class="mr-3">
             hi, {{ uf.flair_for_user(u=user, roles_list=roles_from_flags) }}
           </span>
-          <a href="/dashboard" class="mr-3 text-blue-600">Dashboard</a>
+          <a href="/dashboard" class="mr-3 text-blue-600">{{ t('nav.dashboard') }}</a>
           {% if flags.IS_ADMIN or flags.IS_PRESIDENT or flags.IS_CHAIR %}
-            <a href="/logout" class="mr-3 text-red-600">Logout</a>
+            <a href="/logout" class="mr-3 text-red-600">{{ t('nav.logout') }}</a>
             <a href="/admin" class="text-green-600">Admin</a>
           {% else %}
-            <a href="/logout" class="text-red-600">Logout</a>
+            <a href="/logout" class="text-red-600">{{ t('nav.logout') }}</a>
             </form>            
           {% endif %}
         {% else %}
-          <a href="/login" class="mr-3 text-blue-600">Login</a>
+          <a href="/login" class="mr-3 text-blue-600">{{ t('nav.login') }}</a>
           <a href="/register" class="text-blue-600">Register</a>
         {% endif %}
+        <form method="post" action="/ui-language" data-ui-language
+              class="inline-flex items-center gap-1 ml-3 text-sm"
+              aria-label="{{ t('ui.language') }}"
+              title="{{ t('ui.language_selected', language='日本語' if ui_locale() == 'ja' else 'English') }}">
+          <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+          <button type="submit" name="locale" value="en" lang="en"
+                  aria-pressed="{{ 'true' if ui_locale() == 'en' else 'false' }}"
+                  {% if ui_locale() == 'en' %}disabled{% endif %}>EN</button>
+          <span aria-hidden="true">|</span>
+          <button type="submit" name="locale" value="ja" lang="ja"
+                  aria-pressed="{{ 'true' if ui_locale() == 'ja' else 'false' }}"
+                  {% if ui_locale() == 'ja' %}disabled{% endif %}>日本語</button>
+        </form>
         <!-- <button id="helpBtn" class="px-3 py-1 border rounded">?</button> -->
 
     <!-- <div id="helpPanel" class="hidden fixed right-4 top-16 w-[360px] max-h-[80vh] overflow-auto bg-white border rounded p-3 shadow">
@@ -192,7 +208,7 @@
       href="{{ back_url }}"
       class="fixed left-4 top-10 z-50 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 shadow-md ring-1 ring-slate-200 backdrop-blur hover:bg-slate-50"
     >
-      ← Back
+      ← {{ t('nav.back') }}
     </a>
   {% endif %}
 

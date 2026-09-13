@@ -1,0 +1,11 @@
+{
+  "nav.home": "ホーム",
+  "nav.dashboard": "ダッシュボード",
+  "nav.login": "ログイン",
+  "nav.logout": "ログアウト",
+  "nav.back": "戻る",
+  "ui.notifications": "通知",
+  "ui.language": "表示言語",
+  "ui.unsaved_language": "保存されていない変更があります。変更を破棄して表示言語を切り替えますか？",
+  "ui.language_selected": "表示言語：{language}"
+}

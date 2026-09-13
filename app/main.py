@@ -231,6 +231,26 @@ templates.env.globals["getattr"] = getattr
 templates.env.globals["ai_features_enabled"] = AI_FEATURES_ENABLED
 templates.env.filters["jst"] = _format_jst
 
+from app.i18n import install_jinja, normalize_locale, resolve_locale, safe_return_to
+from app.security import IS_PROD as UI_COOKIE_SECURE
+
+install_jinja(templates.env)
+
+
+@app.middleware("http")
+async def ui_locale_context(request: Request, call_next):
+    request.state.ui_locale = resolve_locale(request)
+    return await call_next(request)
+
+
+@app.post("/ui-language")
+def set_ui_language(locale: str = Form("en"), return_to: str = Form("/")):
+    response = RedirectResponse(safe_return_to(return_to), status_code=303)
+    response.set_cookie("ui_locale", normalize_locale(locale), path="/", samesite="lax",
+                        httponly=True, secure=UI_COOKIE_SECURE, max_age=60 * 60 * 24 * 365)
+    return response
+
+
 # ----- helpers: MUST be above routes -----
 EMPTY_FLAGS = {"IS_ADMIN": False, "IS_PRESIDENT": False, "IS_CHAIR": False, "IS_INVITED": False, "IS_MEMBER": False}
 

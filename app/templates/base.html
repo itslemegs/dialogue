@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <title>{{ title or "d¡alogüe." }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/static/js/deliberation-polling.js"></script>
     <!-- Tailwind via CDN (no build) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -28,7 +29,7 @@
         const ackIds = [];
         for (const it of items){
           // ⛔️ Skip INVITE_ROR here — let question page render actions
-          if (it.type === 'INVITE_ROR') continue;
+          if (it.type === 'INVITE_ROR' || it.type === 'INVITE_ROR_PFLOOR') continue;
     
           // Render generic toast
           const el = document.createElement('div');

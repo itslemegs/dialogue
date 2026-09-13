@@ -1,0 +1,317 @@
+{% set IS_CHAIR = flags.IS_CHAIR %}
+{% set IS_PRESIDENT = flags.IS_PRESIDENT %}
+{% set KIND = 'amendment' if mode == 'AMENDMENT' else 'draft' %}
+{% set ITEM_ID = amendment.id if mode == 'AMENDMENT' else draft.id %}
+<p class="mt-4 text-sm" role="status">Draft status: {{ draft.status.value|default(draft.status) }}</p>
+      <!-- Early voting (consensus) -->
+       {% set early_done = 0 %}
+        <section class="pf-vote-section mt-5">
+        <h3 class="font-semibold">Early voting (consensus check)</h3>
+        <p class="text-xs text-slate-500">
+            Adopted by consensus if no “No” votes. (Abstentions not counted.)
+        </p>
+
+        {% set can_vote = early_vote and early_vote.is_open and not HAS_EARLY_VOTED %}
+
+        <div class="mt-2 flex flex-wrap gap-2">
+            {% if can_vote %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            data-log-action="CAST_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+                <input type="hidden" name="choice" value="YES">
+                <button class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm text-sm"
+        data-log-action="CLICK_CAST_EARLY_VOTE_YES"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Vote Yes in the consensus check. If there are no No votes, the item may pass by consensus."
+        data-hint-side="right">Yes</button>
+            </form>
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            data-log-action="CAST_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+                <input type="hidden" name="choice" value="NO">
+                <button class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm text-sm"
+        data-log-action="CLICK_CAST_EARLY_VOTE_NO"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Vote No in the consensus check. A No vote prevents adoption by consensus."
+        data-hint-side="right">No</button>
+            </form>
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            data-log-action="CAST_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+                <input type="hidden" name="choice" value="ABSTAIN">
+                <button class="px-3.5 py-2 rounded-xl bg-slate-400 hover:bg-slate-500 text-white font-semibold shadow-sm text-sm"
+        data-log-action="CLICK_CAST_EARLY_VOTE_ABSTAIN"
+        data-target-type="{{ KIND }}"
+        data-target-id="{{ ITEM_ID }}"
+        data-hint="Abstain from the consensus check. Abstentions are recorded but not counted as Yes or No."
+        data-hint-side="right">Abstain</button>
+            </form>
+            {% else %}
+            <p class="text-xs text-slate-400">
+                {% if not early_vote %}
+                Early voting has not been opened yet.
+                {% elif not early_vote.is_open %}
+                Early voting is closed.
+                {% elif HAS_EARLY_VOTED %}
+                You have already cast your early vote.
+                {% endif %}
+            </p>
+            {% endif %}
+
+            {% if IS_PRESIDENT or IS_CHAIR %}
+            {% if early_vote.is_open %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/close">
+              <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm text-xs"
+              data-hint="Close the early consensus check and calculate whether consensus was reached."
+              data-hint-side="right">Close</button>
+            </form>
+            {% else %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/open"
+            data-log-action="OPEN_EARLY_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+            <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm text-xs"
+            data-hint="Open the early consensus check so members can vote Yes, No, or Abstain."
+            data-hint-side="right">Open</button>
+            </form>
+            {% endif %}
+            {% endif %}
+        </div>
+
+        {% if early_vote %}
+            <div class="mt-2 text-sm text-slate-700">
+            Early vote:
+            <strong>{{ early_vote.yes }}</strong> Yes •
+            <strong>{{ early_vote.no }}</strong> No •
+            <strong>{{ early_vote.abstain }}</strong> Abstain
+            <span class="text-xs text-slate-500">
+                ({{ 'open' if early_vote.is_open else 'closed' }})
+            </span>
+
+            {% if not early_vote.is_open %}
+                <div class="text-xs mt-1">
+                Result:
+                {% if early_vote.no == 0 and early_vote.yes > 0 %}
+                    <span class="text-emerald-700 font-medium">Adopted by consensus</span>
+                    {% set early_done = 1 %}
+                {% elif early_vote.yes == 0 and early_vote.no > 0 %}
+                <span class="text-emerald-700 font-medium">Rejected by consensus</span>
+                    {% set early_done = 1 %}
+                {% else %}
+                    <span class="text-slate-600">No consensus</span>
+                    {% set early_done = 0 %}
+                {% endif %}
+                </div>
+            {% endif %}
+            </div>
+        {% endif %}
+        </section>
+
+      {% if amendment_cards and amendment_cards|length > 0 %}
+      <section class="pf-vote-section mt-5">
+        <h3 class="font-semibold">Amendments</h3>
+        <p class="text-xs text-slate-500">
+          Adopted by consensus if no “No” votes. (Abstentions not counted.)
+        </p>
+
+        <div class="mt-3 space-y-4">
+          {% for card in amendment_cards %}
+            {% set am = card.am %}
+            {% set v = card.vote_summary %}
+
+            <div class="pf-amendment-card p-3">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <div class="font-semibold">{{ am.label }}</div>
+                  <div class="text-xs text-slate-500">#{{ am.am_no }}</div>
+                </div>
+                <span class="text-xs text-slate-500">
+                  {{ v.kind or 'No vote yet' }}
+                  {% if v.exists %}
+                    — {{ 'open' if v.is_open else 'closed' }}
+                  {% endif %}
+                </span>
+              </div>
+
+              <div class="mt-2 text-sm whitespace-pre-wrap">{{ am.body_markdown }}</div>
+
+              <div class="mt-3 flex flex-wrap gap-2 items-center">
+                <a
+  class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm text-sm"
+  href="/events/{{ event.id }}/proposal-floor/amendment/{{ am.id }}"
+  data-hint="Open this amendment's discussion and voting page."
+  data-hint-side="right"
+>
+  View amendment floor / vote
+</a>
+              </div>
+
+              <div class="mt-2 text-sm text-slate-700">
+                {% if v.exists %}
+                  <strong>{{ v.yes }}</strong> Yes •
+                  <strong>{{ v.no }}</strong> No •
+                  <strong>{{ v.abstain }}</strong> Abstain
+
+                  <span class="text-xs text-slate-500">• Result:</span>
+
+                  {% if 'Adopted' in v.result %}
+                    <span class="text-emerald-700 font-medium">{{ v.result }}</span>
+                  {% elif 'Rejected' in v.result %}
+                    <span class="text-rose-700 font-medium">{{ v.result }}</span>
+                  {% elif v.result == 'Voting open' %}
+                    <span class="text-blue-700 font-medium">{{ v.result }}</span>
+                  {% else %}
+                    <span class="text-slate-600">{{ v.result }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-slate-500">No vote has been opened for this amendment yet.</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      <!-- Formal voting -->
+      {% set formal_locked = HAS_FORMAL_VOTED or (formal_vote and not formal_vote.is_open) %}
+      {% if not early_done %}
+      <section class="pf-vote-section mt-5">
+        <h3 class="font-semibold">Formal voting</h3>
+        <p class="text-xs text-slate-500">
+          Simple majority of Yes vs No. Ties rejected. Abstentions are not counted.
+        </p>
+        <div class="mt-2 flex flex-wrap gap-2">
+
+          {% if (not formal_locked) and (formal_vote.is_open) %}
+
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          data-log-action="CAST_FORMAL_VOTE"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
+            <input type="hidden" name="choice" value="YES">
+            <button
+  class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
+  data-log-action="CLICK_CAST_FORMAL_VOTE_YES"
+  data-target-type="{{ KIND }}"
+  data-target-id="{{ ITEM_ID }}"
+  data-hint="Vote Yes in the formal vote. Formal voting uses Yes versus No majority."
+  data-hint-side="right"
+>
+  Yes
+</button>
+          </form>
+
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          data-log-action="CAST_FORMAL_VOTE"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
+            <input type="hidden" name="choice" value="NO">
+            <button
+  class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
+  data-log-action="CLICK_CAST_FORMAL_VOTE_NO"
+  data-target-type="{{ KIND }}"
+  data-target-id="{{ ITEM_ID }}"
+  data-hint="Vote No in the formal vote. If No votes are greater than or equal to Yes votes, the item is rejected."
+  data-hint-side="right"
+>
+  No
+</button>
+          </form>
+
+          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          data-log-action="CAST_FORMAL_VOTE"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
+            <input type="hidden" name="choice" value="ABSTAIN">
+            <button
+  class="px-3.5 py-2 rounded-xl bg-slate-500 hover:bg-slate-600 text-white font-semibold shadow-sm {% if formal_locked %}opacity-50 cursor-not-allowed{% endif %}"
+  data-log-action="CLICK_CAST_FORMAL_VOTE_ABSTAIN"
+  data-target-type="{{ KIND }}"
+  data-target-id="{{ ITEM_ID }}"
+  data-hint="Abstain from the formal vote. Abstentions are recorded but not counted in Yes versus No."
+  data-hint-side="right"
+>
+  Abstain
+</button>
+          </form>
+
+          {% else %}
+          {% if formal_vote and not formal_vote.is_open %}
+          <p class="text-xs text-slate-400">Formal voting is closed.</p>
+          {% elif HAS_FORMAL_VOTED %}
+          <p class="text-xs text-slate-400">You have already cast your formal vote.</p>
+          {% elif not formal_vote.is_open %}
+          <p class="text-xs text-slate-400">
+            Formal vote is not opened yet.
+          </p>
+          {% endif %}
+          {% endif %}
+
+          {% if IS_PRESIDENT or IS_CHAIR %}
+            {% if formal_vote.is_open %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/close">
+              <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm"
+        data-hint="Close the formal vote and calculate the final Yes versus No result."
+        data-hint-side="right">Close</button>
+            </form>
+            {% else %}
+            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/open"
+            data-log-action="OPEN_FORMAL_VOTE"
+            data-target-type="{{ KIND }}"
+            data-target-id="{{ ITEM_ID }}">
+            <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm"
+            data-hint="Open formal voting for this draft or amendment."
+            data-hint-side="right">Open</button>
+            </form>
+            {% endif %}
+          {% endif %}
+        </div>
+
+        {% if formal_vote %}
+          <div class="mt-2 text-sm text-slate-700">
+            Formal vote:
+            <strong>{{ formal_vote.yes }}</strong> Yes •
+            <strong>{{ formal_vote.no }}</strong> No •
+            <strong>{{ formal_vote.abstain }}</strong> Abstain
+            <span class="text-xs text-slate-500">
+              ({{ 'open' if formal_vote.is_open else 'closed' }})
+            </span>
+            {% if not formal_vote.is_open %}
+              {% set counted = (formal_vote.yes + formal_vote.no) %}
+              <div class="text-xs mt-1">
+                Counted: {{ counted }} • Result:
+                {% if formal_vote.yes > formal_vote.no %}
+                  <span class="text-emerald-700 font-medium">Accepted</span>
+                {% else %}
+                  <span class="text-rose-700 font-medium">Rejected</span>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      {% if (IS_PRESIDENT or IS_CHAIR) and (early_done or formal_locked) %}
+      <section class="pf-vote-section mt-5">
+        {% if IS_PRESIDENT or IS_CHAIR %}
+          <form class="mt-3" method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/close_discussion"
+          data-log-action="CLOSE_PFLOOR_DISCUSSION"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}">
+          <button class="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-black text-white font-semibold shadow-sm"
+          data-log-action="CLICK_CLOSE_PFLOOR_DISCUSSION"
+          data-target-type="{{ KIND }}"
+          data-target-id="{{ ITEM_ID }}"
+          data-hint="End the proposal floor discussion after voting has finished."
+          data-hint-side="right">Close discussion</button>
+          </form>
+        {% endif %}
+      </section>
+      {% endif %}

@@ -104,32 +104,8 @@ Delete room
         <button class="px-3 py-2 bg-blue-600 text-white rounded" data-log-action="CLICK_POST_PROPOSAL_ROOM_MESSAGE" data-target-type="proposal_room" data-target-id="{{ room.id }}">Send</button>
       </form>
     </div>
-    <ul class="divide-y">
-      {% for R in threads %}
-        {# render similar to your interventions macro; very minimal: #}
-        <li class="p-3">
-          <div class="text-slate-600 text-sm">
-            #{{ R.node.local_no }} • @{{ user_map[R.node.user_id].handle if user_map.get(R.node.user_id) }}
-            <span class="text-xs text-slate-400">{{ R.node.created_at }}</span>
-          </div>          
-          <div class="whitespace-pre-wrap mt-1">{{ R.node.body }}</div>
-          <button class="text-xs text-indigo-600 mt-1" onclick="document.getElementById('parent_id').value='{{ R.node.id }}'">Reply</button>
-          {% if R.children and R.children|length %}
-            <ul class="pl-4 mt-2 space-y-2 border-l">
-              {% for C in R.children %}
-                <li class="pl-2">
-                  <div class="text-slate-600 text-sm">
-                    #{{ C.node.local_no }} • @{{ user_map[C.node.user_id].handle if user_map.get(C.node.user_id) }}
-                  </div>                  
-                  <div class="whitespace-pre-wrap">{{ C.node.body }}</div>
-                </li>
-              {% endfor %}
-            </ul>
-          {% endif %}
-        </li>
-      {% else %}
-        <li class="p-3 text-slate-500">No messages yet.</li>
-      {% endfor %}
+    <ul id="room-messages" class="divide-y">
+      {% include "partials/room_messages.html" %}
     </ul>
   </section>
 
@@ -1363,4 +1339,10 @@ Delete room
     });
   })();
   </script>
+<script>
+  DeliberationPolling.room({
+    url: "/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/updates",
+    list: "room-messages"
+  });
+</script>
 {% endblock %}

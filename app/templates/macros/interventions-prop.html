@@ -29,7 +29,7 @@
   {# Build author_roles from role_map (avoids lazy-load issues) #}
   {% set author_roles = role_map.get(it.by_user, []) if role_map is defined else [] %}
 
-  <li class="{% if depth == 0 %}border-t border-slate-200 first:border-t-0{% else %}pl-0{% endif %}">
+  <li data-post-id="{{ it.id }}" class="{% if depth == 0 %}border-t border-slate-200 first:border-t-0{% else %}pl-0{% endif %}">
     <div class="flex gap-3 {% if depth == 0 %}px-4 py-4{% else %}py-2 ml-5{% endif %}">
 
       {# Avatar + connector lines #}
@@ -60,7 +60,7 @@
 
         <div class="mt-2 whitespace-pre-wrap leading-relaxed">{{ it.body }}</div>
 
-        <div class="mt-2 flex items-center gap-4 text-sm">
+        <div data-post-actions class="mt-2 flex items-center gap-4 text-sm">
           {% if not (IS_PRESIDENT or IS_CHAIR or IS_ADMIN) and not can_speak %}
   <form method="post" action="/events/{{ event_id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/register" class="inline ror-form">
     <input type="hidden" name="kind_req" value="ROR">
@@ -100,6 +100,7 @@
 
         {% set reply_dom_id = "pfi-replies-" ~ it.id %}
 
+<span data-reply-toggle>
 {% if reply_count|int > 0 and has_children %}
   <button
     type="button"
@@ -132,13 +133,12 @@
   </button>
 {% endif %}
 
-{% if has_children %}
-  <ul id="{{ reply_dom_id }}" class="mt-3 ml-3 hidden">
+</span>
+  <ul data-reply-list id="{{ reply_dom_id }}" class="mt-3 ml-3 hidden">
     {% for C in N.children %}
       {{ render_node(C, user_map, q, can_speak, user, depth+1, loop.first, loop.last) }}
     {% endfor %}
   </ul>
-{% endif %}
       </div>
     </div>
   </li>

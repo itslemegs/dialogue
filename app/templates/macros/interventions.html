@@ -29,7 +29,7 @@
   {# Build author_roles from role_map (avoids lazy-load issues) #}
   {% set author_roles = role_map.get(it.by_user, []) if role_map is defined else [] %}
 
-  <li class="{% if depth == 0 %}border-t border-slate-200 first:border-t-0{% else %}pl-0{% endif %}">
+  <li data-post-id="{{ it.id }}" class="{% if depth == 0 %}border-t border-slate-200 first:border-t-0{% else %}pl-0{% endif %}">
     <div class="flex gap-3 {% if depth == 0 %}px-4 py-4{% else %}py-2 ml-5{% endif %}">
 
       {# Avatar + connector lines #}
@@ -60,7 +60,7 @@
 
         <div class="mt-2 whitespace-pre-wrap leading-relaxed">{{ it.body }}</div>
 
-        <div class="mt-2 flex items-center gap-4 text-sm">
+        <div data-post-actions class="mt-2 flex items-center gap-4 text-sm">
             {% if not (IS_PRESIDENT or IS_CHAIR or IS_ADMIN) and not can_speak %}
               <form method="post"
                     action="/events/{{ event.id }}/general-floor/{{ item.proposal_id }}/floor/register"
@@ -104,13 +104,14 @@
           {% endif %}
         </div>
 
+        <span data-reply-toggle>
         {% if reply_count|int > 0 and has_children %}
           <button
             type="button"
             class="mt-3 ml-3 text-sm text-slate-600 hover:text-slate-800 flex items-center gap-1 js-toggle-replies"
-            data-target="replies-{{ it.local_no or it.id }}"
+            data-target="replies-{{ it.id }}"
             aria-expanded="false"
-            aria-controls="replies-{{ it.local_no or it.id }}">
+            aria-controls="replies-{{ it.id }}">
             <svg class="w-4 h-4 transition-transform duration-150" data-chevron viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.08 1.04l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
             </svg>
@@ -119,13 +120,12 @@
           </button>
         {% endif %}
 
-        {% if has_children %}
-          <ul id="replies-{{ it.local_no or it.id }}" class="mt-3 ml-3 hidden">
+        </span>
+          <ul data-reply-list id="replies-{{ it.id }}" class="mt-3 ml-3 hidden">
             {% for C in N.children %}
               {{ render_node(C, user_map, q, can_speak, user, depth+1, loop.first, loop.last) }}
             {% endfor %}
           </ul>
-        {% endif %}
       </div>
     </div>
   </li>

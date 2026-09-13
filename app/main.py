@@ -236,6 +236,14 @@ SESSION_LOG_SKIP_CONTAINS = (
 )
 
 
+def _is_shared_poll_read(path: str) -> bool:
+    return bool(re.fullmatch(
+        r"/events/\d+/(?:general-floor/\d+/(?:floor/state|interventions/(?:head|fragment))"
+        r"|proposal-floor/(?:draft|amendment)/\d+/(?:floor/state|interventions/(?:head|fragment))"
+        r"|proposal-discussion/\d+/rooms/\d+/updates)", path
+    ))
+
+
 def _session_log_should_skip(path: str) -> bool:
     return (
         any(path.startswith(prefix) for prefix in SESSION_LOG_SKIP_PREFIXES)
@@ -267,7 +275,7 @@ def _log_user_id_from_request(request: Request) -> int | None:
 @app.middleware("http")
 async def experiment_session_log_middleware(request: Request, call_next):
     path = request.url.path
-    should_skip = _session_log_should_skip(path)
+    should_skip = _session_log_should_skip(path) or (request.method == "GET" and _is_shared_poll_read(path))
 
     session_key = get_or_make_session_key(request)
     request_id = get_request_id(request)
@@ -2326,6 +2334,78 @@ def ensure_general_floor_question(db: Session, prop: AgendaProposal) -> Question
 
     return q
 
+
+def _discussion_revision(db, model, condition):
+    count, last = db.exec(select(func.count(model.id), func.max(model.id)).where(condition)).one()
+    return f"{count}:{last or 0}"
+
+
+def _rows_revision(rows):
+    return f"{len(rows)}:{max((row.id for row in rows), default=0)}"
+
+
+def _thread_rows(rows, parent_field):
+    by_id = {row.id: {"node": row, "children": []} for row in rows}
+    roots = []
+    for row in rows:
+        parent = getattr(row, parent_field)
+        (by_id[parent]["children"] if parent in by_id else roots).append(by_id[row.id])
+    return roots
+
+
+def _general_poll_context(db, user, event_id, pid):
+    event = _require_event_access(db=db, user=user, event_id=event_id)
+    prop = _get_event_proposal_or_404(db, event.id, pid, accepted_only=True)
+    link = db.exec(select(GeneralFloorLink).where(GeneralFloorLink.proposal_id == prop.id)).first()
+    q = db.get(Question, link.question_id) if link else None
+    fs = db.exec(select(FloorState).where(FloorState.question_id == q.id)).first() if q else None
+    return event, prop, q, fs
+
+
+def _floor_snapshot(db, state, speakers, user, proposal_floor=False):
+    model = ProposalSpeakerRequest if proposal_floor else SpeakerRequest
+    current = db.get(model, state.current_speaker_request_id) if state and state.current_speaker_request_id else None
+    if current and current.status != "SPEAKING":
+        current = None
+    ids = {speaker.user_id for speaker in speakers}
+    handles = {u.id: u.handle for u in db.exec(select(User).where(User.id.in_(ids))).all()} if ids else {}
+    flags = effective_flags(user)
+    target = getattr(current, "target_intervention_id", None)
+    target_model = ProposalIntervention if proposal_floor else Intervention
+    target_row = db.get(target_model, target) if target else None
+    return {
+        "is_open": bool(state and state.is_open),
+        "speaking_time_sec": state.speaking_time_sec if state else 120,
+        "current_req_id": current.id if current else None,
+        "current_user_id": current.user_id if current else None,
+        "current_kind": current.kind if current else None,
+        "current_target_intervention_id": target,
+        "current_target_local_no": target_row.local_no if target_row else None,
+        "can_manage": bool(flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT")),
+        "can_speak": bool((current and current.user_id == user.id) or flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT")),
+        "speakers": [{"id": r.id, "user_id": r.user_id, "handle": handles.get(r.user_id, str(r.user_id)),
+                      "kind": r.kind, "status": r.status, "position": r.position,
+                      "created_at": r.created_at.isoformat()} for r in speakers],
+    }
+
+
+def _poll_json(data):
+    return JSONResponse(data, headers={"Cache-Control": "private, no-store"})
+
+
+def _general_floor_item(prop, q):
+    return {
+        "id": q.id,  # question id for floor actions/live summary
+        "proposal_id": prop.id,
+        "title": prop.title,
+        "background": prop.background,
+        "source_url": prop.source_url,
+        "created_at": prop.created_at,
+        # Materialize the handle before the session closes.
+        "proposer": {"handle": prop.proposer.handle} if prop.proposer else None,
+    }
+
+
 @app.get("/events/{event_id}/general-floor/{pid}", response_class=HTMLResponse)
 def show_general_floor_item(event_id: int, pid: int, request: Request):
     user = current_user(request)
@@ -2348,7 +2428,7 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
         ints = db.exec(
             select(Intervention)
             .where(Intervention.question_id == q.id)
-            .order_by(Intervention.created_at.asc())
+            .order_by(Intervention.created_at.asc(), Intervention.id.asc())
         ).all()
 
         # threadify
@@ -2388,21 +2468,7 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
         ).first() or 0
 
         # view-model for the template
-        item = {
-            "id": q.id,  # question id for floor-related actions/live summary
-            "proposal_id": prop.id,
-
-            # display fields should match the General Floor list page
-            "title": prop.title,
-            "background": prop.background,
-            "source_url": prop.source_url,
-            "created_at": prop.created_at,
-
-            # avoid DetachedInstanceError after db session closes
-            "proposer": {
-                "handle": prop.proposer.handle
-            } if prop.proposer else None,
-        }
+        item = _general_floor_item(prop, q)
 
     return templates.TemplateResponse(request, "events/general_floor_item.html",
         {
@@ -2427,82 +2493,33 @@ def show_general_floor_item(event_id: int, pid: int, request: Request):
 
 @app.get("/events/{event_id}/general-floor/{pid}/interventions/fragment", response_class=HTMLResponse)
 def interventions_fragment(event_id: int, pid: int, request: Request):
-    user = current_user(request)
-    if not user:
-        raise HTTPException(401)
-
+    user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     with get_session() as db:
-        event = _require_event_access(db=db, user=user, event_id=event_id)
-        prop = _get_event_proposal_or_404(db, event.id, pid, accepted_only=True)
-
-        q = ensure_general_floor_question(db, prop)
-
-        all_users = db.exec(select(User).options(selectinload(User.roles))).all()
-        user_map = {u.id: u for u in all_users}
-        role_map = {u.id: sorted({r.name for r in (u.roles or [])}) for u in all_users}
-
-        ints = db.exec(
-            select(Intervention)
-            .where(Intervention.question_id == q.id)
-            .order_by(Intervention.created_at.asc())
-        ).all()
-
-        by_id = {it.id: {"node": it, "children": []} for it in ints}
-        roots = []
-        for it in ints:
-            if it.relates_to_id and it.relates_to_id in by_id:
-                by_id[it.relates_to_id]["children"].append(by_id[it.id])
-            else:
-                roots.append(by_id[it.id])
-
-        fs = get_or_create_floor(db, q.id)
-        cur_req = db.get(SpeakerRequest, fs.current_speaker_request_id) if fs.current_speaker_request_id else None
-        can_speak = bool(cur_req and cur_req.user_id == user.id and cur_req.status == "SPEAKING")
-
+        event, prop, q, fs = _general_poll_context(db, user, event_id, pid)
+        rows = db.exec(select(Intervention).where(Intervention.question_id == q.id)
+                       .order_by(Intervention.created_at.asc(), Intervention.id.asc())).all() if q else []
+        ids = {row.by_user for row in rows}
+        users = db.exec(select(User).where(User.id.in_(ids)).options(selectinload(User.roles))).all() if ids else []
         flags = effective_flags(user)
-        if flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"):
-            can_speak = True
-
-    return templates.TemplateResponse(request, "partials/interventions_list.html",
-        {
-            "request": request,
-            "user": user,
-            "flags": flags,
-            "event": event,
-            "threads": roots,
-            "user_map": user_map,
-            "role_map": role_map,
-            "q": q,
-            "can_speak": can_speak,
-        },
-    )
+        current = db.get(SpeakerRequest, fs.current_speaker_request_id) if fs and fs.current_speaker_request_id else None
+        can_speak = bool((current and current.user_id == user.id and current.status == "SPEAKING") or flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"))
+        context = dict(request=request, user=user, flags=flags, event=event, proposal=prop,
+                       item=_general_floor_item(prop, q) if q else None, q=q,
+                       threads=_thread_rows(rows, "relates_to_id"), user_map={u.id: u for u in users},
+                       role_map={u.id: sorted({r.name for r in u.roles}) for u in users},
+                       can_speak=can_speak, discussion_revision=_rows_revision(rows))
+    return templates.TemplateResponse(request, "partials/interventions_list.html", context,
+                                      headers={"Cache-Control": "private, no-store"})
 
 # GET /events/{event_id}/general-floor/{pid}/interventions/head
 @app.get("/events/{event_id}/general-floor/{pid}/interventions/head")
 def interventions_head(event_id: int, pid: int, request: Request):
-    user = current_user(request)
-    if not user:
-        raise HTTPException(status_code=401)
-
+    user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     with get_session() as db:
-        _event = _require_event_access(db=db, user=user, event_id=event_id)
-        prop = _get_event_proposal_or_404(db, event_id, pid, accepted_only=True)
-        q = ensure_general_floor_question(db, prop)
-
-        last_child_id = db.exec(
-            select(func.max(Intervention.id)).where(
-                (Intervention.question_id == q.id)
-                & (Intervention.relates_to_id.isnot(None))
-            )
-        ).first() or 0
-
-        last_any_id = db.exec(
-            select(func.max(Intervention.id)).where(
-                Intervention.question_id == q.id
-            )
-        ).first() or 0
-
-    return {"last_child_id": int(last_child_id), "last_any_id": int(last_any_id)}
+        _, _, q, _ = _general_poll_context(db, user, event_id, pid)
+        revision = _discussion_revision(db, Intervention, Intervention.question_id == q.id) if q else "0:0"
+        child = db.exec(select(func.max(Intervention.id)).where(Intervention.question_id == q.id, Intervention.relates_to_id.isnot(None))).first() if q else 0
+    return _poll_json({"revision": revision, "last_any_id": int(revision.split(":")[1]), "last_child_id": child or 0})
 
 from app.services.live_summary import Scope, refresh_summary_if_needed
 
@@ -2923,67 +2940,13 @@ def floor_finish_current_for_agenda(pid: int, request: Request, event_id: int):
 # GET /events/{event_id}/general-floor/{pid}/floor/state
 @app.get("/events/{event_id}/general-floor/{pid}/floor/state")
 def floor_state_for_agenda(pid: int, request: Request, event_id: int):
-    user = current_user(request)
-    if not user:
-        raise HTTPException(status_code=401)
-
+    user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     with get_session() as db:
-        # prop = db.get(AgendaProposal, pid)
-        # if not prop or prop.status != ProposalStatus.accepted:
-        #     raise HTTPException(status_code=404, detail="Agenda item not found or not accepted")
-
-        # # Ensure / fetch the backing Question for this agenda item
-        # q = ensure_general_floor_question(db, prop)
-        event = _require_event_access(db=db, user=user, event_id=event_id)
-        prop = _get_event_proposal_or_404(db, event.id, pid, accepted_only=True)
-        q = ensure_general_floor_question(db, prop)
-
-        fs = db.exec(select(FloorState).where(FloorState.question_id == q.id)).first()
-        if not fs:
-            fs = get_or_create_floor(db, q.id)
-
-        cur_user_id = None
-        cur_target = None
-        cur_kind = None
-        target_local = None
-        if fs.current_speaker_request_id:
-            cur_req = db.get(SpeakerRequest, fs.current_speaker_request_id)
-            if cur_req and cur_req.status == "SPEAKING":
-                cur_user_id = cur_req.user_id
-                cur_target = cur_req.target_intervention_id
-                cur_kind = cur_req.kind
-
-        speakers = ordered_speakers(db, q.id)
-
-        # id -> handle map
-        users = db.exec(select(User)).all()
-        handle_map = {u.id: u.handle for u in users}
-
-        if cur_target:
-            tgt = db.get(Intervention, cur_target)
-            target_local = tgt.local_no if tgt else None
-
-        data = {
-            "is_open": fs.is_open,
-            "speaking_time_sec": fs.speaking_time_sec,
-            "current_req_id": fs.current_speaker_request_id,
-            "current_user_id": cur_user_id,
-            "current_kind": cur_kind,
-            "current_target_intervention_id": cur_target,
-            "current_target_local_no": target_local,
-            "speakers": [
-                {
-                    "id": s.id,
-                    "user_id": s.user_id,
-                    "handle": handle_map.get(s.user_id, str(s.user_id)),
-                    "kind": s.kind,
-                    "status": s.status,
-                    "position": s.position,
-                    "created_at": s.created_at.isoformat(),
-                } for s in speakers
-            ],
-        }
-    return JSONResponse(data)
+        _, _, q, fs = _general_poll_context(db, user, event_id, pid)
+        speakers = ordered_speakers(db, q.id) if q else []
+        data = _floor_snapshot(db, fs, speakers, user)
+        data["discussion_revision"] = _discussion_revision(db, Intervention, Intervention.question_id == q.id) if q else "0:0"
+    return _poll_json(data)
 
 # POST /events/{event_id}/general-floor/{pid}/floor/take_now
 @app.post("/events/{event_id}/general-floor/{pid}/floor/take_now")
@@ -3378,7 +3341,7 @@ def rooms_show(event_id: int, pid: int, rid: int, request: Request):
         msgs = db.exec(
             select(ProposalMessage)
             .where(ProposalMessage.room_id == rid)
-            .order_by(ProposalMessage.created_at)
+            .order_by(ProposalMessage.created_at.asc(), ProposalMessage.id.asc())
         ).all()
 
         by_id = {m.id: {"node": m, "children": []} for m in msgs}
@@ -3425,6 +3388,27 @@ def rooms_show(event_id: int, pid: int, rid: int, request: Request):
             "cos_list": cos_list,
         },
     )
+
+
+@app.get("/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}/updates")
+def room_updates(event_id: int, pid: int, rid: int, request: Request, revision: str = ""):
+    user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+    with get_session() as db:
+        event = _require_event_access(db=db, user=user, event_id=event_id)
+        _get_event_proposal_or_404(db, event.id, pid, accepted_only=True)
+        _get_event_room_or_404(db, event.id, pid, rid)
+        current = _discussion_revision(db, ProposalMessage, ProposalMessage.room_id == rid)
+        html = None
+        if current != revision:
+            rows = db.exec(select(ProposalMessage).where(ProposalMessage.room_id == rid)
+                           .order_by(ProposalMessage.created_at.asc(), ProposalMessage.id.asc())).all()
+            ids = {r.user_id for r in rows}
+            users = db.exec(select(User).where(User.id.in_(ids))).all() if ids else []
+            current = _rows_revision(rows)
+            html = templates.env.get_template("partials/room_messages.html").render(
+                threads=_thread_rows(rows, "parent_id"), user_map={u.id: u for u in users})
+    return _poll_json({"revision": current, "html": html})
+
 
 import sqlalchemy as sa
 
@@ -5353,6 +5337,122 @@ def amendment_vote_close(event_id: int, amend_id: int, request: Request):
         status_code=303,
     )
 
+
+def _pfloor_voting_context(db, st, user, draft, mode):
+    early = _get_early_vote(db, st)
+    formal = _get_formal_vote(db, st)
+    return {
+        "early_vote": early, "formal_vote": formal,
+        "HAS_EARLY_VOTED": _has_user_early_voted(db, st, user.id) if early else False,
+        "HAS_FORMAL_VOTED": _has_user_formal_voted(db, st, user.id) if formal else False,
+        "amendment_cards": _amendment_vote_cards(db, draft) if mode == "DRAFT" else [],
+    }
+
+
+def _pfloor_poll_context(db, user, event_id, kind, item_id):
+    event = _require_event_access(db=db, user=user, event_id=event_id)
+    if kind == "draft":
+        draft, prop = _get_event_draft_or_404(db, event.id, item_id)
+        amendment = None
+    elif kind == "amendment":
+        amendment, draft, prop = _get_event_amendment_or_404(db, event.id, item_id)
+    else:
+        raise HTTPException(400, "kind must be draft|amendment")
+    if prop.status != ProposalStatus.accepted:
+        raise HTTPException(404, "Agenda item not accepted")
+    if not draft.is_submitted or not draft.submitted_at or _now_utc() < _to_aware_utc(draft.submitted_at) + VISIBLE_AFTER:
+        raise HTTPException(403, "Draft is not visible yet")
+    scope = dict(event_id=event.id, proposal_id=prop.id,
+                 draft_id=draft.id if amendment is None else None,
+                 amendment_id=amendment.id if amendment else None)
+    st = db.exec(select(ProposalFloorState).where(
+        ProposalFloorState.event_id == event.id, ProposalFloorState.proposal_id == prop.id,
+        ProposalFloorState.draft_id == scope["draft_id"],
+        ProposalFloorState.amendment_id == scope["amendment_id"])).first()
+    return event, prop, draft, amendment, scope, st
+
+
+def _amendment_vote_cards(db, d):
+    ams = db.exec(
+        select(Amendment)
+        .where(Amendment.draft_id == d.id)
+        .order_by(Amendment.am_no.asc())
+    ).all()
+
+    amendment_cards = []
+    ids = [am.id for am in ams]
+    early_by_id = {v.amendment_id: v for v in db.exec(select(ProposalEarlyVote).where(
+        ProposalEarlyVote.event_id == d.event_id, ProposalEarlyVote.amendment_id.in_(ids))).all()} if ids else {}
+    formal_by_id = {v.amendment_id: v for v in db.exec(select(ProposalFormalVote).where(
+        ProposalFormalVote.event_id == d.event_id, ProposalFormalVote.amendment_id.in_(ids))).all()} if ids else {}
+
+    for am in ams:
+        early = early_by_id.get(am.id)
+        formal = formal_by_id.get(am.id)
+
+        # Prefer formal vote if it exists, otherwise show early vote.
+        active_vote = formal or early
+
+        vote_summary = {
+            "exists": active_vote is not None,
+            "kind": None,
+            "is_open": False,
+            "yes": 0,
+            "no": 0,
+            "abstain": 0,
+            "result": "No vote yet",
+        }
+
+        if formal:
+            vote_summary.update(
+                {
+                    "kind": "Formal vote",
+                    "is_open": formal.is_open,
+                    "yes": formal.yes,
+                    "no": formal.no,
+                    "abstain": formal.abstain,
+                }
+            )
+
+            if formal.is_open:
+                vote_summary["result"] = "Voting open"
+            elif formal.yes > formal.no:
+                vote_summary["result"] = "Adopted"
+            else:
+                vote_summary["result"] = "Rejected"
+
+        elif early:
+            vote_summary.update(
+                {
+                    "kind": "Early vote",
+                    "is_open": early.is_open,
+                    "yes": early.yes,
+                    "no": early.no,
+                    "abstain": early.abstain,
+                }
+            )
+
+            if early.is_open:
+                vote_summary["result"] = "Voting open"
+            elif early.no == 0 and early.yes > 0:
+                vote_summary["result"] = "Adopted by consensus"
+            elif early.yes == 0 and early.no > 0:
+                vote_summary["result"] = "Rejected by consensus"
+            else:
+                vote_summary["result"] = "No consensus"
+
+        amendment_cards.append(
+            {
+                "am": am,
+                "early_vote": early,
+                "formal_vote": formal,
+                "vote_summary": vote_summary,
+            }
+        )
+
+    return amendment_cards
+
+
 @app.get("/events/{event_id}/proposal-floor/draft/{draft_id}", response_class=HTMLResponse)
 def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
@@ -5378,11 +5478,7 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
                 status_code=303,
             )
 
-        early_vote = _get_early_vote(db, st)
-        has_early_voted = _has_user_early_voted(db, st, user.id) if early_vote else False
-
-        formal_vote = _get_formal_vote(db, st)
-        has_formal_voted = _has_user_formal_voted(db, st, user.id) if formal_vote else False
+        voting = _pfloor_voting_context(db, st, user, d, "DRAFT")
 
         can_speak = _pf_user_has_floor(db, state=st, user_id=user.id)
         f = effective_flags(user)
@@ -5395,86 +5491,6 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
         user_map = {u.id: u for u in users}
         speakers = _pfloor_load_speakers(db, st)
 
-        ams = db.exec(
-            select(Amendment)
-            .where(Amendment.draft_id == d.id)
-            .order_by(Amendment.am_no.asc())
-        ).all()
-
-        amendment_cards = []
-
-        for am in ams:
-            ast = _pfloor_get_or_create_state(
-                db,
-                event_id=event.id,
-                proposal_id=d.proposal_id,
-                draft_id=None,
-                amendment_id=am.id,
-            )
-
-            early = _get_early_vote(db, ast)
-            formal = _get_formal_vote(db, ast)
-
-            # Prefer formal vote if it exists, otherwise show early vote.
-            active_vote = formal or early
-
-            vote_summary = {
-                "exists": active_vote is not None,
-                "kind": None,
-                "is_open": False,
-                "yes": 0,
-                "no": 0,
-                "abstain": 0,
-                "result": "No vote yet",
-            }
-
-            if formal:
-                vote_summary.update(
-                    {
-                        "kind": "Formal vote",
-                        "is_open": formal.is_open,
-                        "yes": formal.yes,
-                        "no": formal.no,
-                        "abstain": formal.abstain,
-                    }
-                )
-
-                if formal.is_open:
-                    vote_summary["result"] = "Voting open"
-                elif formal.yes > formal.no:
-                    vote_summary["result"] = "Adopted"
-                else:
-                    vote_summary["result"] = "Rejected"
-
-            elif early:
-                vote_summary.update(
-                    {
-                        "kind": "Early vote",
-                        "is_open": early.is_open,
-                        "yes": early.yes,
-                        "no": early.no,
-                        "abstain": early.abstain,
-                    }
-                )
-
-                if early.is_open:
-                    vote_summary["result"] = "Voting open"
-                elif early.no == 0 and early.yes > 0:
-                    vote_summary["result"] = "Adopted by consensus"
-                elif early.yes == 0 and early.no > 0:
-                    vote_summary["result"] = "Rejected by consensus"
-                else:
-                    vote_summary["result"] = "No consensus"
-
-            amendment_cards.append(
-                {
-                    "am": am,
-                    "pfloor": ast,
-                    "early_vote": early,
-                    "formal_vote": formal,
-                    "vote_summary": vote_summary,
-                }
-            )
 
     return templates.TemplateResponse(request, "events/proposal_floor_item.html",
         {
@@ -5482,16 +5498,12 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
             "user": user,
             "flags": f,
             "event": event,
-            "early_vote": early_vote,
-            "HAS_EARLY_VOTED": has_early_voted,
-            "formal_vote": formal_vote,
-            "HAS_FORMAL_VOTED": has_formal_voted,
             "mode": "DRAFT",
             "proposal": prop,
             "draft": d,
             "amendment": None,
-            "amendment_cards": amendment_cards,
             "pfloor": st,
+            **voting,
             "speakers": speakers,
             "user_map": user_map,
             "can_speak": can_speak,
@@ -5524,11 +5536,7 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
                 status_code=303,
             )
 
-        early_vote = _get_early_vote(db, st)
-        has_early_voted = _has_user_early_voted(db, st, user.id) if early_vote else False
-
-        formal_vote = _get_formal_vote(db, st)
-        has_formal_voted = _has_user_formal_voted(db, st, user.id) if formal_vote else False
+        voting = _pfloor_voting_context(db, st, user, d, "AMENDMENT")
 
         can_speak = _pf_user_has_floor(db, state=st, user_id=user.id)
         f = effective_flags(user)
@@ -5547,16 +5555,12 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
             "user": user,
             "flags": f,
             "event": event,
-            "early_vote": early_vote,
-            "HAS_EARLY_VOTED": has_early_voted,
-            "formal_vote": formal_vote,
-            "HAS_FORMAL_VOTED": has_formal_voted,
             "mode": "AMENDMENT",
             "proposal": prop,
             "draft": d,
             "amendment": am,
-            "amendment_cards": [],
             "pfloor": st,
+            **voting,
             "speakers": speakers,
             "user_map": user_map,
             "can_speak": can_speak,
@@ -5618,112 +5622,33 @@ def _pfi_parent_matches_scope(parent: ProposalIntervention, scope: dict) -> bool
     "/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions/fragment",
     response_class=HTMLResponse,
 )
-def pfloor_interventions_fragment(
-    event_id: int,
-    kind: str,
-    item_id: int,
-    request: Request,
-):
+def pfloor_interventions_fragment(event_id: int, kind: str, item_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
-    kind = (kind or "").lower()
-
     with get_session() as db:
-        # Keep this if you already use event-scoped access control.
-        _require_event_access(db=db, user=user, event_id=event_id)
-
-        draft, scope = _resolve_pfloor_target_or_404(db, event_id, kind, item_id)
-
-        all_users = db.exec(select(User).options(selectinload(User.roles))).all()
-        user_map = {u.id: u for u in all_users}
-        role_map = {u.id: sorted({r.name for r in (u.roles or [])}) for u in all_users}
-
-        rows = db.exec(
-            select(ProposalIntervention)
-            .where(_pfi_scope_where(**scope))
-            .order_by(ProposalIntervention.created_at.asc())
-        ).all()
-
-        by_id = {r.id: {"node": r, "children": []} for r in rows}
-        roots = []
-
-        for r in rows:
-            pid = r.parent_id
-            if pid and pid in by_id:
-                by_id[pid]["children"].append(by_id[r.id])
-            else:
-                roots.append(by_id[r.id])
-
-        # Important: use the actual scope.
-        # For draft: draft_id=draft.id, amendment_id=None
-        # For amendment: draft_id=None, amendment_id=amend.id
-        fs = _pfloor_get_or_create_state(db, **scope)
-
-        can_speak = _pf_user_has_floor(db, state=fs, user_id=user.id)
-
+        event, prop, draft, amendment, scope, st = _pfloor_poll_context(db, user, event_id, kind, item_id)
+        rows = db.exec(select(ProposalIntervention).where(_pfi_scope_where(**scope))
+                       .order_by(ProposalIntervention.created_at.asc(), ProposalIntervention.id.asc())).all()
+        ids = {row.by_user for row in rows}
+        users = db.exec(select(User).where(User.id.in_(ids)).options(selectinload(User.roles))).all() if ids else []
         flags = effective_flags(user)
-        if flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"):
-            can_speak = True
-
-    return templates.TemplateResponse(
-        request,
-        "partials/pfloor_interventions_list.html",
-        {
-            "request": request,
-            "user": user,
-            "flags": flags,
-            "threads": roots,
-            "user_map": user_map,
-            "role_map": role_map,
-            "event_id": event_id,
-            "kind": kind,
-            "item_id": item_id,
-            "can_speak": can_speak,
-            "last_any_id": max([r.id for r in rows], default=0),
-        },
-    )
+        can_speak = bool((st and _pf_user_has_floor(db, state=st, user_id=user.id)) or flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"))
+        context = dict(request=request, user=user, flags=flags, threads=_thread_rows(rows, "parent_id"),
+                       user_map={u.id: u for u in users}, role_map={u.id: sorted({r.name for r in u.roles}) for u in users},
+                       event_id=event.id, kind=kind, item_id=item_id, can_speak=can_speak,
+                       discussion_revision=_rows_revision(rows), last_any_id=max((r.id for r in rows), default=0))
+    return templates.TemplateResponse(request, "partials/pfloor_interventions_list.html", context,
+                                      headers={"Cache-Control": "private, no-store"})
 
 
 @app.get("/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions/head")
-def pfloor_interventions_head(
-    event_id: int,
-    kind: str,
-    item_id: int,
-    request: Request,
-):
+def pfloor_interventions_head(event_id: int, kind: str, item_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
-    kind = (kind or "").lower()
-
     with get_session() as db:
-        _require_event_access(db=db, user=user, event_id=event_id)
-
-        draft, scope = _resolve_pfloor_target_or_404(db, event_id, kind, item_id)
-
-        last_any = db.exec(
-            select(func.max(ProposalIntervention.id))
-            .where(_pfi_scope_where(**scope))
-        ).one_or_none()
-
-        last_reply = db.exec(
-            select(func.max(ProposalIntervention.id))
-            .where(
-                and_(
-                    _pfi_scope_where(**scope),
-                    ProposalIntervention.parent_id.isnot(None),
-                )
-            )
-        ).one_or_none()
-
-    def _scalar(value):
-        if value is None:
-            return 0
-        if isinstance(value, tuple):
-            value = value[0]
-        return int(value or 0)
-
-    return {
-        "last_any_id": _scalar(last_any),
-        "last_child_id": _scalar(last_reply),
-    }
+        _, _, _, _, scope, _ = _pfloor_poll_context(db, user, event_id, kind, item_id)
+        revision = _discussion_revision(db, ProposalIntervention, _pfi_scope_where(**scope))
+        child = db.exec(select(func.max(ProposalIntervention.id)).where(
+            _pfi_scope_where(**scope), ProposalIntervention.parent_id.isnot(None))).first()
+    return _poll_json({"revision": revision, "last_any_id": int(revision.split(":")[1]), "last_child_id": child or 0})
 
 
 @app.post("/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions")
@@ -6453,42 +6378,23 @@ def pfloor_finish_current(kind: str, id: int, request: Request, event_id: int):
             st.updated_at = datetime.utcnow(); db.add(st); db.commit()
     return RedirectResponse(f"/events/{event_id}/proposal-floor/{kind}/{id}", status_code=303)
 
-# state (polled by UI every 3s, like general-floor)
+# Read-only shared floor state (polled every four seconds).
 @app.get("/events/{event_id}/proposal-floor/{kind}/{id}/floor/state")
 def pfloor_state(kind: str, id: int, request: Request, event_id: int):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     with get_session() as db:
-        _require_event_access(db=db, user=user, event_id=event_id)
-        mode, ev_id, prop_id, draft_id, amend_id, _ = _resolve_pfloor_target(db,
-            draft_id=id if kind=="draft" else None,
-            amend_id=id if kind=="amendment" else None
-        )
-        if ev_id != event_id:
-            raise HTTPException(404)
-        st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
-
-        cur_user_id = None; cur_kind = None
-        if st.current_speaker_request_id:
-            cur = db.get(ProposalSpeakerRequest, st.current_speaker_request_id)
-            if cur and cur.status == "SPEAKING":
-                cur_user_id = cur.user_id; cur_kind = cur.kind
-
-        speakers = _pfloor_load_speakers(db, st)
-        handles = {u.id: u.handle for u in db.exec(select(User)).all()}
-
-        data = {
-            "is_open": st.is_open,
-            "speaking_time_sec": st.speaking_time_sec,
-            "current_req_id": st.current_speaker_request_id,
-            "current_user_id": cur_user_id,
-            "current_kind": cur_kind,
-            "speakers": [{
-                "id": s.id, "user_id": s.user_id, "handle": handles.get(s.user_id, str(s.user_id)),
-                "kind": s.kind, "status": s.status, "position": s.position,
-                "created_at": s.created_at.isoformat(),
-            } for s in speakers],
-        }
-        return JSONResponse(data)
+        event, prop, draft, amendment, scope, st = _pfloor_poll_context(db, user, event_id, kind, id)
+        speakers = _pfloor_load_speakers(db, st) if st else []
+        data = _floor_snapshot(db, st, speakers, user, proposal_floor=True)
+        data["discussion_revision"] = _discussion_revision(db, ProposalIntervention, _pfi_scope_where(**scope))
+        # Vote lookup needs only scope attributes, never a newly persisted floor row.
+        from types import SimpleNamespace
+        mode = "AMENDMENT" if amendment else "DRAFT"
+        voting = _pfloor_voting_context(db, st or SimpleNamespace(**scope), user, draft, mode)
+        data["voting_html"] = templates.env.get_template("partials/pfloor_vote_panel.html").render(
+            request=request, event=event, proposal=prop, draft=draft, amendment=amendment,
+            mode=mode, user=user, flags=effective_flags(user), pfloor=st, **voting)
+    return _poll_json(data)
 
 # chair announcement (no thread)
 @app.post("/events/{event_id}/proposal-floor/{kind}/{id}/floor/take_now")

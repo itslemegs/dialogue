@@ -1,0 +1,452 @@
+"""Read-only route tests using the existing isolated-source unittest pattern.
+
+No app.main/app.db imports, application startup, SQL engine, network, or model
+initialization. The in-memory query double evaluates the handlers' predicates;
+any attempted persistence or AI call fails the test.
+"""
+import ast
+import asyncio
+import time
+import copy
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import json
+import re
+from types import SimpleNamespace as N
+import unittest
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.testclient import TestClient
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class Condition:
+    def __init__(self, fn): self.fn = fn
+    def __and__(self, other): return Condition(lambda row: self.fn(row) and other.fn(row))
+    def __or__(self, other): return Condition(lambda row: self.fn(row) or other.fn(row))
+
+
+class Column:
+    def __init__(self, model, name): self.model, self.name = model, name
+    def __eq__(self, value): return Condition(lambda row: getattr(row, self.name, None) == value)
+    def __ge__(self, value): return Condition(lambda row: getattr(row, self.name, None) >= value)
+    def in_(self, values): return Condition(lambda row: getattr(row, self.name, None) in values)
+    def is_(self, value): return self == value
+    def isnot(self, value): return Condition(lambda row: getattr(row, self.name, None) != value)
+    def asc(self): return self
+    def desc(self): return self
+
+
+class ModelType(type):
+    def __getattr__(cls, name): return Column(cls, name)
+
+
+class Row(metaclass=ModelType):
+    def __init__(self, **values): self.__dict__.update(values)
+
+
+class Aggregate:
+    def __init__(self, kind, column): self.kind, self.column, self.model = kind, column, column.model
+
+
+class Query:
+    def __init__(self, *columns):
+        self.columns = columns
+        self.model = columns[0] if isinstance(columns[0], ModelType) else columns[0].model
+        self.conditions, self.order = [], []
+    def where(self, *conditions): self.conditions.extend(conditions); return self
+    def options(self, *args): return self
+    def order_by(self, *columns): self.order = columns; return self
+
+
+class Results:
+    def __init__(self, rows): self.rows = rows
+    def all(self): return self.rows
+    def first(self): return self.rows[0] if self.rows else None
+    def one(self):
+        assert len(self.rows) == 1
+        return self.rows[0]
+
+
+class ReadOnlyDB:
+    def __init__(self, rows): self.rows = rows
+    def __enter__(self): return self
+    def __exit__(self, *args): return False
+    def get(self, model, ident):
+        return next((r for r in self.rows if type(r) is model and r.id == ident), None)
+    def exec(self, query):
+        rows = [r for r in self.rows if type(r) is query.model and all(c.fn(r) for c in query.conditions)]
+        for col in reversed(query.order):
+            if isinstance(col, Column): rows.sort(key=lambda r: getattr(r, col.name))
+        if isinstance(query.columns[0], Aggregate):
+            values = [len(rows) if a.kind == 'count' else max((getattr(r, a.column.name) for r in rows), default=None)
+                      for a in query.columns]
+            return Results([tuple(values) if len(values) > 1 else values[0]])
+        if isinstance(query.columns[0], Column):
+            return Results([getattr(r, query.columns[0].name) for r in rows])
+        return Results(rows)
+    def __getattr__(self, name):
+        raise AssertionError('Unexpected database operation: ' + name)
+
+
+def flags(user):
+    roles = user.role_names if user else []
+    return {key: role in roles for key, role in [('IS_ADMIN','admin'), ('IS_CHAIR','chairman'),
+        ('IS_PRESIDENT','president'), ('IS_MEMBER','member'), ('IS_INVITED','invited speaker')]}
+
+
+class PollingTests(unittest.TestCase):
+    def setUp(self):
+        self.now = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        names = ['User','Event','EventAccessGrant','AgendaProposal','GeneralFloorLink','Question',
+                 'FloorState','SpeakerRequest','Intervention','ProposalRoom','ProposalMessage',
+                 'ProposalDraft','Amendment','ProposalFloorState','ProposalSpeakerRequest',
+                 'ProposalIntervention','ProposalEarlyVote','ProposalFormalVote','ProposalEarlyBallot','ProposalFormalBallot']
+        self.models = {name: ModelType(name, (Row,), {}) for name in names}
+        self.rows = []
+        def add(name, **values):
+            row = self.models[name](**values); self.rows.append(row); return row
+        self.add = add
+        self.user = add('User', id=2, handle='viewer', role_names=['member'], roles=[])
+        add('User', id=1, handle='author', role_names=['member'], roles=[])
+        add('User', id=3, handle='chair', role_names=['chairman'], roles=[])
+        add('User', id=4, handle='banned', role_names=['member','banned'], roles=[])
+        self.event = add('Event', id=10, access_mode='open', stages=[])
+        self.prop = add('AgendaProposal', id=20, event_id=10, status='accepted', title='Agenda',
+                        background='Context', source_url=None, created_at=self.now, proposer=None)
+        self.room = add('ProposalRoom', id=30, event_id=10, proposal_id=20, sponsor_id=1)
+        self.draft = add('ProposalDraft', id=40, event_id=10, proposal_id=20, room_id=30,
+            is_submitted=True, submitted_at=self.now-timedelta(days=1), status='TABLED', l_number='L.1', title='Original')
+        self.amend = add('Amendment', id=50, draft_id=40, am_no=1, label='L.1/Amend.1', body_markdown='Amendment text')
+        self.db = ReadOnlyDB(self.rows)
+        self.ai = Mock(side_effect=AssertionError('Unexpected AI/translation call'))
+        self.templates = Jinja2Templates(directory=str(ROOT/'app/templates'))
+        self.templates.env.globals.update(getattr=getattr, ai_features_enabled=False)
+        self.ns = dict(self.models, __name__='isolated_polling', Request=Request, HTTPException=HTTPException,
+            JSONResponse=JSONResponse, templates=self.templates, select=Query, selectinload=lambda *a: None,
+            func=N(count=lambda c: Aggregate('count',c), max=lambda c: Aggregate('max',c)),
+            and_=lambda *cs: Condition(lambda row: all(c.fn(row) for c in cs)),
+            get_session=lambda: self.db, effective_flags=flags,
+            unsign_cookie=lambda value: int(value) if value else None,
+            has_role=lambda user, role: role in user.role_names,
+            ProposalStatus=N(accepted='accepted'), EventAccessMode=N(open='open'),
+            datetime=datetime, timezone=timezone, VISIBLE_AFTER=timedelta(0), re=re,
+            _now_utc=lambda: self.now, AI_FEATURES_ENABLED=False,
+            ensure_general_floor_question=self.ai, get_or_create_floor=self.ai,
+            _pfloor_get_or_create_state=self.ai, translate_text=self.ai, mark_dirty=self.ai,
+            refresh_summary_if_needed=self.ai, get_cached_or_enqueue_draft_translation=self.ai,
+            DRAFT_GENERATION_EXECUTOR=self.ai)
+        # The existing scope helper imports SQLAlchemy locally. Supply the same
+        # predicate double there; do not import an engine or application module.
+        sqlalchemy = patch.dict('sys.modules', {'sqlalchemy': N(and_=self.ns['and_'])})
+        sqlalchemy.start()
+        self.addCleanup(sqlalchemy.stop)
+        needed = ['current_user','_is_event_member','_get_event_or_404','_user_has_event_access','_require_event_access',
+            '_get_event_proposal_or_404','_get_event_room_or_404','_get_event_draft_or_404','_get_event_amendment_or_404',
+            '_general_floor_item','_general_poll_context','_discussion_revision','_rows_revision','_thread_rows',
+            '_floor_snapshot','_poll_json','interventions_fragment','interventions_head','floor_state_for_agenda',
+            'room_updates','_pfloor_poll_context','_pfloor_voting_context','_amendment_vote_cards',
+            'pfloor_interventions_fragment','pfloor_interventions_head','pfloor_state','_pfi_scope_where',
+            '_get_early_vote','_get_formal_vote','_has_user_early_voted','_has_user_formal_voted',
+            '_pf_user_has_floor','_pfloor_load_speakers','_to_aware_utc','_is_shared_poll_read',
+            'experiment_session_log_middleware']
+        tree = ast.parse((ROOT/'app/main.py').read_text())
+        definitions = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef,ast.AsyncFunctionDef))}
+        nodes = []
+        for name in needed:
+            node = copy.deepcopy(definitions[name]); node.decorator_list = []; nodes.append(node)
+        module = ast.Module(body=[ast.ImportFrom(module='__future__', names=[ast.alias(name='annotations')],level=0)]+nodes,type_ignores=[])
+        ast.fix_missing_locations(module)
+        exec(compile(module, 'isolated_polling', 'exec'), self.ns)
+        self.ns['ordered_speakers'] = lambda db,qid: [r for r in self.rows if type(r) is self.models['SpeakerRequest'] and r.question_id==qid]
+        self.ns['_pfloor_queue_order'] = lambda: (self.models['ProposalSpeakerRequest'].position.asc(),)
+        self.app = FastAPI()
+        for route, name in [
+            ('/events/{event_id}/general-floor/{pid}/floor/state','floor_state_for_agenda'),
+            ('/events/{event_id}/general-floor/{pid}/interventions/head','interventions_head'),
+            ('/events/{event_id}/general-floor/{pid}/interventions/fragment','interventions_fragment'),
+            ('/events/{event_id}/proposal-floor/{kind}/{id}/floor/state','pfloor_state'),
+            ('/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions/head','pfloor_interventions_head'),
+            ('/events/{event_id}/proposal-floor/{kind}/{item_id}/interventions/fragment','pfloor_interventions_fragment'),
+            ('/events/{event_id}/proposal-discussion/{pid}/rooms/{rid}/updates','room_updates')]:
+            self.app.add_api_route(route,self.ns[name],methods=['GET'])
+        self.client = TestClient(self.app)
+        self.client.cookies.set('session','2')
+        self.general = '/events/10/general-floor/20'
+        self.floor = '/events/10/proposal-floor/draft/40'
+        self.room_url = '/events/10/proposal-discussion/20/rooms/30/updates'
+
+    def tearDown(self): self.ai.assert_not_called()
+
+    def link_general(self):
+        self.add('Question',id=60,event_id=10)
+        self.add('GeneralFloorLink',id=1,proposal_id=20,question_id=60)
+
+    def intervention(self, ident, parent=None):
+        return self.add('Intervention',id=ident,question_id=60,by_user=1,local_no=ident,
+                        relates_to_id=parent,body='<script>unsafe</script>',created_at=self.now)
+
+    def vote(self, kind, **values):
+        defaults = dict(id=1,event_id=10,proposal_id=20,draft_id=40,amendment_id=None,
+                        is_open=True,yes=2,no=1,abstain=3)
+        defaults.update(values)
+        return self.add('Proposal'+kind+'Vote',**defaults)
+
+    def test_general_fragment_has_authoritative_item_context_and_keys(self):
+        self.link_general(); self.intervention(1); self.intervention(2,1)
+        response = self.client.get(self.general+'/interventions/fragment')
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertIn('/events/10/general-floor/20/floor/register',response.text)
+        self.assertIn('data-discussion-revision="2:2"',response.text)
+        self.assertIn('id="replies-1"',response.text)
+        self.assertIn('data-post-id="2"',response.text)
+        self.assertNotIn('<script>unsafe',response.text)
+        self.assertIn('&lt;script&gt;',response.text)
+        self.client.cookies.set('session','3')
+        response = self.client.get(self.general+'/interventions/fragment')
+        self.assertIn('name="to_handle"',response.text)
+        self.assertIn('/events/10/general-floor/20/floor/invite_ror',response.text)
+
+    def test_general_reads_do_not_create_missing_question_or_floor(self):
+        for linked in [False,True]:
+            if linked: self.link_general()
+            before = len(self.rows)
+            for suffix in ['/floor/state','/interventions/head','/interventions/fragment']:
+                response=self.client.get(self.general+suffix)
+                self.assertEqual(response.status_code,200,response.text)
+            self.assertEqual(len(self.rows),before)
+        state=self.client.get(self.general+'/floor/state').json()
+        self.assertFalse(state['is_open']); self.assertEqual(state['discussion_revision'],'0:0')
+
+    def test_revision_detects_later_commit_with_lower_id(self):
+        self.link_general(); self.intervention(10)
+        first=self.client.get(self.general+'/interventions/head').json()
+        self.intervention(9)
+        second=self.client.get(self.general+'/interventions/head').json()
+        self.assertEqual(first['last_any_id'],second['last_any_id'])
+        self.assertNotEqual(first['revision'],second['revision'])
+
+    def test_room_second_viewer_messages_replies_and_unchanged_revision(self):
+        self.add('ProposalMessage',id=1,room_id=30,user_id=1,local_no=1,parent_id=None,body='Root',created_at=self.now)
+        first=self.client.get(self.room_url).json()
+        self.add('ProposalMessage',id=2,room_id=30,user_id=1,local_no=2,parent_id=1,body='Reply',created_at=self.now)
+        second=self.client.get(self.room_url,params={'revision':first['revision']}).json()
+        self.assertEqual(second['revision'],'2:2')
+        self.assertIn('data-post-id="1"',second['html']);self.assertIn('data-post-id="2"',second['html'])
+        self.assertIn('Reply',second['html']); self.assertIn('@author',second['html'])
+        unchanged=self.client.get(self.room_url,params={'revision':second['revision']}).json()
+        self.assertIsNone(unchanged['html'])
+        self.rows.remove(self.draft)
+        self.assertEqual(self.client.get(self.room_url).status_code,200)
+        self.assertFalse(any(type(r) is self.models['ProposalDraft'] for r in self.rows))
+
+    def test_room_access_and_relations(self):
+        self.client.cookies.clear();self.assertEqual(self.client.get(self.room_url).status_code,401)
+        self.client.cookies.set('session','4');self.assertEqual(self.client.get(self.room_url).status_code,403)
+        self.client.cookies.set('session','2')
+        self.event.access_mode='passcode'
+        self.assertEqual(self.client.get(self.room_url).status_code,403)
+        self.add('EventAccessGrant',id=1,event_id=10,user_id=2)
+        self.assertEqual(self.client.get(self.room_url).status_code,200)
+        self.room.proposal_id=99;self.assertEqual(self.client.get(self.room_url).status_code,404)
+        self.room.proposal_id=20;self.room.event_id=99;self.assertEqual(self.client.get(self.room_url).status_code,404)
+        self.room.event_id=10;self.prop.event_id=99;self.assertEqual(self.client.get(self.room_url).status_code,404)
+        self.prop.event_id=10;self.prop.status='rejected';self.assertEqual(self.client.get(self.room_url).status_code,404)
+
+    def test_floor_readonly_missing_state_and_scope_separation(self):
+        self.add('ProposalIntervention',id=1,event_id=10,proposal_id=20,draft_id=40,amendment_id=None,
+                 by_user=1,parent_id=None,local_no=1,body='Draft discussion',created_at=self.now)
+        self.add('ProposalIntervention',id=2,event_id=10,proposal_id=20,draft_id=None,amendment_id=50,
+                 by_user=1,parent_id=None,local_no=1,body='Amendment discussion',created_at=self.now)
+        for kind,ident,own,other in [('draft',40,'Draft discussion','Amendment discussion'),('amendment',50,'Amendment discussion','Draft discussion')]:
+            base=f'/events/10/proposal-floor/{kind}/{ident}'
+            for suffix in ['/floor/state','/interventions/head','/interventions/fragment']:
+                response=self.client.get(base+suffix)
+                self.assertEqual(response.status_code,200,response.text)
+                if suffix.endswith('fragment'):
+                    self.assertIn(own,response.text);self.assertNotIn(other,response.text)
+        self.assertFalse(any(type(r) is self.models['ProposalFloorState'] for r in self.rows))
+
+    def test_floor_access_visibility(self):
+        for base in [self.general,self.floor]:
+            self.client.cookies.clear();self.assertEqual(self.client.get(base+'/floor/state').status_code,401)
+            self.client.cookies.set('session','4');self.assertEqual(self.client.get(base+'/floor/state').status_code,403)
+            self.client.cookies.set('session','2')
+        self.draft.is_submitted=False;self.assertEqual(self.client.get(self.floor+'/floor/state').status_code,403)
+        self.draft.is_submitted=True;self.draft.event_id=99
+        self.assertEqual(self.client.get('/events/10/proposal-floor/amendment/50/floor/state').status_code,404)
+        self.draft.event_id=10;self.amend.draft_id=99
+        self.assertEqual(self.client.get('/events/10/proposal-floor/amendment/50/interventions/fragment').status_code,404)
+        self.prop.status='rejected';self.assertEqual(self.client.get(self.floor+'/floor/state').status_code,404)
+
+    def voting_html(self, url=None):
+        response=self.client.get((url or self.floor)+'/floor/state')
+        self.assertEqual(response.status_code,200,response.text)
+        return response.json()['voting_html']
+
+    def test_early_vote_unopened_open_voted_totals_closed(self):
+        self.assertIn('Early voting has not been opened yet',self.voting_html())
+        vote=self.vote('Early')
+        html=self.voting_html()
+        self.assertIn('/early/vote',html);self.assertIn('<strong>3</strong> Abstain',html)
+        self.add('ProposalEarlyBallot',id=1,event_id=10,proposal_id=20,draft_id=40,amendment_id=None,user_id=1,choice='NO')
+        self.assertIn('/early/vote',self.voting_html()) # Other user's ballot does not lock this user.
+        self.add('ProposalEarlyBallot',id=2,event_id=10,proposal_id=20,draft_id=40,amendment_id=None,user_id=2,choice='YES')
+        html=self.voting_html();self.assertIn('already cast your early vote',html);self.assertNotIn('/early/vote"',html)
+        vote.is_open=False;vote.no=0
+        self.assertIn('Adopted by consensus',self.voting_html())
+        vote.no=2;vote.yes=0;self.assertIn('Rejected by consensus',self.voting_html())
+        vote.yes=2;self.assertIn('No consensus',self.voting_html())
+
+    def test_formal_vote_results_and_persisted_status(self):
+        self.assertIn('Formal vote is not opened yet',self.voting_html())
+        vote=self.vote('Formal')
+        self.assertIn('/formal/vote',self.voting_html())
+        self.add('ProposalFormalBallot',id=1,formal_vote_id=vote.id,user_id=2,choice='ABSTAIN')
+        self.assertIn('already cast your formal vote',self.voting_html())
+        vote.is_open=False;vote.yes=2;vote.no=2;vote.abstain=20
+        html=self.voting_html();self.assertIn('Formal voting is closed',html);self.assertIn('Rejected',html)
+        vote.yes=3;html=self.voting_html();self.assertIn('Accepted',html);self.assertIn('Counted: 5',html)
+        self.draft.status='ADOPTED';self.assertIn('Draft status: ADOPTED',self.voting_html())
+
+    def test_amendment_cards_use_active_votes_and_never_other_ballot_choices(self):
+        vote=self.vote('Formal',draft_id=None,amendment_id=50,is_open=False,yes=4,no=1)
+        html=self.voting_html();self.assertIn('L.1/Amend.1',html);self.assertIn('Adopted',html)
+        self.add('ProposalFormalBallot',id=1,formal_vote_id=vote.id,user_id=1,choice='PRIVATE_SENTINEL')
+        html=self.voting_html('/events/10/proposal-floor/amendment/50')
+        self.assertNotIn('PRIVATE_SENTINEL',html)
+        self.assertIn('/amendment/50/formal/open',self._chair_html())
+
+    def _chair_html(self):
+        self.client.cookies.set('session','3')
+        return self.voting_html('/events/10/proposal-floor/amendment/50')
+
+    def test_logging_exemptions_are_explicit(self):
+        check=self.ns['_is_shared_poll_read']
+        for path in [self.room_url,self.general+'/floor/state',self.general+'/interventions/head',
+                     self.floor+'/interventions/fragment']:
+            self.assertTrue(check(path))
+        for path in [self.general,self.floor+'/early/vote',self.floor+'/floor/register','/dashboard']:
+            self.assertFalse(check(path))
+        source=(ROOT/'app/main.py').read_text()
+        self.assertIn('request.method == "GET" and _is_shared_poll_read(path)',source)
+
+    def test_existing_floor_recognition_queue_and_readonly_snapshot(self):
+        self.link_general()
+        self.intervention(7)
+        self.add('FloorState', id=1, question_id=60, is_open=True,
+                 speaking_time_sec=120, current_speaker_request_id=8)
+        self.add('SpeakerRequest', id=8, question_id=60, user_id=2, kind='ROR',
+                 status='SPEAKING', position=1, target_intervention_id=7, created_at=self.now)
+        self.add('ProposalFloorState', id=2, event_id=10, proposal_id=20,
+                 draft_id=40, amendment_id=None, is_open=False, formal_is_open=False,
+                 speaking_time_sec=90, current_speaker_request_id=9)
+        self.add('ProposalSpeakerRequest', id=9, event_id=10, proposal_id=20,
+                 draft_id=40, amendment_id=None, user_id=2, kind='ROR_ALL',
+                 status='SPEAKING', position=1, target_intervention_id=None, created_at=self.now)
+        self.add('ProposalSpeakerRequest', id=10, event_id=10, proposal_id=20,
+                 draft_id=None, amendment_id=50, user_id=1, kind='GENERAL',
+                 status='QUEUED', position=2, target_intervention_id=None, created_at=self.now)
+        self.vote('Formal')  # Active record wins even though formal_is_open is false.
+        before=copy.deepcopy([r.__dict__ for r in self.rows])
+        general=self.client.get(self.general+'/floor/state').json()
+        self.assertTrue(general['can_speak'])
+        self.assertEqual(general['current_target_local_no'],7)
+        proposal=self.client.get(self.floor+'/floor/state').json()
+        self.assertEqual([r['id'] for r in proposal['speakers']],[9])
+        self.assertEqual(proposal['current_kind'],'ROR_ALL')
+        self.assertIn('/formal/vote',proposal['voting_html'])
+        for base in [self.general,self.floor]:
+            for suffix in ['/interventions/head','/interventions/fragment']:
+                self.assertEqual(self.client.get(base+suffix).status_code,200)
+        self.assertEqual([r.__dict__ for r in self.rows],before)
+
+    def test_draft_ballot_does_not_lock_amendment_ballot(self):
+        self.vote('Early')
+        self.vote('Early',id=2,draft_id=None,amendment_id=50)
+        self.add('ProposalEarlyBallot',id=1,event_id=10,proposal_id=20,draft_id=40,
+                 amendment_id=None,user_id=2,choice='NO')
+        self.assertIn('already cast your early vote',self.voting_html())
+        html=self.voting_html('/events/10/proposal-floor/amendment/50')
+        self.assertIn('/amendment/50/early/vote',html)
+        self.assertNotIn('already cast your early vote',html)
+
+    def test_logging_middleware_skips_poll_reads_but_logs_actions(self):
+        session=MagicMock()
+        self.ns.update(time=time, _session_log_should_skip=lambda path: False,
+            get_or_make_session_key=lambda request: 'test-session', get_request_id=lambda request: 'test-request',
+            get_session=session, add_session_log=Mock(), _log_user_id_from_request=lambda request: 2,
+            _event_id_from_path=lambda path: 10)
+        paths=[self.room_url]+[base+suffix for base in [self.general,self.floor]
+            for suffix in ['/floor/state','/interventions/head','/interventions/fragment']]
+        for path in paths:
+            request=Request({'type':'http','method':'GET','path':path,'headers':[], 'query_string':b''})
+            asyncio.run(self.ns['experiment_session_log_middleware'](request,AsyncMock(return_value=JSONResponse({}))))
+        session.assert_not_called()
+        self.ns['add_session_log'].assert_not_called()
+        for method,path in [('POST',self.floor+'/formal/vote'),('GET',self.floor),('POST',self.floor+'/floor/state')]:
+            request=Request({'type':'http','method':method,'path':path,'headers':[], 'query_string':b''})
+            asyncio.run(self.ns['experiment_session_log_middleware'](request,AsyncMock(return_value=JSONResponse({}))))
+        self.assertEqual(self.ns['add_session_log'].call_count,3)
+        self.assertEqual(session.return_value.__enter__.return_value.commit.call_count,3)
+
+    def test_all_poll_routes_enforce_membership_and_event_grants(self):
+        paths=[self.room_url]+[base+suffix for base in [self.general,self.floor,
+            '/events/10/proposal-floor/amendment/50']
+            for suffix in ['/floor/state','/interventions/head','/interventions/fragment']]
+        self.event.access_mode='passcode'
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code,403,path)
+        self.add('EventAccessGrant',id=1,event_id=10,user_id=2)
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code,200,path)
+        self.user.role_names=[]
+        for path in paths:
+            self.assertEqual(self.client.get(path).status_code,403,path)
+
+    def test_complete_active_pages_render_with_ai_disabled(self):
+        self.templates.env.globals['url_for'] = lambda name, **params: (
+            '/static/' + params['path'] if name == 'static' else
+            f"/events/{params['event_id']}/proposal-discussion/{params['pid']}/rooms/{params['rid']}/delete")
+        self.draft.sponsor_id=1
+        for field in ['recalling','noting','welcoming','expressing_regret','expressing_deep_concern',
+                      'emphasizing','decides','requests','calls_upon','encourages']:
+            setattr(self.draft,field,'')
+        self.link_general()
+        q=self.db.get(self.models['Question'],60)
+        st=N(id=1,is_open=True,current_speaker_request_id=None,speaking_time_sec=120)
+        for user_id in [1,2,3]:
+            user=self.db.get(self.models['User'],user_id)
+            context=dict(user=user,flags=flags(user),event=self.event,proposal=self.prop,
+                room=self.room,draft=self.draft,amendment=self.amend,q=q,
+                item=self.ns['_general_floor_item'](self.prop,q),floor=st,pfloor=st,
+                threads=[],user_map={user.id:user},role_map={},speakers=[],
+                can_speak=user_id==3,current_req=None,last_any_id=0,last_child_id=0,
+                cos_list=[],early_vote=None,formal_vote=None,HAS_EARLY_VOTED=False,
+                HAS_FORMAL_VOTED=False,amendment_cards=[])
+            for name,mode in [('events/general_floor_item.html','DRAFT'),
+                ('events/proposal_floor_item.html','DRAFT'),('events/proposal_floor_item.html','AMENDMENT'),
+                ('rooms/show.html','DRAFT')]:
+                with self.subTest(template=name,mode=mode,user=user_id):
+                    request=Request({'type':'http','method':'GET','path':self.floor,'headers':[]})
+                    self.draft.is_submitted = name != 'rooms/show.html'
+                    request.state.help_ctx = {}
+                    html=self.templates.env.get_template(name).render(request=request,mode=mode,**context)
+                    self.assertIn('DeliberationPolling.',html)
+                    self.assertIn('textarea',html)
+
+    def test_templates_parse_and_controls_are_not_in_message_region(self):
+        for name in ['base.html','rooms/show.html','events/general_floor_item.html','events/proposal_floor_item.html',
+                     'partials/room_messages.html','partials/pfloor_vote_panel.html','macros/interventions.html','macros/interventions-prop.html']:
+            self.templates.env.parse((ROOT/'app/templates'/name).read_text())
+        html=self.client.get(self.room_url).json()['html']
+        self.assertNotIn('draft_title',html);self.assertNotIn('textarea',html)
+        self.assertNotIn('Generate',html)
+        self.assertIn("it.type === 'INVITE_ROR_PFLOOR'",(ROOT/'app/templates/base.html').read_text())
+
+
+if __name__ == '__main__': unittest.main()

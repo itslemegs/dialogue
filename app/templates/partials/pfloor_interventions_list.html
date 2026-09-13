@@ -1,3 +1,4 @@
+<template data-discussion-revision="{{ discussion_revision }}"></template>
 {# app/templates/partials/pfloor_interventions_list.html #}
 {% from "macros/interventions-prop.html" import render_node with context %}
 {% import "macros/interventions-prop.html" as iv with context %}
@@ -7,7 +8,7 @@
 {% for R in threads %}
   {{ render_node(R, user_map, none, can_speak, user) }}
 {% else %}
-  <li class="text-slate-500 px-4 py-4">
+  <li data-empty-message class="text-slate-500 px-4 py-4">
     No interventions yet. Be the first to post.
   </li>
 {% endfor %}

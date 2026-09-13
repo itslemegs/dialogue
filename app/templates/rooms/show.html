@@ -546,6 +546,305 @@
   }
 </style>
 
+
+<style>
+  /* Proposal Draft — shared guidance + polished document view */
+
+  .draft-panel {
+    overflow: hidden;
+    border: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, .98);
+    box-shadow:
+      0 20px 50px rgba(15, 23, 42, .055),
+      0 1px 2px rgba(15, 23, 42, .04);
+  }
+
+  .draft-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.1rem 1.15rem .95rem;
+    border-bottom: 1px solid #e2e8f0;
+    background:
+      linear-gradient(
+        145deg,
+        rgba(248,250,252,.96),
+        rgba(255,255,255,.99)
+      );
+  }
+
+  .draft-panel-kicker,
+  .draft-guide-eyebrow,
+  .draft-section-kicker {
+    color: #6366f1;
+    font-size: .64rem;
+    font-weight: 800;
+    letter-spacing: .11em;
+  }
+
+  .draft-panel-title {
+    margin-top: .14rem;
+    color: #0f172a;
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -.015em;
+  }
+
+  .draft-panel-subtitle {
+    margin-top: .18rem;
+    max-width: 38rem;
+    color: #64748b;
+    font-size: .75rem;
+    line-height: 1.45;
+  }
+
+  .draft-role-chip {
+    flex: 0 0 auto;
+    padding: .32rem .62rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #f8fafc;
+    color: #64748b;
+    font-size: .67rem;
+    font-weight: 750;
+  }
+
+  .draft-role-chip-owner {
+    border-color: #c7d2fe;
+    background: #eef2ff;
+    color: #4338ca;
+  }
+
+  .draft-role-chip-submitted {
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+    color: #047857;
+  }
+
+  .draft-crash-course {
+    margin: 1rem 1rem .75rem;
+    padding: .9rem;
+    border: 1px solid rgba(199, 210, 254, .85);
+    border-radius: 16px;
+    background:
+      linear-gradient(
+        145deg,
+        rgba(238,242,255,.76),
+        rgba(250,250,255,.95)
+      );
+  }
+
+  .draft-crash-course-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+  }
+
+  .draft-guide-title {
+    margin-top: .12rem;
+    color: #312e81;
+    font-size: .84rem;
+    font-weight: 800;
+  }
+
+  .draft-guide-icon {
+    display: grid;
+    width: 2rem;
+    height: 2rem;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(255,255,255,.8);
+    color: #4f46e5;
+  }
+
+  .draft-guide-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .55rem;
+    margin-top: .75rem;
+  }
+
+  .draft-guide-item {
+    display: flex;
+    gap: .55rem;
+    padding: .65rem;
+    border: 1px solid rgba(224,231,255,.9);
+    border-radius: 12px;
+    background: rgba(255,255,255,.8);
+  }
+
+  .draft-guide-number {
+    display: grid;
+    width: 1.45rem;
+    height: 1.45rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 999px;
+    background: #4f46e5;
+    color: white;
+    font-size: .65rem;
+    font-weight: 800;
+  }
+
+  .draft-guide-item strong {
+    display: block;
+    color: #312e81;
+    font-size: .72rem;
+  }
+
+  .draft-guide-item p {
+    margin-top: .14rem;
+    color: #64748b;
+    font-size: .66rem;
+    line-height: 1.4;
+  }
+
+  .draft-guide-tip {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin-top: .65rem;
+    color: #6366f1;
+    font-size: .68rem;
+    font-weight: 650;
+  }
+
+  .draft-readonly-document {
+    margin: .75rem 1rem 1rem;
+  }
+
+  .draft-document-sheet {
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    border-radius: 17px;
+    background: white;
+    box-shadow: 0 9px 25px rgba(15,23,42,.045);
+  }
+
+  .draft-document-top {
+    padding: 1rem 1rem .9rem;
+    border-bottom: 1px solid #e2e8f0;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(248,250,252,.9),
+        rgba(255,255,255,.98)
+      );
+  }
+
+  .draft-doc-number {
+    color: #059669;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+  }
+
+  .draft-doc-title {
+    margin-top: .22rem;
+    color: #0f172a;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .draft-document-section {
+    padding: .9rem 1rem;
+  }
+
+  .draft-document-section + .draft-document-section {
+    border-top: 1px solid #eef2f7;
+  }
+
+  .draft-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .65rem;
+    margin-bottom: .65rem;
+  }
+
+  .draft-section-title {
+    color: #334155;
+    font-size: .78rem;
+    font-weight: 800;
+  }
+
+  .draft-clause-list {
+    display: grid;
+    gap: .55rem;
+  }
+
+  .draft-clause-card {
+    padding: .65rem .72rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+  }
+
+  .draft-clause-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .65rem;
+    margin-bottom: .25rem;
+  }
+
+  .draft-clause-label {
+    color: #475569;
+    font-size: .68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .045em;
+  }
+
+  .draft-clause-hint {
+    color: #6366f1;
+    font-size: .64rem;
+    font-weight: 700;
+  }
+
+  .draft-clause-value {
+    color: #1e293b;
+    font-size: .8rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  .draft-support-box {
+    margin: .75rem 1rem 1rem;
+    padding: .8rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #f8fafc;
+  }
+
+  .draft-people-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .45rem;
+  }
+
+  .draft-person-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: .28rem .48rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: white;
+    font-size: .7rem;
+  }
+
+  @media (max-width: 900px) {
+    .draft-guide-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
 <h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
 <div class="text-slate-500 text-sm mb-4">Agenda: {{ proposal.title }}</div>
 
@@ -667,8 +966,65 @@ Delete room
 
 
   <!-- Draft -->
-  <section class="md:col-span-7 bg-white border rounded p-3">
-    <h3 class="font-semibold">Draft (Room sponsor edits; others can co-sign)</h3>
+  <section class="md:col-span-7 draft-panel">
+    <div class="draft-panel-header">
+      <div>
+        <div class="draft-panel-kicker">COLLABORATIVE DRAFT</div>
+        <h3 class="draft-panel-title">Proposal Draft</h3>
+        <p class="draft-panel-subtitle">
+          The room sponsor edits the draft. Everyone can review the structure and drafting guidance.
+        </p>
+      </div>
+
+      {% if user and user.id == room.sponsor_id and not draft.is_submitted %}
+        <span class="draft-role-chip draft-role-chip-owner">You are editing</span>
+      {% elif draft.is_submitted %}
+        <span class="draft-role-chip draft-role-chip-submitted">Submitted</span>
+      {% else %}
+        <span class="draft-role-chip">Read-only view</span>
+      {% endif %}
+    </div>
+
+    <div class="draft-crash-course">
+      <div class="draft-crash-course-head">
+        <div>
+          <div class="draft-guide-eyebrow">QUICK DRAFTING GUIDE</div>
+          <div class="draft-guide-title">What a complete proposal needs</div>
+        </div>
+        <span class="draft-guide-icon" aria-hidden="true">✦</span>
+      </div>
+
+      <div class="draft-guide-grid">
+        <div class="draft-guide-item">
+          <span class="draft-guide-number">1</span>
+          <div>
+            <strong>A clear title</strong>
+            <p>Tell readers what the proposal is about in one concise phrase.</p>
+          </div>
+        </div>
+
+        <div class="draft-guide-item">
+          <span class="draft-guide-number">2</span>
+          <div>
+            <strong>Preambular clause(s)</strong>
+            <p>Explain <em>why</em> the proposal is needed: context, concerns, or principles.</p>
+          </div>
+        </div>
+
+        <div class="draft-guide-item">
+          <span class="draft-guide-number">3</span>
+          <div>
+            <strong>Operative clause(s)</strong>
+            <p>Explain <em>what</em> should happen: a decision, request, recommendation, or action.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="draft-guide-tip">
+        <span aria-hidden="true">ⓘ</span>
+        Hover or tap a highlighted clause label for a short explanation of how to use it.
+      </div>
+    </div>
 
     {% set is_sponsor = (user and user.id == room.sponsor_id) %}
     {% if is_sponsor and not draft.is_submitted %}
@@ -738,21 +1094,6 @@ Delete room
           data-log-action="SAVE_DRAFT"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}">
-          <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
-            <div class="font-semibold text-indigo-900 mb-2">
-              Before submitting, your draft must include:
-            </div>
-
-            <div class="grid gap-1">
-              <div>✓ <strong>A title</strong></div>
-              <div>✓ <strong>At least one preambular clause</strong> — why the proposal is needed</div>
-              <div>✓ <strong>At least one operative clause</strong> — what the proposal asks to happen</div>
-            </div>
-
-            <div class="mt-2 text-xs text-indigo-800">
-              Remember to save your latest changes before submitting.
-            </div>
-          </div>
           <div class="space-y-1">
             <div class="flex items-center gap-2">
               <label for="draft_title" class="text-sm font-semibold text-slate-700">

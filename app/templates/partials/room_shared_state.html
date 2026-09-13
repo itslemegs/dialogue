@@ -1,90 +1,232 @@
+{% import "macros/user_flair.html" as uf with context %}
+
 {% set is_sponsor = (user and user.id == room.sponsor_id) %}
+{% set submitted = getattr(draft, 'is_submitted', False) %}
 
-{% if getattr(draft, 'is_submitted', False) %}
-  <div class="mt-2 p-2 rounded bg-emerald-50 text-emerald-700">
-    Submitted as <strong>{{ getattr(draft, 'l_number', '') }}</strong> at {{ getattr(draft, 'submitted_at', None)|jst }}
-  </div>
-{% endif %}
+{% if not is_sponsor or submitted %}
+  <div class="draft-readonly-document">
+    <div class="draft-document-sheet">
 
-{# Never replace the sponsor's active editor. Everyone else gets the saved server version. #}
-{% if not is_sponsor or getattr(draft, 'is_submitted', False) %}
-  <div class="mt-2 grid grid-cols-1 gap-2">
-    {% if getattr(draft, 'title', '') %}
-      <div>
-        <div class="text-xs text-slate-500">Title</div>
-        <div class="border rounded p-2 font-medium">{{ getattr(draft, 'title', '') }}</div>
-      </div>
-    {% endif %}
+      <div class="draft-document-top">
+        {% if submitted %}
+          <div class="draft-doc-number">
+            {{ getattr(draft, 'l_number', '') }}
+            · SUBMITTED {{ getattr(draft, 'submitted_at', None)|jst }}
+          </div>
+        {% else %}
+          <div class="draft-doc-number" style="color:#6366f1;">
+            SAVED WORKING DRAFT
+          </div>
+        {% endif %}
 
-    {% for label, name in [
-      ('Recalling', 'recalling'),
-      ('Noting', 'noting'),
-      ('Welcoming', 'welcoming'),
-      ('Expressing regret', 'expressing_regret'),
-      ('Expressing deep concern', 'expressing_deep_concern'),
-      ('Emphasizing', 'emphasizing'),
-      ('Decides', 'decides'),
-      ('Requests', 'requests'),
-      ('Calls upon', 'calls_upon'),
-      ('Encourages', 'encourages')
-    ] %}
-      {% set val = getattr(draft, name, '') %}
-      {% if val %}
-        <div>
-          <div class="text-xs text-slate-500">{{ label }}</div>
-          <div class="whitespace-pre-wrap border rounded p-2">{{ val }}</div>
+        <div class="draft-doc-title">
+          {{ getattr(draft, 'title', '') or 'Untitled proposal' }}
         </div>
-      {% endif %}
-    {% endfor %}
+      </div>
+
+      {% set preambular = [
+        (
+          'Recalling',
+          'recalling',
+          'Refer back to an earlier agreement, discussion, principle, or event that is relevant to this proposal.'
+        ),
+        (
+          'Noting',
+          'noting',
+          'Point out a relevant fact, observation, or situation without strongly judging it.'
+        ),
+        (
+          'Welcoming',
+          'welcoming',
+          'Acknowledge a positive development, effort, or action that has already taken place.'
+        ),
+        (
+          'Expressing regret',
+          'expressing_regret',
+          'Show disappointment about an undesirable situation or something that has happened.'
+        ),
+        (
+          'Expressing deep concern',
+          'expressing_deep_concern',
+          'Highlight a serious problem, risk, or harm that requires attention.'
+        ),
+        (
+          'Emphasizing',
+          'emphasizing',
+          'Stress a principle or point that is especially important to the proposal.'
+        )
+      ] %}
+
+      {% set operative = [
+        (
+          'Decides',
+          'decides',
+          'State a concrete decision or action that the group or body itself will take.'
+        ),
+        (
+          'Requests',
+          'requests',
+          'Formally ask a particular person, organization, or body to take an action.'
+        ),
+        (
+          'Calls upon',
+          'calls_upon',
+          'Strongly urge an actor to take action. This is stronger than simply encouraging them.'
+        ),
+        (
+          'Encourages',
+          'encourages',
+          'Recommend or support an action without making it sound compulsory.'
+        )
+      ] %}
+
+      <div class="draft-document-section">
+        <div class="draft-section-heading">
+          <div>
+            <div class="draft-section-kicker">WHY</div>
+            <div class="draft-section-title">Preambular clauses</div>
+          </div>
+        </div>
+
+        <div class="draft-clause-list">
+          {% set ns = namespace(found=false) %}
+          {% for label, name, description in preambular %}
+            {% set val = getattr(draft, name, '') %}
+            {% if val %}
+              {% set ns.found = true %}
+              <div class="draft-clause-card">
+                <div class="draft-clause-head">
+                  <span class="draft-clause-label">{{ label }}</span>
+                  <button type="button"
+                          class="draft-clause-hint"
+                          data-draft-hint="{{ description }}"
+                          data-draft-hint-side="top">
+                    ? Guidance
+                  </button>
+                </div>
+                <div class="draft-clause-value">{{ val }}</div>
+              </div>
+            {% endif %}
+          {% endfor %}
+
+          {% if not ns.found %}
+            <div class="text-xs text-slate-400">
+              No preambular clause has been added yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="draft-document-section">
+        <div class="draft-section-heading">
+          <div>
+            <div class="draft-section-kicker">WHAT HAPPENS</div>
+            <div class="draft-section-title">Operative clauses</div>
+          </div>
+        </div>
+
+        <div class="draft-clause-list">
+          {% set ns = namespace(found=false) %}
+          {% for label, name, description in operative %}
+            {% set val = getattr(draft, name, '') %}
+            {% if val %}
+              {% set ns.found = true %}
+              <div class="draft-clause-card">
+                <div class="draft-clause-head">
+                  <span class="draft-clause-label">{{ label }}</span>
+                  <button type="button"
+                          class="draft-clause-hint"
+                          data-draft-hint="{{ description }}"
+                          data-draft-hint-side="top">
+                    ? Guidance
+                  </button>
+                </div>
+                <div class="draft-clause-value">{{ val }}</div>
+              </div>
+            {% endif %}
+          {% endfor %}
+
+          {% if not ns.found %}
+            <div class="text-xs text-slate-400">
+              No operative clause has been added yet.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
   </div>
 {% endif %}
 
-{% if not getattr(draft, 'is_submitted', False) and not is_sponsor %}
-  <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+
+{% if not submitted and not is_sponsor %}
+  <div class="draft-support-box">
     <div class="text-sm font-semibold text-slate-800">
-      Do you support this proposal?
+      Support this draft
     </div>
 
-    <div class="text-xs text-slate-500 mt-1 mb-2">
-      Co-signing shows that you support bringing this draft forward.
+    <div class="text-xs text-slate-500 mt-1 mb-3">
+      Co-signing supports bringing this draft forward.
       It is not your final vote on the proposal.
     </div>
 
     <form method="post"
           action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/cosign">
-      <button class="px-3 py-1.5 rounded {{ 'bg-fuchsia-700 text-white' if user and (user.id in (cos_list or [])) else 'bg-slate-100' }}"
+      <button class="px-3 py-1.5 rounded-lg font-semibold text-sm
+                     {{ 'bg-fuchsia-700 text-white' if user and (user.id in (cos_list or [])) else 'bg-indigo-600 text-white' }}"
               data-hint="{{ 'Remove your support from this draft before it is submitted.' if user and (user.id in (cos_list or [])) else 'Add your support as a co-signer before this draft is submitted.' }}"
               data-hint-side="top">
-        {{ 'Remove co-sign' if user and (user.id in (cos_list or [])) else 'Co-sign' }}
+        {{ 'Remove co-sign' if user and (user.id in (cos_list or [])) else 'Co-sign this draft' }}
       </button>
     </form>
   </div>
-{% elif getattr(draft, 'is_submitted', False) %}
-  <div class="mt-3 text-sm text-slate-500">
-    Co-signing closed after submission.
+{% elif submitted %}
+  <div class="draft-support-box text-xs text-slate-500">
+    Co-signing is closed because this draft has been submitted.
   </div>
 {% endif %}
 
-<div class="mt-3 text-sm">
-  <div class="text-slate-500"
-       data-hint="The main sponsor owns this room draft and can edit it before submission."
-       data-hint-side="top">
-    Main sponsor: @{{ user_map[room.sponsor_id].handle if user_map.get(room.sponsor_id) }}
+
+<div class="draft-support-box">
+  <div class="draft-people-row">
+    <span class="text-xs font-semibold text-slate-500">Sponsor</span>
+
+    {% set sponsor = user_map.get(room.sponsor_id) %}
+    {% set sponsor_roles = sponsor.roles | map(attribute='name') | list if sponsor and sponsor.roles else [] %}
+
+    <span class="draft-person-chip"
+          data-hint="The main sponsor owns this room draft and can edit it before submission."
+          data-hint-side="top">
+      {{ uf.flair_for_user(
+        u=sponsor,
+        roles_list=sponsor_roles,
+        handle_text="@" ~ (sponsor.handle if sponsor and sponsor.handle else "unknown")
+      ) }}
+    </span>
   </div>
 
-  <div>
-    Co-signers:
+  <div class="draft-people-row mt-2">
+    <span class="text-xs font-semibold text-slate-500">Co-signers</span>
+
     {% set ids = (cos_list or []) %}
+
     {% if ids and ids|length %}
       {% for uid in ids %}
-        <span class="inline-block rounded bg-slate-100 px-2 py-0.5 mr-1"
+        {% set signer = user_map.get(uid) %}
+        {% set signer_roles = signer.roles | map(attribute='name') | list if signer and signer.roles else [] %}
+
+        <span class="draft-person-chip"
               data-hint="This member has co-signed the draft."
               data-hint-side="top">
-          @{{ user_map[uid].handle if user_map.get(uid) }}
+          {{ uf.flair_for_user(
+            u=signer,
+            roles_list=signer_roles,
+            handle_text="@" ~ (signer.handle if signer and signer.handle else "unknown")
+          ) }}
         </span>
       {% endfor %}
     {% else %}
-      <span class="text-slate-500">—</span>
+      <span class="text-xs text-slate-400">No co-signers yet</span>
     {% endif %}
   </div>
 </div>

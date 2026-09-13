@@ -324,12 +324,10 @@ class PollingTests(unittest.TestCase):
             cosigned['draft_revision'],
         )
         self.assertIsNotNone(submitted['draft_html'])
-        self.assertIn('Submitted as', submitted['draft_html'])
         self.assertIn('L.77', submitted['draft_html'])
-        self.assertIn(
-            'Co-signing closed after submission.',
-            submitted['draft_html'],
-        )
+        self.assertIn('SUBMITTED', submitted['draft_html'])
+        self.assertIn('2026-01-02 09:00 JST', submitted['draft_html'])
+        self.assertIn('Co-signing is closed', submitted['draft_html'])
 
     def test_jst_display_and_internal_message_numbers_are_hidden(self):
         # Stored UTC timestamps are displayed as JST.
@@ -398,6 +396,46 @@ class PollingTests(unittest.TestCase):
         self.assertIn(
             'request=request,\n                    user=user,',
             room_source,
+        )
+
+    def test_room_drafting_guidance_is_shared_with_non_sponsors(self):
+        room_source = (
+            ROOT / 'app/templates/rooms/show.html'
+        ).read_text()
+
+        shared_source = (
+            ROOT / 'app/templates/partials/room_shared_state.html'
+        ).read_text()
+
+        # The crash course must sit outside the sponsor-only editor block.
+        crash = room_source.index('QUICK DRAFTING GUIDE')
+        sponsor_gate = room_source.index(
+            '{% if is_sponsor and not draft.is_submitted %}',
+            crash,
+        )
+        self.assertLess(crash, sponsor_gate)
+
+        self.assertIn(
+            'What a complete proposal needs',
+            room_source,
+        )
+        self.assertIn(
+            'Hover or tap a highlighted clause label',
+            room_source,
+        )
+
+        # Read-only participants get the same clause-level explanations.
+        self.assertIn(
+            'data-draft-hint="{{ description }}"',
+            shared_source,
+        )
+        self.assertIn(
+            'Preambular clauses',
+            shared_source,
+        )
+        self.assertIn(
+            'Operative clauses',
+            shared_source,
         )
 
     def test_room_access_and_relations(self):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.i18n import request_locale, translate
+
 import csv
 import html
 import io
@@ -252,6 +254,10 @@ def export_session_log(event_id: int, request: Request, format: str = "csv"):
 
 @router.get("/events/{event_id}/session-log", response_class=HTMLResponse)
 def view_session_log(event_id: int, request: Request):
+    locale = request_locale(request)
+    def label(key, **params):
+        return html.escape(translate(locale, key, **params))
+
     with get_session() as db:
         _require_log_viewer(request, event_id, db)
         logs = db.exec(
@@ -300,10 +306,10 @@ def view_session_log(event_id: int, request: Request):
 
     return f"""
     <!doctype html>
-    <html>
+    <html lang="{locale}">
     <head>
         <meta charset="utf-8">
-        <title>Session Log - Event {event_id}</title>
+        <title>{label('logs.title', id=event_id)}</title>
         <style>
             body {{
                 font-family: system-ui, sans-serif;
@@ -340,29 +346,29 @@ def view_session_log(event_id: int, request: Request):
         </style>
     </head>
     <body>
-        <h1>Session Log - Event {event_id}</h1>
+        <h1>{label('logs.title', id=event_id)}</h1>
 
         <div class="links">
-            <a href="/events/{event_id}/session-log/export?format=csv">Download CSV</a>
-            <a href="/events/{event_id}/session-log/export?format=json">Download JSON</a>
+            <a href="/events/{event_id}/session-log/export?format=csv">{label('logs.csv')}</a>
+            <a href="/events/{event_id}/session-log/export?format=json">{label('logs.json')}</a>
         </div>
 
         <table>
             <thead>
                 <tr>
-                    <th>Time</th>
-                    <th>User</th>
-                    <th>Session</th>
-                    <th>Source</th>
-                    <th>Action</th>
-                    <th>Phase</th>
-                    <th>Page</th>
-                    <th>Method</th>
-                    <th>Status</th>
+                    <th>{label('logs.time')}</th>
+                    <th>{label('logs.user')}</th>
+                    <th>{label('logs.session')}</th>
+                    <th>{label('logs.source')}</th>
+                    <th>{label('logs.action')}</th>
+                    <th>{label('logs.phase')}</th>
+                    <th>{label('logs.page')}</th>
+                    <th>{label('logs.method')}</th>
+                    <th>{label('floor.queue.status')}</th>
                     <th>ms</th>
-                    <th>Target</th>
+                    <th>{label('amendment.target')}</th>
                     <th>ID</th>
-                    <th>Details</th>
+                    <th>{label('logs.details')}</th>
                 </tr>
             </thead>
             <tbody>

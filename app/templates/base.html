@@ -39,12 +39,13 @@
           el.className = "max-w-sm bg-white border rounded shadow p-3";
           el.innerHTML = `
             <div class="text-sm font-semibold mb-1"></div>
-            <div class="text-sm text-slate-700">${it.message}</div>
+            <div class="text-sm text-slate-700" data-notification-message></div>
             <div class="text-xs text-slate-500 mt-1">${window.formatJstTimestamp(it.ts)}</div>
             <div class="mt-2 text-right">
               <button class="px-2 py-1 text-xs bg-slate-800 text-white rounded"></button>
             </div>`;
           el.firstElementChild.textContent = window.UII18n.t(it.type === 'FLOOR' ? 'notifications.floor_recognition' : 'ui.notifications');
+          el.querySelector('[data-notification-message]').textContent = window.UII18n.notificationText(it);
           el.querySelector('button').textContent = window.UII18n.t('common.ok');
           el.querySelector('button').onclick = () => root.removeChild(el);
           root.appendChild(el);

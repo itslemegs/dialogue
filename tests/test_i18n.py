@@ -247,8 +247,8 @@ class RequestTests(unittest.TestCase):
             self.assertIn('@alice&lt;&amp;&gt;', html)
             self.assertIn('href="/admin"', html)
         for role, image, ja_label in [('admin','admin','管理者'), ('member','member','参加者'),
-                ('invited speaker','speaker','招待発言者'), ('president','president','president'),
-                ('chairman','chairman','chairman')]:
+                ('invited speaker','speaker','招待発言者'), ('president','president','総会議長'),
+                ('chairman','chairman','議長')]:
             roles = [role]
             template = self.templates.env.from_string(
                 '{% from "macros/user_flair.html" import flair_for_user with context %}'
@@ -301,7 +301,8 @@ class RequestTests(unittest.TestCase):
                      'events/decision.html','partials/pfloor_vote_panel.html','macros/interventions-prop.html',
                      'partials/pfloor_interventions_list.html','proposal_discussion/index.html','rooms/index.html',
                      'rooms/show.html','partials/room_messages.html','partials/room_shared_state.html',
-                     'events/view_draft_index.html','events/draft_detail.html','events/amendment_detail.html']:
+                     'events/view_draft_index.html','events/draft_detail.html','events/amendment_detail.html',
+                     'admin_home.html','admin/_events.html','admin/_users_roles.html']:
             source = (ROOT/'app/templates'/name).read_text()
             for key in re.findall(r"\b(?:t|tr)\(['\"]([^'\"]+)['\"]\s*(?=[,)])", source):
                 self.assertIn(key, i18n.CATALOGUES['en'], (name,key))
@@ -542,7 +543,7 @@ class RequestTests(unittest.TestCase):
         self.assertIn('(options.generalFloor || options.proposalFloor) ? window.UII18n.t(key, params) : fallback',source)
         self.assertIn('generalFloor: true',(ROOT/'app/templates/events/general_floor_item.html').read_text())
         self.assertNotIn('generalFloor: true',(ROOT/'app/templates/events/proposal_floor_item.html').read_text())
-        self.assertEqual(i18n.translate('ja','roles.chairman'),'chairman')
+        self.assertEqual(i18n.translate('ja','roles.chairman'),'議長')
 
     def proposal_floor_context(self, chair=False):
         ctx=self.general_floor_context(chair)
@@ -981,6 +982,169 @@ class RequestTests(unittest.TestCase):
             result=ns['view_amendment'](event_id=10,pid=20,rid=30,draft_id=40,amend_id=60,request=request('ja'))
             self.assertEqual(result['lang'],'en');self.assertEqual(result['body_show'],ctx['amend'].body_markdown)
         ai.assert_not_called();db.commit.assert_not_called()
+
+    def test_phase8_jst_and_notifications_execute_in_both_locales(self):
+        import shutil, subprocess
+        if not shutil.which('node'):
+            self.skipTest('Node required for presentation execution')
+        fixtures = [dict(locale=locale, catalogue={key:i18n.translate(locale,key) for key in i18n.JS_KEYS})
+                    for locale in ('en','ja')]
+        result = subprocess.run(['node','tests/phase8_i18n.js'], input=json.dumps(fixtures),
+                                text=True,capture_output=True,cwd=ROOT,timeout=20)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        menu = (ROOT/'app/templates/events_menu.html').read_text()
+        self.assertIn('window.formatJstTimestamp(dt, true)',menu)
+        self.assertNotIn('Intl.DateTimeFormat(undefined',menu)
+        self.assertEqual(self.ns['_format_jst']('2027-05-20T09:46:00Z'),'2027-05-20 18:46 JST')
+
+    def test_phase8_admin_roles_preserve_values_permissions_and_content(self):
+        import re
+        users = [SimpleNamespace(id=1,handle='Original_user',email='author@example.org'),
+                 SimpleNamespace(id=2,handle='Banned_user',email='banned@example.org')]
+        roles = {1:['member','chairman'],2:['member','banned']}
+        for actor in ['admin','president','chair']:
+            ctx = dict(tab='users',users=users,role_map=roles,all_roles=['member','admin','president','chairman','invited speaker'],
+                       actor_id=99,actor_is_admin=actor=='admin',actor_is_president=actor=='president',actor_is_chair=actor=='chair')
+            outputs = [self.render_phase2('admin_home.html',locale,**ctx) for locale in ('en','ja')]
+            self.assertIn('User &amp; Role Management',outputs[0])
+            self.assertIn('ユーザー・役割管理',outputs[1])
+            self.assertIn('利用停止中',outputs[1])
+            self.assertIn('議長',outputs[1])
+            for html in outputs:
+                self.assertIn('Original_user',html)
+                self.assertIn('author@example.org',html)
+            for attr in ['action','value','name','disabled']:
+                self.assertEqual(re.findall(r'\b'+attr+r'(?:="[^"]*")?',outputs[0]),
+                                 re.findall(r'\b'+attr+r'(?:="[^"]*")?',outputs[1]))
+        self.assertEqual(roles[1],['member','chairman'])
+        for raw,label in [('president','総会議長'),('chairman','議長'),('banned','利用停止中')]:
+            html=self.templates.env.from_string('{{ role|role_label }}').render(request=request('ja'),role=raw)
+            self.assertEqual(html,label)
+        self.assertEqual(self.templates.env.from_string('{{ role|role_label }}').render(request=request('ja'),role='future_role'),'future_role')
+
+    def test_phase8_admin_events_render_fixed_ui_and_raw_controls(self):
+        import re
+        ctx=dict(tab='events',error='Passcode is required for private events',preset=None,
+                 events=[dict(id=7,title='Authored <Event> 日本語',access_mode='passcode',start_local_str='2027-05-20 18:46',
+                              end_local_str='2027-05-20 19:46',duration_min='60')])
+        outputs=[self.render_phase2('admin_home.html',locale,**ctx) for locale in ('en','ja')]
+        for html in outputs:
+            self.assertIn('Authored &lt;Event&gt; 日本語',html)
+            for value in ['open','passcode']:
+                self.assertIn(f'value="{value}"',html)
+        for label in ['イベントを作成','公開範囲','非公開イベントにはパスコードが必要です。','開始日時（日本時間）']:
+            self.assertIn(label,outputs[1])
+        self.assertIn('Create Event',outputs[0])
+        ctx['events'][0]['access_mode']='open'
+        for locale,label in [('en','Open'),('ja','公開')]:
+            public=self.render_phase2('admin_home.html',locale,**ctx)
+            self.assertRegex(public,rf'bg-emerald-100[^>]*>\s*{label}\s*</span>')
+        self.assertEqual(ctx['events'][0]['access_mode'],'open')
+        self.assertEqual(re.findall(r'(?:name|action|value)="[^"]*"',outputs[0]),
+                         re.findall(r'(?:name|action|value)="[^"]*"',outputs[1]))
+
+    def test_phase8_error_boundary_preserves_exception_codes_and_headers(self):
+        from fastapi.exception_handlers import http_exception_handler
+        from starlette.exceptions import HTTPException
+        node=next(n for n in ast.parse((ROOT/'app/main.py').read_text()).body
+                  if isinstance(n,ast.AsyncFunctionDef) and n.name=='localized_http_error')
+        node.decorator_list=[]
+        ns=dict(Request=Request,StarletteHTTPException=HTTPException,http_exception_handler=http_exception_handler,
+                request_locale=i18n.request_locale,localize_ui_error=i18n.localize_ui_error)
+        exec(compile(ast.Module(body=[node],type_ignores=[]),'isolated_error','exec'),ns)
+        for code in [400,403,404,409]:
+            original=HTTPException(code,'Insufficient role',headers={'X-Test':'unchanged'})
+            for locale in ['en','ja']:
+                response=asyncio.run(ns['localized_http_error'](request(locale),original))
+                self.assertEqual(response.status_code,code)
+                self.assertEqual(response.headers['x-test'],'unchanged')
+                self.assertEqual(json.loads(response.body)['detail'],i18n.translate(locale,'error.role'))
+            self.assertEqual(original.detail,'Insufficient role')
+        for detail in ['Provider: <arbitrary English>',{'operation':'ADD','status':'TABLED'},['GENERAL','ROR','ROR_ALL']]:
+            response=asyncio.run(ns['localized_http_error'](request('ja'),HTTPException(400,detail)))
+            self.assertEqual(json.loads(response.body)['detail'],detail)
+        self.assertEqual(i18n.localize_ui_error('ja','Voting must be at least 1 minute.'),'投票の所要時間は1分以上にしてください。')
+
+    def test_phase8_clause_labels_preserve_authored_content_and_keys(self):
+        import re
+        from html import unescape
+        ctx=self.room_context(sponsor=True,submitted=False)
+        outputs=[self.render_room('rooms/show.html',locale,**ctx) for locale in ['en','ja']]
+        for name,en,ja in [('recalling','Recalling','想起し'),('decides','Decides','決定する'),('requests','Requests','要請する')]:
+            for html,label in zip(outputs,[en,ja]):
+                self.assertRegex(html,rf'<label for="draft_{name}"[^>]*>\s*{label}\s*</label>')
+        fields=lambda html:re.findall(r'<textarea[^>]*name="([^"]+)"[^>]*>(.*?)</textarea>',html,re.S)
+        self.assertEqual(fields(outputs[0]),fields(outputs[1]))
+        self.assertIn(ctx['draft'].recalling,unescape(outputs[1]))
+        for locale in ['en','ja']:
+            ctx['draft'].is_submitted=True
+            html=self.render_room('partials/room_shared_state.html',locale,**ctx)
+            self.assertIn(i18n.translate(locale,'draft.clause.noting'),html)
+            self.assertIn(ctx['draft'].recalling,unescape(html))
+        for key in ['notifications.floor_recognition','home.tagline','floor.points','decision.cosigners','roles.president','roles.chairman']:
+            self.assertNotEqual(i18n.translate('en',key),i18n.translate('ja',key))
+
+    def test_phase8_log_view_shell_preserves_raw_records(self):
+        import html
+        from unittest.mock import MagicMock
+        node=next(n for n in ast.parse((ROOT/'app/routes/session_log.py').read_text()).body
+                  if isinstance(n,ast.FunctionDef) and n.name=='view_session_log')
+        node.decorator_list=[]
+        db=MagicMock();db.__enter__.return_value=db
+        record=SimpleNamespace(user_id=None,created_at='2027-05-20 09:46:00',session_key='opaque-key',source='server',
+            action='PFLOOR_FORMAL_VOTE',phase='proposal_floor',page='/events/7',method='POST',status_code=200,
+            duration_ms=12,target_type='DRAFT',target_id='40',details_json='{"choice":"YES","status":"TABLED"}')
+        db.exec.return_value.all.return_value=[record]
+        ns=dict(Request=Request,get_session=lambda:db,_require_log_viewer=lambda *args:None,
+                select=MagicMock(),ExperimentSessionLog=MagicMock(),html=html,
+                request_locale=i18n.request_locale,translate=i18n.translate)
+        exec(compile(ast.Module(body=[node],type_ignores=[]),'isolated_log_view','exec'),ns)
+        for locale,label in [('en','Download CSV'),('ja','CSVをダウンロード')]:
+            output=ns['view_session_log'](7,request(locale))
+            self.assertIn(label,output);self.assertIn(f'<html lang="{locale}">',output)
+            for raw in ['PFLOOR_FORMAL_VOTE','DRAFT','YES','TABLED','2027-05-20 09:46:00']:
+                self.assertIn(raw,output)
+        db.commit.assert_not_called();db.add.assert_not_called()
+
+    def test_phase8_inline_notices_keep_permission_and_form_semantics(self):
+        import re
+        from html import unescape
+        from urllib.parse import quote
+        from fastapi import HTTPException, Query
+        from fastapi.responses import HTMLResponse
+        from unittest.mock import MagicMock, AsyncMock
+        names={'invite_view','banned_wall','admin_delete_event_confirm'}
+        nodes=[n for n in ast.parse((ROOT/'app/main.py').read_text()).body
+               if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in names]
+        for n in nodes:n.decorator_list=[]
+        db=MagicMock();db.__enter__.return_value=db
+        inv=SimpleNamespace(to_user_id=1,question_id=2,target_intervention_id=3)
+        question=SimpleNamespace(text='Authored <Question> 日本語')
+        ns=dict(Request=Request,Optional=__import__('typing').Optional,Query=Query,HTTPException=HTTPException,
+                HTMLResponse=HTMLResponse,RedirectResponse=RedirectResponse,quote=quote,
+                request_locale=i18n.request_locale,translate=i18n.translate,current_user=lambda req:SimpleNamespace(id=1),
+                get_session=lambda:db,RorInvite='invite',Question='question',User='user',unsign_cookie=lambda v:1,
+                _is_public=lambda path:False,has_role=lambda user,role:role=='banned')
+        exec(compile(ast.Module(body=nodes,type_ignores=[]),'isolated_inline_ui','exec'),ns)
+        outputs=[]
+        for locale in ['en','ja']:
+            db.get.side_effect=lambda model,id: inv if model=='invite' else question
+            response=ns['invite_view'](4,request(locale));output=response.body.decode();outputs.append(output)
+            self.assertIn(question.text,unescape(output))
+            self.assertIn(i18n.translate(locale,'floor.invitation_heading'),output)
+            confirm=ns['admin_delete_event_confirm'](7,request(locale),next='/admin?tab=events').body.decode()
+            self.assertIn('/admin/events/7/delete?next=',confirm)
+            self.assertIn(i18n.translate(locale,'common.delete'),confirm)
+            downstream=AsyncMock()
+            response=asyncio.run(ns['banned_wall'](request(locale),downstream))
+            self.assertEqual(response.status_code,403)
+            self.assertIn(i18n.translate(locale,'account.banned'),response.body.decode())
+            downstream.assert_not_called()
+        self.assertEqual(re.findall(r'action="[^"]+"',outputs[0]),re.findall(r'action="[^"]+"',outputs[1]))
+        inv.to_user_id=9
+        with self.assertRaises(HTTPException) as exc:ns['invite_view'](4,request('ja'))
+        self.assertEqual(exc.exception.status_code,404)
+        db.add.assert_not_called();db.commit.assert_not_called()
 
     def test_unsaved_guard_excludes_polling_hidden_fields(self):
         # Source-level guard, like the polling-header test below. A hidden

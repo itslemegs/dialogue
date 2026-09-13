@@ -14,6 +14,14 @@ CATALOGUES = MappingProxyType({
     )) for locale in SUPPORTED_LOCALES
 })
 JS_KEYS = (
+    "notifications.announcement", "roles.chairman",
+    'notifications.recognized',
+    'notifications.ror_target',
+    'notifications.intro',
+    'notifications.ror_accepted',
+    'notifications.ror_declined',
+
+    "admin.confirm_delete",
     'document.confirm_withdraw',
     'draft.preambular',
     'draft.operative',
@@ -184,6 +192,83 @@ def javascript_catalogue(context):
     return {key: translate(locale, key) for key in JS_KEYS}
 
 
+# Known application UI messages only; machine/provider details pass through.
+UI_ERROR_KEYS = {
+    'Unauthorized': 'error.unauthorized',
+    'Forbidden': 'error.forbidden',
+    'Not Found': 'error.not_found',
+    'Method Not Allowed': 'error.method',
+
+    'Event not found': 'error.event_missing',
+    'Event access denied': 'error.event_access',
+    'Members only': 'error.members',
+    'Your account is banned': 'account.banned',
+    'Banned users cannot access this resource': 'error.banned_resource',
+    'Agenda item not found for this event': 'error.agenda_event',
+    'Agenda item not found or not accepted': 'error.agenda_missing',
+    'Agenda item not accepted': 'error.agenda_unaccepted',
+    'Room not found for this event': 'error.room_event',
+    'Draft not found for this event': 'error.draft_event',
+    'Amendment not found': 'error.amendment_missing',
+    'Amendment not found for this event': 'error.amendment_event',
+    'Admins only': 'error.admins',
+    'Admins or presidents or chairmen only': 'error.managers',
+    'role required': 'error.role_required',
+    'You cannot modify your own roles': 'error.own_roles',
+    'Cannot modify roles of an admin': 'error.admin_roles',
+    "Presidents may only grant 'chairman' or 'invited speaker'": 'error.president_grant',
+    "Presidents may only revoke 'chairman' or 'invited speaker'": 'error.president_revoke',
+    "Chairmen may only grant 'invited speaker'": 'error.chair_grant',
+    "Chairmen may only revoke 'invited speaker'": 'error.chair_revoke',
+    "Cannot revoke baseline 'member' role": 'error.baseline',
+    'Insufficient role': 'error.role',
+    'You are not allowed to ban this user': 'error.ban',
+    'You are not allowed to unban this user': 'error.unban',
+    'President/Chairman access required': 'error.chair_access',
+    'Invalid action': 'error.action',
+    'Invalid start datetime': 'admin.error.start',
+    'Invalid access mode': 'admin.error.access',
+    'Passcode is required for private events': 'admin.error.passcode',
+    'Opening must be at least 1 minute.': 'admin.error.opening',
+    'General Debate must be at least 1 minute.': 'admin.error.debate',
+    'Voting must be at least 1 minute.': 'admin.error.voting',
+    'Draft not found': 'document.error.not_found',
+    'This draft is not visible yet.': 'document.error.not_visible',
+    'Could not allocate local number; please retry.': 'error.number',
+    'Voting is closed': 'error.vote_closed',
+    'Already voted': 'error.already_voted',
+    'Invalid choice': 'error.choice',
+    'Draft is not visible yet': 'error.draft_visibility',
+    'You do not currently have the floor.': 'floor.error.not_speaking',
+    'Only president or chairman can invite RoR': 'floor.error.invite',
+    'User handle not found': 'floor.error.handle',
+    'Target intervention not found in this proposal floor': 'error.target',
+    'Speaker list is closed. Use Right of Reply.': 'error.list_closed',
+    'Experiment logs are restricted to admins, presidents, and chairmen': 'error.logs',
+}
+
+
+def localize_ui_error(locale, message):
+    if not isinstance(message, str):
+        return message
+    key = UI_ERROR_KEYS.get(message)
+    return translate(locale, key) if key else message
+
+
+@pass_context
+def template_error(context, message):
+    return localize_ui_error(template_locale(context), message)
+
+
+@pass_context
+def role_label(context, role):
+    keys = {"admin": "roles.admin", "president": "roles.president",
+            "chairman": "roles.chairman", "invited speaker": "roles.invited_speaker",
+            "member": "roles.member", "banned": "roles.banned"}
+    return template_translate(context, keys[role]) if role in keys else role
+
+
 def install_jinja(env):
     env.globals.update(t=template_translate, ui_locale=template_locale,
-                       ui_js_catalogue=javascript_catalogue)
+                       ui_js_catalogue=javascript_catalogue, ui_error=template_error)
+    env.filters["role_label"] = role_label

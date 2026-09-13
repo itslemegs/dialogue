@@ -879,16 +879,16 @@
         {% if mode == 'AMENDMENT' %}
           <div class="whitespace-pre-wrap">{{ amendment.body_markdown }}</div>
         {% else %}
-          {% if draft.recalling %}<h4>Recalling</h4><div class="whitespace-pre-wrap">{{ draft.recalling }}</div>{% endif %}
-          {% if draft.noting %}<h4>Noting</h4><div class="whitespace-pre-wrap">{{ draft.noting }}</div>{% endif %}
-          {% if draft.welcoming %}<h4>Welcoming</h4><div class="whitespace-pre-wrap">{{ draft.welcoming }}</div>{% endif %}
-          {% if draft.expressing_regret %}<h4>Expressing regret</h4><div class="whitespace-pre-wrap">{{ draft.expressing_regret }}</div>{% endif %}
-          {% if draft.expressing_deep_concern %}<h4>Expressing deep concern</h4><div class="whitespace-pre-wrap">{{ draft.expressing_deep_concern }}</div>{% endif %}
-          {% if draft.emphasizing %}<h4>Emphasizing</h4><div class="whitespace-pre-wrap">{{ draft.emphasizing }}</div>{% endif %}
-          {% if draft.decides %}<h4>Decides</h4><div class="whitespace-pre-wrap">{{ draft.decides }}</div>{% endif %}
-          {% if draft.requests %}<h4>Requests</h4><div class="whitespace-pre-wrap">{{ draft.requests }}</div>{% endif %}
-          {% if draft.calls_upon %}<h4>Calls upon</h4><div class="whitespace-pre-wrap">{{ draft.calls_upon }}</div>{% endif %}
-          {% if draft.encourages %}<h4>Encourages</h4><div class="whitespace-pre-wrap">{{ draft.encourages }}</div>{% endif %}
+          {% if draft.recalling %}<h4>{{ t('draft.clause.recalling') }}</h4><div class="whitespace-pre-wrap">{{ draft.recalling }}</div>{% endif %}
+          {% if draft.noting %}<h4>{{ t('draft.clause.noting') }}</h4><div class="whitespace-pre-wrap">{{ draft.noting }}</div>{% endif %}
+          {% if draft.welcoming %}<h4>{{ t('draft.clause.welcoming') }}</h4><div class="whitespace-pre-wrap">{{ draft.welcoming }}</div>{% endif %}
+          {% if draft.expressing_regret %}<h4>{{ t('draft.clause.expressing_regret') }}</h4><div class="whitespace-pre-wrap">{{ draft.expressing_regret }}</div>{% endif %}
+          {% if draft.expressing_deep_concern %}<h4>{{ t('draft.clause.expressing_deep_concern') }}</h4><div class="whitespace-pre-wrap">{{ draft.expressing_deep_concern }}</div>{% endif %}
+          {% if draft.emphasizing %}<h4>{{ t('draft.clause.emphasizing') }}</h4><div class="whitespace-pre-wrap">{{ draft.emphasizing }}</div>{% endif %}
+          {% if draft.decides %}<h4>{{ t('draft.clause.decides') }}</h4><div class="whitespace-pre-wrap">{{ draft.decides }}</div>{% endif %}
+          {% if draft.requests %}<h4>{{ t('draft.clause.requests') }}</h4><div class="whitespace-pre-wrap">{{ draft.requests }}</div>{% endif %}
+          {% if draft.calls_upon %}<h4>{{ t('draft.clause.calls_upon') }}</h4><div class="whitespace-pre-wrap">{{ draft.calls_upon }}</div>{% endif %}
+          {% if draft.encourages %}<h4>{{ t('draft.clause.encourages') }}</h4><div class="whitespace-pre-wrap">{{ draft.encourages }}</div>{% endif %}
         {% endif %}
       </div>
 

@@ -1,55 +1,55 @@
 <div class="space-y-4">
-    <h2 class="text-xl font-semibold">Event Management</h2>
+    <h2 class="text-xl font-semibold">{{ t('admin.events') }}</h2>
   
     {% if error %}
-      <div class="mb-2 p-3 rounded bg-rose-100 text-rose-700 text-sm">{{ error }}</div>
+      <div class="mb-2 p-3 rounded bg-rose-100 text-rose-700 text-sm">{{ ui_error(error) }}</div>
     {% endif %}
   
     <!-- CREATE FORM (unchanged except action="/admin/events") -->
     <form method="post" action="/admin/events" class="bg-white border rounded-xl p-6 space-y-5">
-      <h3 class="text-lg font-medium">Create Event</h3>
+      <h3 class="text-lg font-medium">{{ t('admin.create_event') }}</h3>
 
       <div>
-        <label class="block text-sm font-medium text-slate-700">Title</label>
-        <input name="title" type="text" placeholder="Enter event title" required
+        <label class="block text-sm font-medium text-slate-700">{{ t('draft.title') }}</label>
+        <input name="title" type="text" placeholder="{{ t('admin.event_title') }}" required
               value="{{ preset.title if preset else '' }}"
               class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700">Start (local)</label>
+          <label class="block text-sm font-medium text-slate-700">{{ t('admin.start_local') }}</label>
           <input name="start_local" type="datetime-local" required
                 value="{% if preset and preset.start_local %}{{ preset.start_local.strftime('%Y-%m-%dT%H:%M') if preset.start_local.__class__.__name__ != 'str' else preset.start_local }}{% endif %}"
                 class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
-          <p class="mt-1 text-xs text-slate-500">Timezone: Asia/Tokyo</p>
+          <p class="mt-1 text-xs text-slate-500">{{ t('admin.timezone') }}</p>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700">Auto-calculated End</label>
+          <label class="block text-sm font-medium text-slate-700">{{ t('admin.auto_end') }}</label>
           <input id="auto_end" type="text" readonly
                 class="mt-1 w-full rounded border-slate-200 bg-slate-50 text-slate-600" />
-          <p class="mt-1 text-xs text-slate-500">Updates as you change durations</p>
+          <p class="mt-1 text-xs text-slate-500">{{ t('admin.duration_help') }}</p>
         </div>
       </div>
 
       <fieldset class="border rounded-lg p-4">
-        <legend class="px-2 text-sm font-medium text-slate-700">Stage durations (minutes)</legend>
+        <legend class="px-2 text-sm font-medium text-slate-700">{{ t('admin.durations') }}</legend>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block text-xs font-medium text-slate-600">Opening</label>
+            <label class="block text-xs font-medium text-slate-600">{{ t('event.stage.opening') }}</label>
             <input name="open_min" id="open_min" type="number" min="1" required
                   value="{{ preset.open_min if preset else '' }}"
                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-600">General Debate</label>
+            <label class="block text-xs font-medium text-slate-600">{{ t('event.stage.general_debate') }}</label>
             <input name="debate_min" id="debate_min" type="number" min="1" required
                   value="{{ preset.debate_min if preset else '' }}"
                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
           </div>
           <div>
-            <label class="block text-xs font-medium text-slate-600">Voting</label>
+            <label class="block text-xs font-medium text-slate-600">{{ t('event.stage.voting') }}</label>
             <input name="vote_min" id="vote_min" type="number" min="1" required
                   value="{{ preset.vote_min if preset else '' }}"
                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
@@ -59,45 +59,45 @@
       </fieldset>
 
       <fieldset class="border rounded-lg p-4">
-        <legend class="px-2 text-sm font-medium text-slate-700">Access</legend>
+        <legend class="px-2 text-sm font-medium text-slate-700">{{ t('admin.access') }}</legend>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-slate-700">Visibility</label>
+            <label class="block text-sm font-medium text-slate-700">{{ t('admin.visibility') }}</label>
             <select name="access_mode" id="access_mode"
                     class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500">
               <option value="open"
                 {% if not preset or not preset.access_mode or preset.access_mode == "open" %}selected{% endif %}>
-                Open to members
+                {{ t('admin.members') }}
               </option>
               <option value="passcode"
                 {% if preset and preset.access_mode == "passcode" %}selected{% endif %}>
-                Private (requires passcode)
+                {{ t('admin.private_passcode') }}
               </option>
             </select>
           </div>
 
           <div id="passcode_wrap" class="hidden">
-            <label class="block text-sm font-medium text-slate-700">Passcode</label>
+            <label class="block text-sm font-medium text-slate-700">{{ t('dashboard.passcode') }}</label>
             <input name="passcode" id="passcode" type="text"
                   class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500"
-                  placeholder="Set event passcode" />
-            <p class="mt-1 text-xs text-slate-500">Only used when visibility is Private.</p>
+                  placeholder="{{ t('admin.passcode_placeholder') }}" />
+            <p class="mt-1 text-xs text-slate-500">{{ t('admin.passcode_help') }}</p>
           </div>
         </div>
       </fieldset>
 
       <div class="flex items-center justify-end gap-3">
-        <a href="/admin?tab=events" class="px-3 py-2 rounded border text-slate-700">Cancel</a>
+        <a href="/admin?tab=events" class="px-3 py-2 rounded border text-slate-700">{{ t('common.cancel') }}</a>
         <button type="submit" class="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
-          Create Event
+          {{ t('admin.create_event') }}
         </button>
       </div>
     </form>
   
     <!-- EVENTS LIST -->
     <div class="bg-white border rounded-xl p-6">
-      <h3 class="text-lg font-medium mb-3">Events</h3>
+      <h3 class="text-lg font-medium mb-3">{{ t('dashboard.events') }}</h3>
   
       {% if events and events|length > 0 %}
         <div class="overflow-x-auto">
@@ -105,12 +105,12 @@
             <thead class="bg-slate-50">
               <tr>
                 <th class="p-2 text-left w-12">ID</th>
-                <th class="p-2 text-left">Title</th>
-                <th class="p-2 text-left">Access</th>
-                <th class="p-2 text-left">Start (JST)</th>
-                <th class="p-2 text-left">End (JST)</th>
-                <th class="p-2 text-left">Duration</th>
-                <th class="p-2 text-left w-32">Actions</th>
+                <th class="p-2 text-left">{{ t('draft.title') }}</th>
+                <th class="p-2 text-left">{{ t('admin.access') }}</th>
+                <th class="p-2 text-left">{{ t('admin.start_jst') }}</th>
+                <th class="p-2 text-left">{{ t('admin.end_jst') }}</th>
+                <th class="p-2 text-left">{{ t('admin.duration') }}</th>
+                <th class="p-2 text-left w-32">{{ t('admin.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -121,11 +121,11 @@
                 <td class="p-2">
                   {% if e.access_mode == "passcode" %}
                     <span class="inline-block px-2 py-1 rounded bg-amber-100 text-amber-800 text-xs font-medium">
-                      Private
+                      {{ t('admin.private') }}
                     </span>
                   {% else %}
                     <span class="inline-block px-2 py-1 rounded bg-emerald-100 text-emerald-800 text-xs font-medium">
-                      Open
+                      {{ t('admin.public') }}
                     </span>
                   {% endif %}
                 </td>
@@ -137,8 +137,8 @@
                 <td class="p-2">
                   <form method="post"
                         action="/admin/events/{{ e.id }}/delete?next=/admin/events"
-                        onsubmit="return confirm('Delete this event? This also deletes its proposals and stages.');">
-                    <button class="px-3 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">Delete</button>
+                        onsubmit="return confirm(window.UII18n.t('admin.confirm_delete'));">
+                    <button class="px-3 py-1 rounded bg-rose-600 text-white hover:bg-rose-700">{{ t('common.delete') }}</button>
                   </form>
                 </td>
               </tr>
@@ -147,7 +147,7 @@
           </table>
         </div>
       {% else %}
-        <p class="text-sm text-slate-500">No events yet.</p>
+        <p class="text-sm text-slate-500">{{ t('admin.no_events') }}</p>
       {% endif %}
     </div>
   </div>

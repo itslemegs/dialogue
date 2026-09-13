@@ -1,16 +1,16 @@
 <div class="space-y-4">
-    <h2 class="text-xl font-semibold">User &amp; Role Management</h2>
+    <h2 class="text-xl font-semibold">{{ t('admin.users') }}</h2>
 
 <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; min-width: 720px;">
   <thead>
     <tr>
       <th style="text-align:left;">ID</th>
-      <th style="text-align:left;">Handle</th>
-      <th style="text-align:left;">Email</th>
-      <th style="text-align:left;">Roles</th>
-      <th style="text-align:left;">Grant</th>
-      <th style="text-align:left;">Revoke</th>
-      <th style="text-align:left;">Ban</th>
+      <th style="text-align:left;">{{ t('account.handle') }}</th>
+      <th style="text-align:left;">{{ t('account.email') }}</th>
+      <th style="text-align:left;">{{ t('admin.roles') }}</th>
+      <th style="text-align:left;">{{ t('admin.grant') }}</th>
+      <th style="text-align:left;">{{ t('admin.revoke') }}</th>
+      <th style="text-align:left;">{{ t('admin.ban') }}</th>
     </tr>
   </thead>
   <tbody>
@@ -22,12 +22,12 @@
       <td>
         {{ uf.flair_for_user(u=u, roles_list=role_map.get(u.id)) }}
         {% if target_is_banned %}
-            <span style="margin-left:6px; padding:2px 6px; border-radius:4px; background:#ffd6d6; color:#b00020; font-weight:600;">BANNED</span>
+            <span style="margin-left:6px; padding:2px 6px; border-radius:4px; background:#ffd6d6; color:#b00020; font-weight:600;">{{ t('admin.banned') }}</span>
         {% endif %}
       </td> 
       <td>{{ u.email }}</td>
       {% set primary = roles | reject('equalto', 'member') | list %}
-      <td>{{ (primary if primary else (['member'] if 'member' in roles else [])) | join(', ') or '-' }}</td>
+      <td>{{ (primary if primary else (['member'] if 'member' in roles else [])) | map('role_label') | join(', ') or '-' }}</td>
 
       {% set target_roles = role_map.get(u.id, []) %}
       {% set target_is_admin = 'admin' in target_roles %}
@@ -47,22 +47,22 @@
 
       <td>
         {% if target_is_banned %}
-            <span style="opacity:0.5;">— banned —</span>
+            <span style="opacity:0.5;">{{ t('admin.banned_notice') }}</span>
         {% elif grant_blocked %}
-            <span style="opacity:0.5;">— restricted —</span>
+            <span style="opacity:0.5;">{{ t('admin.restricted') }}</span>
         {% else %}
           <form method="post" action="/admin/users/{{u.id}}/roles/grant" style="display:flex; gap:6px; align-items:center;">
             {% set existing = role_map.get(u.id, []) %}
             {% set grantable = all_roles | reject('in', existing) | list %}
             {% if grantable|length == 0 %}
-              <span style="opacity:0.5;">— none —</span>
+              <span style="opacity:0.5;">{{ t('admin.none') }}</span>
             {% else %}
               <select name="role">
                 {% for r in grantable %}
-                  <option value="{{ r }}">{{ r }}</option>
+                  <option value="{{ r }}">{{ r|role_label }}</option>
                 {% endfor %}
               </select>
-              <button type="submit">Grant</button>
+              <button type="submit">{{ t('admin.grant') }}</button>
             {% endif %}
           </form>
         {% endif %}
@@ -70,24 +70,24 @@
 
       <td>
         {% if target_is_banned %}
-            <span style="opacity:0.5;">— banned —</span>
+            <span style="opacity:0.5;">{{ t('admin.banned_notice') }}</span>
         {% elif revoke_blocked %}
-            <span style="opacity:0.5;">— restricted —</span>
+            <span style="opacity:0.5;">{{ t('admin.restricted') }}</span>
         {% else %}
           <form method="post" action="/admin/users/{{u.id}}/roles/revoke" style="display:flex; gap:6px; align-items:center;">
             <select name="role">
               {% if actor_is_admin %}
                 {# admin: any role except 'member' #}
                 {% for r in roles if r != 'member' %}
-                  <option value="{{ r }}">{{ r }}</option>
+                  <option value="{{ r }}">{{ r|role_label }}</option>
                 {% endfor %}
               {% elif actor_is_president %}
                 {# president: only 'chairman' and 'invited speaker' #}
-                {% if 'chairman' in roles %}<option value="chairman">chairman</option>{% endif %}
-                {% if 'invited speaker' in roles %}<option value="invited speaker">invited speaker</option>{% endif %}
+                {% if 'chairman' in roles %}<option value="chairman">{{ 'chairman'|role_label }}</option>{% endif %}
+                {% if 'invited speaker' in roles %}<option value="invited speaker">{{ 'invited speaker'|role_label }}</option>{% endif %}
               {% elif actor_is_chair %}
                 {# chair: only 'invited speaker' #}
-                {% if 'invited speaker' in roles %}<option value="invited speaker">invited speaker</option>{% endif %}
+                {% if 'invited speaker' in roles %}<option value="invited speaker">{{ 'invited speaker'|role_label }}</option>{% endif %}
               {% endif %}
             </select>
             {% set has_revokable =
@@ -96,9 +96,9 @@
                (actor_is_chair and ('invited speaker' in roles))
             %}
             {% if has_revokable %}
-              <button type="submit">Revoke</button>
+              <button type="submit">{{ t('admin.revoke') }}</button>
             {% else %}
-              <button type="submit" disabled>Revoke</button>
+              <button type="submit" disabled>{{ t('admin.revoke') }}</button>
             {% endif %}
           </form>
         {% endif %}
@@ -110,15 +110,15 @@
                             or (actor_is_chair and (not target_is_admin) and (not target_is_pres) and (not is_self)) %}
 
         {% if not can_ban %}
-            <span style="opacity:0.5;">— restricted —</span>
+            <span style="opacity:0.5;">{{ t('admin.restricted') }}</span>
         {% else %}
             {% if target_is_banned %}
             <form method="post" action="/admin/users/{{u.id}}/unban">
-                <button type="submit">Unban</button>
+                <button type="submit">{{ t('admin.unban') }}</button>
             </form>
             {% else %}
             <form method="post" action="/admin/users/{{u.id}}/ban">
-                <button type="submit" style="color:#b00020;">Ban</button>
+                <button type="submit" style="color:#b00020;">{{ t('admin.ban') }}</button>
             </form>
             {% endif %}
         {% endif %}
@@ -130,9 +130,9 @@
 
 <p style="margin-top:12px;">
     <small>
-      <b>Admins</b> can grant/revoke all roles (except baseline <i>member</i>), and can ban.<br>
-      <b>Presidents</b> can grant/revoke <b>chairman</b> and <b>invited speaker</b>, cannot modify admins or baseline <i>member</i>, and can ban.<br>
-      <b>Chairmen</b> can grant/revoke <b>invited speaker</b>, cannot modify other roles or baseline <i>member</i>, and can ban.
+      {{ t('admin.admin_help') }}<br>
+      {{ t('admin.president_help') }}<br>
+      {{ t('admin.chair_help') }}
     </small>
 </p>
 

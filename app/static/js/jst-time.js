@@ -1,6 +1,8 @@
 (function () {
   "use strict";
 
+  const uiLocale = document.documentElement.lang === "ja" ? "ja-JP" : "sv-SE";
+
   const JST_OPTIONS = {
     timeZone: "Asia/Tokyo",
     year: "numeric",
@@ -11,7 +13,7 @@
     hour12: false
   };
 
-  window.formatJstTimestamp = function (value) {
+  window.formatJstTimestamp = function (value, localized = false) {
     if (value === null || value === undefined || value === "") {
       return "";
     }
@@ -45,6 +47,6 @@
       return String(value);
     }
 
-    return dt.toLocaleString("sv-SE", JST_OPTIONS) + " JST";
+    return dt.toLocaleString(localized ? uiLocale : "sv-SE", JST_OPTIONS) + " JST";
   };
 })();

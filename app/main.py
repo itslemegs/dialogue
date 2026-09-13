@@ -236,6 +236,19 @@ from app.security import IS_PROD as UI_COOKIE_SECURE
 
 install_jinja(templates.env)
 
+from fastapi.exception_handlers import http_exception_handler
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.i18n import localize_ui_error
+
+
+@app.exception_handler(StarletteHTTPException)
+async def localized_http_error(request: Request, exc: StarletteHTTPException):
+    detail = localize_ui_error(request_locale(request), exc.detail)
+    if detail == exc.detail:
+        return await http_exception_handler(request, exc)
+    return await http_exception_handler(request, StarletteHTTPException(
+        status_code=exc.status_code, detail=detail, headers=exc.headers))
+
 
 @app.middleware("http")
 async def ui_locale_context(request: Request, call_next):
@@ -613,7 +626,7 @@ async def banned_wall(request: Request, call_next):
             u = db.get(User, uid)
             if u and has_role(u, "banned"):
                 return HTMLResponse(
-                    "<h3>Your account is banned.</h3>",
+                    f"<h3>{translate(request_locale(request), 'account.banned')}</h3>",
                     status_code=403
                 )
 
@@ -1088,17 +1101,21 @@ def invite_view(iid: int, request: Request):
         if not inv or inv.to_user_id != user.id:
             raise HTTPException(404)
         q = db.get(Question, inv.question_id)
+    from html import escape
+    locale = request_locale(request)
+    def label(key, **params):
+        return escape(translate(locale, key, **params))
     # very simple inline template
     html = f"""
-    <html><body style="font-family:system-ui">
-      <h3>Right of Reply Invitation</h3>
-      <p>Question #{inv.question_id}: {q.text if q else ''}</p>
-      <p>Target intervention: #{inv.target_intervention_id}</p>
+    <html lang="{locale}"><body style="font-family:system-ui">
+      <h3>{label('floor.invitation_heading')}</h3>
+      <p>{label('floor.invitation_question', id=inv.question_id)} {escape(q.text) if q else ''}</p>
+      <p>{label('floor.invitation_target', id=inv.target_intervention_id)}</p>
       <form method="post" action="/invites/{iid}/accept" style="display:inline">
-        <button>Accept</button>
+        <button>{label('floor.ror.accept')}</button>
       </form>
       <form method="post" action="/invites/{iid}/decline" style="display:inline;margin-left:8px">
-        <button>Decline</button>
+        <button>{label('floor.ror.decline')}</button>
       </form>
     </body></html>
     """
@@ -1433,7 +1450,7 @@ def admin_home(request: Request, tab: str = "users"):
                     title=ev.title,
                     start_local_str=start_local.strftime("%Y-%m-%d %H:%M"),
                     end_local_str=end_local.strftime("%Y-%m-%d %H:%M") if ev.ends_at else "—",
-                    duration_min=(f"{dur} min" if dur is not None else "—"),
+                    duration_min=(translate(request_locale(request), "admin.minutes", count=dur) if dur is not None else "—"),
                     access_mode=(ev.access_mode.value if hasattr(ev.access_mode, "value") else str(ev.access_mode)),
                 ))
 
@@ -1849,16 +1866,20 @@ def hard_delete_event(session, event_id: int):
 # GET -> show a tiny confirm page with a POST form (so clicks on links won't 405)
 @app.get("/admin/events/{event_id}/delete")
 @app.get("/admin/events/{event_id}/delete/", include_in_schema=False)
-def admin_delete_event_confirm(event_id: int, next: Optional[str] = Query("/admin/events")):
+def admin_delete_event_confirm(event_id: int, request: Request, next: Optional[str] = Query("/admin/events")):
+    from html import escape
+    locale = request_locale(request)
+    def label(key):
+        return escape(translate(locale, key))
     dest = next or "/admin/events"
     return HTMLResponse(f"""
-      <!doctype html><meta charset="utf-8">
+      <!doctype html><html lang="{locale}"><meta charset="utf-8">
       <div style="max-width:600px;margin:3rem auto;font-family:system-ui">
-        <h1>Delete event?</h1>
-        <p>This will also delete its proposals and stages.</p>
+        <h1>{label('admin.delete_heading')}</h1>
+        <p>{label('admin.delete_help')}</p>
         <form method="post" action="/admin/events/{event_id}/delete?next={quote(dest)}">
-          <button style="padding:.5rem 1rem;background:#dc2626;color:#fff;border-radius:.5rem;border:0">Delete</button>
-          <a href="{dest}" style="margin-left:1rem">Cancel</a>
+          <button style="padding:.5rem 1rem;background:#dc2626;color:#fff;border-radius:.5rem;border:0">{label('common.delete')}</button>
+          <a href="{dest}" style="margin-left:1rem">{label('common.cancel')}</a>
         </form>
       </div>
     """)

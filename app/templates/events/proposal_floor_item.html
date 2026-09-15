@@ -668,9 +668,28 @@
     /* Keep the document and discussion usable while the roomier admin right side scrolls with the page. */
     .pf-page-admin .pf-sidebar,
     .pf-page-admin .pf-main-chat {
-      height: calc(100vh - 4rem);
-      position: sticky;
-      top: 1rem;
+      height: auto;
+      min-height: 0;
+      position: static;
+      top: auto;
+      overflow: visible !important;
+    }
+
+    /* Admin proposal floor uses the document/page as the vertical scroller.
+      Avoid nested full-height scroll panes in the document and discussion columns. */
+    .pf-page-admin .pf-thread-shell {
+      flex: 0 0 auto;
+      min-height: 0;
+      overflow: visible;
+    }
+
+    .pf-page-admin #interventions {
+      flex: 0 0 auto;
+      min-height: 0;
+      max-height: none;
+      overflow-x: hidden;
+      overflow-y: visible;
+      overscroll-behavior: auto;
     }
 
     .pf-page-admin .pf-right-admin.pf-right-panel {

@@ -1049,6 +1049,17 @@
   }
 </style>
 
+<div class="mb-3 flex justify-end">
+  <button
+    type="button"
+    id="proposal-room-tutorial"
+    class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+  >
+    <span aria-hidden="true">?</span>
+    <span>Tutorial</span>
+  </button>
+</div>
+
 <h2 class="text-xl font-semibold mb-1">{{ room.title }}</h2>
 <div class="text-slate-500 text-sm mb-4">{{ t('proposal_floor.agenda') }} {{ proposal.title }}</div>
 
@@ -1069,7 +1080,7 @@
 <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
   <!-- Chat -->
 
-  <section class="md:col-span-5 room-chat-shell">
+  <section id="room-tour-discussion" class="md:col-span-5 room-chat-shell">
 
     <div class="room-chat-header">
 
@@ -1170,7 +1181,7 @@
 
 
   <!-- Draft -->
-  <section class="md:col-span-7 draft-panel">
+  <section id="room-tour-draft" class="md:col-span-7 draft-panel">
     <div class="draft-panel-header">
       <div>
         <div class="draft-panel-kicker">{{ t('draft.collaborative') }}</div>
@@ -1189,7 +1200,7 @@
       {% endif %}
     </div>
 
-    <div class="draft-crash-course">
+    <div id="room-tour-guide" class="draft-crash-course">
       <div class="draft-crash-course-head">
         <div>
           <div class="draft-guide-eyebrow">{{ t('draft.guide') }}</div>
@@ -1233,7 +1244,7 @@
     {% set is_sponsor = (user and user.id == room.sponsor_id) %}
     {% if is_sponsor and not draft.is_submitted %}
 
-    <div class="draft-editor-shell">
+    <div id="room-tour-editor" class="draft-editor-shell">
 
       <div class="draft-editor-heading">
         <div>
@@ -1245,7 +1256,7 @@
         </div>
       </div>
 
-      <div class="draft-ai-box mt-2 p-2 rounded border bg-slate-50 space-y-2">
+      <div id="room-tour-ai" class="draft-ai-box mt-2 p-2 rounded border bg-slate-50 space-y-2">
       <label class="block text-sm text-slate-600 {% if not ai_features_enabled %}hidden{% endif %}">
         {{ t('draft.ai.free_text') }}
       </label>
@@ -1304,9 +1315,11 @@
       hx-trigger="load, every 3s"
       hx-swap="innerHTML"
     ></div> -->
-    <form method="post"
-          action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/save"
-          class="draft-editor-form space-y-3 mt-3"
+    <form
+      id="room-tour-draft-form"
+      method="post"
+      action="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/save"
+      class="draft-editor-form space-y-3 mt-3"
           data-log-action="SAVE_DRAFT"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}">
@@ -2392,4 +2405,111 @@
     shared: "room-shared-draft-state"
   });
 </script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const isSponsor =
+      {{ 'true' if user and user.id == room.sponsor_id else 'false' }};
+
+    const isSubmitted =
+      {{ 'true' if draft.is_submitted else 'false' }};
+
+    let tourRole = "viewer";
+
+    if (isSponsor && !isSubmitted) {
+      tourRole = "sponsor";
+    } else if (isSubmitted) {
+      tourRole = "submitted";
+    }
+
+    const storageKey =
+      "dialogue-tour:proposal-room:v1:user-{{ user.id }}:" + tourRole;
+
+    const steps = [
+      {
+        target: "#room-tour-discussion",
+        title: "Room Discussion",
+        text: "Use this space to coordinate with the other participants working on this proposal.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#room-tour-draft",
+        title: "Shared Draft",
+        text: "This panel contains the proposal being developed by the room.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: "#room-tour-guide",
+        title: "Drafting Guide",
+        text: "This guide explains the basic structure: a clear title, preambular clauses, and operative clauses.",
+        placement: "left",
+        padding: 8
+      },
+
+      {% if user and user.id == room.sponsor_id and not draft.is_submitted %}
+      {
+        target: "#room-tour-editor",
+        title: "Editing Workspace",
+        text: "As the sponsor, you can edit and prepare the shared draft in this workspace.",
+        placement: "left",
+        padding: 8
+      },
+
+      {% if ai_features_enabled %}
+      {
+        target: "#room-tour-ai",
+        title: "AI Drafting",
+        text: "You may describe what you want to draft here and generate a starting point to review and edit.",
+        placement: "left",
+        padding: 8
+      },
+      {% endif %}
+
+      {
+        target: "#room-tour-draft-form",
+        title: "Manual Drafting",
+        text: "Write and revise the title, preambular clauses, and operative clauses directly here.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: "button[data-log-action='CLICK_SAVE_DRAFT']",
+        title: "Save Your Work",
+        text: "Save your changes while the proposal is still being developed.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "button[data-log-action='CLICK_SUBMIT_DRAFT_AS_L_DOC']",
+        title: "Submit the Draft",
+        text: "When the draft is ready, the sponsor submits it for consideration as an official draft document.",
+        placement: "top",
+        padding: 8
+      }
+      {% endif %}
+    ];
+
+    function startProposalRoomTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("proposal-room-tutorial")
+      ?.addEventListener("click", startProposalRoomTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startProposalRoomTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

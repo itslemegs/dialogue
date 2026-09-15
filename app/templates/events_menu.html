@@ -1,8 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{{ t('event.menu') }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <h1 id="event-menu-tour-title" class="text-2xl font-bold">
+        {{ t('event.menu') }}
+      </h1>
+
+      {% if event %}
+      <button
+        type="button"
+        id="event-menu-tutorial"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+      >
+        <span aria-hidden="true">?</span>
+        <span>Tutorial</span>
+      </button>
+      {% endif %}
+    </div>
+
     {% if event %}
       <div id="event-meta"
            data-start="{{ event.starts_at_iso }}"
@@ -144,6 +160,11 @@
 <script>
   (function () {
     const tr = window.UII18n.t;
+
+    // Temporary master switch for event-menu time locks.
+    // false = all menu cards are accessible
+    // true  = normal schedule-based locking
+    const MENU_LOCKS_ENABLED = false;
     const meta = document.getElementById('event-meta');
     if (!meta) return;
   
@@ -336,7 +357,11 @@
           }
         }
   
-        setLocked(card, locked, hint);
+        if (MENU_LOCKS_ENABLED) {
+          setLocked(card, locked, hint);
+        } else {
+          setLocked(card, false, '');
+        }
       });
     }
   
@@ -344,6 +369,121 @@
     const iv = setInterval(tick, 1000 * 15);
     window.addEventListener('beforeunload', () => clearInterval(iv));
   })();
+  </script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:event-menu:v1:user-{{ user.id if user else 'guest' }}:event-{{ event.id if event else 'none' }}";
+
+    const steps = [
+      {
+        target: "#event-menu-tour-title",
+        title: "Event Menu",
+        text: "This is the main navigation hub for the event. Each card represents a stage or workspace in the deliberation process.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#event-meta",
+        title: "Current Event",
+        text: "This shows the event you are currently participating in.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#menu-grid",
+        title: "Event Workflow",
+        text: "The cards below take you through agenda setting, deliberation, drafting, voting, and the final decision. Availability depends on the event schedule and your role.",
+        placement: "top",
+        padding: 8
+      },
+
+      {% if flags and (flags.IS_PRESIDENT or flags.IS_CHAIR) %}
+        {
+          target: '[data-key="review_agenda"]',
+          title: "2. Review Agenda",
+          text: "Authorized chairs or presidents review submitted agenda proposals and decide which items enter the accepted agenda.",
+          placement: "right",
+          padding: 8
+        },
+      {% endif %}
+
+      {
+        target: '[data-key="view_agenda"]',
+        title: "3. View Agenda",
+        text: "See the agenda items that have been accepted for deliberation during the event.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: '[data-key="general_floor"]',
+        title: "4. General Floor",
+        text: "Join the broad discussion of accepted agenda items, take the floor, respond to other participants, and develop the direction of deliberation.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: '[data-key="proposal_discussion"]',
+        title: "5. Proposal Discussion",
+        text: "Move from general discussion into focused drafting rooms, where participants can develop a formal proposal and gather co-signers.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: '[data-key="view_draft_resolution"]',
+        title: "6. View Tabled Drafts",
+        text: "Read draft resolutions that have been formally submitted, including their text, sponsors, co-signers, and proposed amendments.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: '[data-key="proposal_floor"]',
+        title: "7. Proposal Floor",
+        text: "Discuss tabled drafts and amendments, participate in the speaker process, and vote when voting is opened.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: '[data-key="decision"]',
+        title: "8. Decision",
+        text: "Review the recorded outcomes of draft resolutions and amendments, including voting results and final statuses.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: '[data-key="propose_agenda"] .status-badge',
+        title: "Open and Locked Stages",
+        text: "Each card displays its current availability. A stage may be open or locked depending on the event schedule. Locked cards also explain when they open or why they are unavailable.",
+        placement: "bottom",
+        padding: 6
+      }
+    ];
+
+    function startEventMenuTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("event-menu-tutorial")
+      ?.addEventListener("click", startEventMenuTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startEventMenuTour, 700);
+    }
+  });
   </script>
   
 {% endblock %}

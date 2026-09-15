@@ -850,10 +850,20 @@
 
 
 <div class="pf-page {% if IS_PRESIDENT or IS_CHAIR %}pf-page-admin{% else %}pf-page-member{% endif %} -mx-2 md:-mx-4 px-2 md:px-4 py-3 md:py-4">
+  <div class="max-w-[1600px] mx-auto mb-3 flex justify-end">
+    <button
+      type="button"
+      id="proposal-floor-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
+  </div>
   <div class="pf-layout grid grid-cols-1 md:grid-cols-12 gap-4 xl:gap-5 items-stretch max-w-[1600px] mx-auto h-full min-h-0">
   <!-- LEFT: Document -->
   <aside class="pf-sidebar md:col-span-3 flex flex-col gap-4 overflow-y-auto pf-scroll md:h-full min-h-0 pr-1">
-    <section class="pf-card p-4">
+    <section id="pf-tour-document" class="pf-card p-4">
       <div class="pf-kicker">
         {{ t('proposal_floor.amendment') if mode == 'AMENDMENT' else t('proposal_floor.tabled_draft') }}
       </div>
@@ -917,7 +927,7 @@
   </aside>
 
   <!-- MIDDLE: Interventions (optional thread area for intros/general comments) -->
-  <main class="pf-main-chat md:col-span-6 flex flex-col gap-4 min-w-0 px-0 md:px-1">
+  <main id="pf-tour-discussion" class="pf-main-chat md:col-span-6 flex flex-col gap-4 min-w-0 px-0 md:px-1">
     <section class="pf-card p-4">
       <div class="flex items-center justify-between gap-3">
         <div>
@@ -1854,5 +1864,74 @@
         if (e.key === "Escape") hide();
       });
     })();
+  </script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:proposal-floor:v1:user-{{ user.id }}:{{ mode|lower }}";
+
+    const steps = [
+      {
+        target: "#pf-tour-document",
+        title: "Current Document",
+        text: "This panel shows the draft or amendment currently being discussed.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#pf-voting",
+        title: "Voting",
+        text: "Voting controls and results appear here when voting is opened.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#pf-tour-discussion",
+        title: "Discussion",
+        text: "The discussion record appears here as participants contribute to the floor.",
+        placement: "auto",
+        padding: 8
+      },
+
+      {
+        target: ".pf-right-speakers",
+        title: "Speaker Queue",
+        text: "This area shows who is speaking and who is waiting for the floor.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: ".pf-right-composer",
+        title: "Speaking",
+        text: "When you have the floor, use this area to submit your contribution.",
+        placement: "left",
+        padding: 8
+      }
+    ];
+
+    function startProposalFloorTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("proposal-floor-tutorial")
+      ?.addEventListener("click", startProposalFloorTour);
+
+    /*
+     * Automatically show the tutorial once for this user.
+     * It can always be replayed using the Tutorial button.
+     */
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startProposalFloorTour, 500);
+    }
+  });
   </script>
 {% endblock %}

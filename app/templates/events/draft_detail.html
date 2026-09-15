@@ -374,7 +374,7 @@
 </section>
 
 <!-- Amendment form / builder -->
-<section class="mt-8">
+<section id="draft-tour-amendment-builder" class="mt-8">
   <h3 class="text-base font-semibold mb-2">{{ t('amendment.propose') }}</h3>
 
   <p class="text-sm text-slate-600 mb-3">
@@ -440,7 +440,8 @@
     </div>
 
     <!-- Manual builder -->
-    <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
+    <div id="draft-tour-amendment-guidance"
+     class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-sm text-slate-700">
       <div class="font-semibold text-indigo-900 mb-2">{{ t('amendment.guidance') }}</div>
 
       <div class="grid md:grid-cols-2 gap-3">
@@ -476,7 +477,8 @@
         </div>
       </div>
     </div>
-    <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div id="draft-tour-amendment-operations"
+     class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
       <div class="flex items-start justify-between gap-3 mb-3">
         <div>
           <h4 class="text-sm font-semibold text-slate-800">{{ t('amendment.operations') }}</h4>
@@ -1714,7 +1716,7 @@
     if (!window.DialogueTour) return;
 
     const storageKey =
-      "dialogue-tour:draft-detail:v1:user-{{ user.id if user else 'guest' }}";
+      "dialogue-tour:draft-detail:v2:user-{{ user.id if user else 'guest' }}"
 
     const steps = [
       {
@@ -1745,8 +1747,66 @@
 
       {
         target: "#draft-tour-amendments",
-        title: "Amendments",
-        text: "Proposed amendments to this draft are listed here as the document moves through deliberation.",
+        title: "Existing Amendments",
+        text: "Amendments that have already been proposed for this draft are listed here. Open one to read the proposed changes.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#draft-tour-amendment-builder",
+        title: "Propose an Amendment",
+        text: "Use this area when you want to propose a specific change to the submitted draft.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#draft-tour-amendment-guidance",
+        title: "How Amendments Work",
+        text: "An amendment can ADD new text, REMOVE existing text, or REPLACE existing text. Choose whether the change affects a preambular or operative clause.",
+        placement: "top",
+        padding: 8
+      },
+
+      {% if ai_features_enabled %}
+      {
+        target: "#am_plain_text",
+        title: "Describe the Change",
+        text: "You may describe the amendment in plain language here. The AI amendment builder can turn your description into structured amendment operations.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: "#am_btn_generate",
+        title: "Generate Operations",
+        text: "Generate a proposed set of amendment operations, then review them carefully before submitting.",
+        placement: "top",
+        padding: 8
+      },
+      {% endif %}
+
+      {
+        target: "#add-op",
+        title: "Add an Operation",
+        text: "You can build the amendment manually by adding one or more operations.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: "#draft-tour-amendment-operations",
+        title: "Amendment Operations",
+        text: "Each operation specifies what to change, which clause it affects, and any text that should be added or used as a replacement.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#amend-form",
+        title: "Submit the Amendment",
+        text: "Review all operations carefully, then submit the amendment. It will appear in the amendment list for further deliberation.",
         placement: "top",
         padding: 8
       }

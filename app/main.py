@@ -1872,6 +1872,124 @@ def hard_delete_event(session, event_id: int):
         session.exec(text(sql), params=params)
 
     # ============================================================
+    # DETACH CROSS-SCOPE POINTERS
+    #
+    # Some rows can point at objects owned by this event while the
+    # referencing row itself belongs to another event/scope. Those
+    # rows must survive, but their nullable pointer must be cleared
+    # before the target object is deleted.
+    # ============================================================
+
+    # Proposal-floor state -> speaker request
+    run("""
+        UPDATE proposal_floor_state
+        SET current_speaker_request_id = NULL
+        WHERE current_speaker_request_id IN (
+            SELECT id
+            FROM proposal_speaker_request
+            WHERE event_id = :id
+        )
+    """)
+
+    # General-floor state -> speaker request
+    run("""
+        UPDATE floorstate
+        SET current_speaker_request_id = NULL
+        WHERE current_speaker_request_id IN (
+            SELECT sr.id
+            FROM speakerrequest sr
+            JOIN question q ON q.id = sr.question_id
+            WHERE q.event_id = :id
+        )
+    """)
+
+    # Other proposal-floor requests may point at a general-floor
+    # intervention belonging to this event.
+    run("""
+        UPDATE proposal_speaker_request
+        SET target_intervention_id = NULL
+        WHERE target_intervention_id IN (
+            SELECT i.id
+            FROM intervention i
+            JOIN question q ON q.id = i.question_id
+            WHERE q.event_id = :id
+        )
+    """)
+
+    # General-floor RoR invites may also point at those interventions.
+    run("""
+        UPDATE rorinvite
+        SET target_intervention_id = NULL
+        WHERE target_intervention_id IN (
+            SELECT i.id
+            FROM intervention i
+            JOIN question q ON q.id = i.question_id
+            WHERE q.event_id = :id
+        )
+    """)
+
+    # General speaker requests may point at those interventions too.
+    run("""
+        UPDATE speakerrequest
+        SET target_intervention_id = NULL
+        WHERE target_intervention_id IN (
+            SELECT i.id
+            FROM intervention i
+            JOIN question q ON q.id = i.question_id
+            WHERE q.event_id = :id
+        )
+    """)
+
+    # Break intervention self-links, including references originating
+    # from a different question/event.
+    run("""
+        UPDATE intervention
+        SET relates_to_id = NULL
+        WHERE relates_to_id IN (
+            SELECT i.id
+            FROM intervention i
+            JOIN question q ON q.id = i.question_id
+            WHERE q.event_id = :id
+        )
+    """)
+
+    # Break proposal-intervention parent pointers before deleting
+    # the event's intervention tree.
+    run("""
+        UPDATE proposal_intervention
+        SET parent_id = NULL
+        WHERE parent_id IN (
+            SELECT id
+            FROM proposal_intervention
+            WHERE event_id = :id
+        )
+    """)
+
+    # Break proposal-message reply pointers.
+    run("""
+        UPDATE proposalmessage
+        SET parent_id = NULL
+        WHERE parent_id IN (
+            SELECT pm.id
+            FROM proposalmessage pm
+            JOIN proposalroom pr ON pr.id = pm.room_id
+            WHERE pr.event_id = :id
+        )
+    """)
+
+    # Formal ballots may point to a vote container belonging to the
+    # event even if the ballot's own event scope is inconsistent.
+    run("""
+        UPDATE proposal_formal_ballot
+        SET formal_vote_id = NULL
+        WHERE formal_vote_id IN (
+            SELECT id
+            FROM proposal_formal_vote
+            WHERE event_id = :id
+        )
+    """)
+
+    # ============================================================
     # LIVE SUMMARY
     #
     # LiveSummary has several non-cascading FKs, so remove summaries

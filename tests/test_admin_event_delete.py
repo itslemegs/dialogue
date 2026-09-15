@@ -202,6 +202,88 @@ class AdminEventDeleteTests(unittest.TestCase):
             delete_index("event"),
             len(statements) - 1,
         )
+    def test_cross_scope_pointers_are_detached_before_targets_are_deleted(self):
+        session = FakeSession()
+
+        self.hard_delete_event(session, 42)
+
+        statements = [
+            " ".join(statement.lower().split())
+            for statement, _ in session.statements
+        ]
+
+        def find(fragment):
+            for index, statement in enumerate(statements):
+                if fragment in statement:
+                    return index
+            self.fail(f"SQL fragment not found: {fragment}")
+
+        intervention_delete = find("delete from intervention")
+
+        self.assertLess(
+            find(
+                "update proposal_speaker_request "
+                "set target_intervention_id = null"
+            ),
+            intervention_delete,
+        )
+
+        self.assertLess(
+            find(
+                "update rorinvite "
+                "set target_intervention_id = null"
+            ),
+            intervention_delete,
+        )
+
+        self.assertLess(
+            find(
+                "update speakerrequest "
+                "set target_intervention_id = null"
+            ),
+            intervention_delete,
+        )
+
+        self.assertLess(
+            find(
+                "update intervention set relates_to_id = null"
+            ),
+            intervention_delete,
+        )
+
+        self.assertLess(
+            find(
+                "update proposal_floor_state "
+                "set current_speaker_request_id = null"
+            ),
+            find("delete from proposal_speaker_request"),
+        )
+
+        self.assertLess(
+            find(
+                "update floorstate "
+                "set current_speaker_request_id = null"
+            ),
+            find("delete from speakerrequest"),
+        )
+
+        self.assertLess(
+            find("update proposalmessage set parent_id = null"),
+            find("delete from proposalmessage"),
+        )
+
+        self.assertLess(
+            find("update proposal_intervention set parent_id = null"),
+            find("delete from proposal_intervention"),
+        )
+
+        self.assertLess(
+            find(
+                "update proposal_formal_ballot "
+                "set formal_vote_id = null"
+            ),
+            find("delete from proposal_formal_vote"),
+        )
 
 
 if __name__ == "__main__":

@@ -5628,7 +5628,11 @@ def proposal_floor_index(event_id: int, request: Request):
                     ProposalDraft.event_id == event.id,
                     ProposalDraft.proposal_id == it.id,
                     ProposalDraft.is_submitted == True,
-                    ProposalDraft.status.in_([ProposalDraftStatus.TABLED, ProposalDraftStatus.REINTRODUCED]),
+                    ProposalDraft.status.in_([
+                        ProposalDraftStatus.TABLED,
+                        ProposalDraftStatus.REINTRODUCED,
+                        ProposalDraftStatus.ADOPTED,
+                    ]),
                 )
             ).all()
             drafts.sort(key=l_seq)

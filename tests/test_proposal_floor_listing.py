@@ -262,6 +262,26 @@ class ProposalFloorListingTests(unittest.TestCase):
             "proposal_floor.amendment_count",
             closed_section,
         )
+    def test_listing_keeps_adopted_drafts_but_excludes_withdrawn(self):
+        source = MAIN.read_text()
+
+        start = source.index("def proposal_floor_index")
+        end = source.index("def _pfi_scope_filter", start)
+        listing_source = source[start:end]
+
+        # Completed/adopted proposal floors must remain visible
+        # in the Closed section.
+        self.assertIn(
+            "ProposalDraftStatus.ADOPTED",
+            listing_source,
+        )
+
+        # Withdrawn drafts are a different lifecycle state and
+        # should not reappear as closed proposal-floor history.
+        self.assertNotIn(
+            "ProposalDraftStatus.WITHDRAWN",
+            listing_source,
+        )
 
 
 if __name__ == "__main__":

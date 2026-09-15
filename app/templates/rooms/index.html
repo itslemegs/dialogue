@@ -1,8 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
-<h2 class="text-xl font-semibold mb-2">{{ t('proposal_discussion.rooms_for', title=proposal.title) }}</h2>
+<div class="flex items-center justify-between gap-4 mb-4">
+  <h2 class="text-xl font-semibold">
+    {{ t('proposal_discussion.rooms_for', title=proposal.title) }}
+  </h2>
 
-<form method="post"
+  <button
+    type="button"
+    id="rooms-index-tutorial"
+    class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+  >
+    <span aria-hidden="true">?</span>
+    <span>Tutorial</span>
+  </button>
+</div>
+
+<form
+      id="rooms-tour-create"
+      method="post"
       action="{{ url_for('rooms_create', event_id=event.id, pid=proposal.id) }}"
       class="space-x-2 mb-4"
       data-log-action="CREATE_PROPOSAL_ROOM"
@@ -13,9 +28,9 @@
   <button class="px-3 py-1 bg-blue-600 text-white rounded" data-log-action="CLICK_CREATE_PROPOSAL_ROOM" data-target-type="agenda_proposal" data-target-id="{{ proposal.id }}">{{ t('proposal_discussion.create_room') }}</button>
 </form>
 
-<ul class="space-y-2">
+<ul id="rooms-tour-list" class="space-y-2">
   {% for r in rooms %}
-    <li class="border rounded p-3">
+  <li class="rooms-tour-item border rounded p-3">
         <div class="font-semibold flex items-center justify-between">
           <span>{{ r.title }}</span>
           {% set can_delete = (r.sponsor_id == user.id) or flags.IS_PRESIDENT or flags.IS_CHAIR or flags.IS_CHAIRMAN %}
@@ -28,12 +43,79 @@
           </form>
           {% endif %}
         </div>
-        <div class="text-sm text-slate-500">{{ t('draft.sponsor') }}: @{{ r.sponsor.handle }}</div>
-        <a class="text-indigo-600 hover:underline"
+        <div class="rooms-tour-sponsor text-sm text-slate-500">
+          {{ t('draft.sponsor') }}: @{{ r.sponsor.handle }}
+        </div>
+        <a class="rooms-tour-open text-indigo-600 hover:underline"
            href="{{ url_for('rooms_show', event_id=event.id, pid=proposal.id, rid=r.id) }}">{{ t('common.open') }}</a>
-      </li>      
+      </li>
   {% else %}
     <li class="text-slate-500">{{ t('proposal_discussion.no_rooms') }}</li>
   {% endfor %}
 </ul>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:rooms-index:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#rooms-tour-create",
+        title: "Create a Discussion Room",
+        text: "Start a new room for this agenda item by giving it a title and, optionally, a short description.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#rooms-tour-list",
+        title: "Existing Rooms",
+        text: "Existing discussion rooms for this agenda item appear here.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".rooms-tour-item",
+        title: "Room",
+        text: "Each room is a separate workspace where participants can discuss the agenda item and develop a draft proposal.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".rooms-tour-sponsor",
+        title: "Room Sponsor",
+        text: "The sponsor is the participant who created the room and manages the draft being developed there.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".rooms-tour-open",
+        title: "Open the Room",
+        text: "Open a room to join its discussion and view or contribute to the shared draft.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+
+    function startRoomsIndexTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("rooms-index-tutorial")
+      ?.addEventListener("click", startRoomsIndexTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startRoomsIndexTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

@@ -2452,6 +2452,24 @@
         padding: 8
       },
 
+      {% if not draft.is_submitted and not (user and user.id == room.sponsor_id) %}
+      {
+        target: "#room-tour-early-cosign",
+        title: "Co-sign the Draft",
+        text: "Before submission, you can add or remove your co-signature to show support for this developing draft.",
+        placement: "left",
+        padding: 8
+      },
+      {% endif %}
+
+      {
+        target: "#room-tour-cosigner-list",
+        title: "Sponsor and Co-signers",
+        text: "This area shows the proposal sponsor and the participants who currently support the draft as co-signers.",
+        placement: "left",
+        padding: 8
+      },
+
       {% if user and user.id == room.sponsor_id and not draft.is_submitted %}
       {
         target: "#room-tour-editor",

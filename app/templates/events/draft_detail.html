@@ -261,6 +261,16 @@
 {% if not hide_draft_for_translation %}
 
   <!-- Official-style document (all languages, same layout) -->
+  <div class="mb-3 flex justify-end">
+    <button
+      type="button"
+      id="draft-detail-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
+  </div>
 <section id="doc_body" class="rounded-2xl border bg-white p-6 prose max-w-none"
          dir="{{ lang_meta.dir }}">
   {% set T = draft_text %}
@@ -286,8 +296,8 @@
 </section>
 {% endif %}
 
-  <!-- Co-signers -->
-  <section class="mt-8">
+<!-- Co-signers -->
+<section id="draft-tour-cosigners" class="mt-8">
     <h2 class="text-lg font-semibold mb-2">{{ t('draft.cosigners') }}</h2>
     <div class="text-sm">
       {% if early_cosigns|length == 0 and late_cosigns|length == 0 %}
@@ -316,7 +326,11 @@
     </div>
 
     {% if can_cosign %}
-      <form method="post" action="/drafts/{{ draft.id }}/cosign" class="mt-3">
+    <form
+    id="draft-tour-late-cosign"
+    method="post"
+    action="/drafts/{{ draft.id }}/cosign"
+    class="mt-3">
         <button class="px-3 py-1.5 rounded bg-blue-600 text-white text-sm hover:bg-blue-700"
         data-hint="{{ t('document.cosign_hint') }}"
         data-hint-side="top">
@@ -330,8 +344,8 @@
     {% endif %}
   </section>
 
-  <!-- Amendments list -->
-<section class="mt-10">
+<!-- Amendments list -->
+<section id="draft-tour-amendments" class="mt-10">
   <h2 class="text-lg font-semibold mb-2">{{ t('proposal_floor.amendments') }}</h2>
 
   {% if amends|length == 0 %}
@@ -1694,4 +1708,63 @@
     });
   })();
 </script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:draft-detail:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#doc_body",
+        title: "Official Draft",
+        text: "This is the submitted draft document. Its contents are now presented as an official draft rather than an editable workspace.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#draft-tour-cosigners",
+        title: "Co-signers",
+        text: "Support is recorded in two stages. Co-signatures made before submission appear as original co-signers, while later support is recorded separately in the addendum.",
+        placement: "right",
+        padding: 8
+      },
+
+      {% if can_cosign %}
+      {
+        target: "#draft-tour-late-cosign",
+        title: "Late Co-signing",
+        text: "You can still add your support after submission. Your co-signature will be recorded in the document addendum rather than as an original co-signer.",
+        placement: "right",
+        padding: 8
+      },
+      {% endif %}
+
+      {
+        target: "#draft-tour-amendments",
+        title: "Amendments",
+        text: "Proposed amendments to this draft are listed here as the document moves through deliberation.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+
+    function startDraftDetailTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("draft-detail-tutorial")
+      ?.addEventListener("click", startDraftDetailTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startDraftDetailTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

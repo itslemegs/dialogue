@@ -5619,6 +5619,9 @@ def proposal_floor_index(event_id: int, request: Request):
         flags = effective_flags(user) if user else EMPTY_FLAGS
 
         rows = []
+        open_rows = []
+        closed_rows = []
+
         for it in items:
             drafts = db.exec(
                 select(ProposalDraft).where(
@@ -5636,13 +5639,31 @@ def proposal_floor_index(event_id: int, request: Request):
                     .where(Amendment.draft_id == d.id)
                     .order_by(Amendment.am_no.asc())
                 ).all()
-                rows.append(
-                    {
-                        "proposal": it,
-                        "draft": d,
-                        "amendments": ams,
-                    }
-                )
+                draft_floor_state = db.exec(
+                    select(ProposalFloorState).where(
+                        ProposalFloorState.event_id == event.id,
+                        ProposalFloorState.proposal_id == it.id,
+                        ProposalFloorState.draft_id == d.id,
+                        ProposalFloorState.amendment_id.is_(None),
+                    )
+                ).first()
+
+                # Missing state means the floor has never been explicitly closed.
+                # This matches the normal ProposalFloorState default of open.
+                is_open = draft_floor_state is None or draft_floor_state.is_open
+                row = {
+                    "proposal": it,
+                    "draft": d,
+                    "amendments": ams,
+                    "is_open": is_open,
+                }
+
+                rows.append(row)
+
+                if is_open:
+                    open_rows.append(row)
+                else:
+                    closed_rows.append(row)
 
     return templates.TemplateResponse(request, "events/proposal_floor.html",
         {
@@ -5652,6 +5673,9 @@ def proposal_floor_index(event_id: int, request: Request):
             "event": event,
             "rows": rows,
             "user_map": user_map,
+            "rows": rows,
+            "open_rows": open_rows,
+            "closed_rows": closed_rows,
         },
     )
 

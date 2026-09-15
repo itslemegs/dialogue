@@ -1,25 +1,43 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-4xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">{{ t('event.proposal_discussion') }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-4">
+    <h1 class="text-2xl font-bold">{{ t('event.proposal_discussion') }}</h1>
+
+    <button
+      type="button"
+      id="proposal-discussion-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
+  </div>
+
   <p class="text-slate-600 mb-6">{{ t('proposal_discussion.intro') }}</p>
 
-  <ul class="space-y-3">
+  <ul id="proposal-discussion-tour-list" class="space-y-3">
     {% for p in proposals %}
-      <li class="border rounded p-4 bg-white">
+    <li class="proposal-discussion-tour-item border rounded p-4 bg-white">
         <div class="flex items-center justify-between">
           <div class="font-semibold">{{ p.title }}</div>
-          <div class="text-sm text-slate-600">
+          <div class="proposal-discussion-tour-count text-sm text-slate-600">
             {{ t('proposal_discussion.room_count', count=room_counts.get(p.id, 0)) }}
           </div>
         </div>
         <div class="mt-2 flex gap-2">
-          <a class="px-3 py-1.5 rounded bg-indigo-600 text-white"
+          <a class="proposal-discussion-tour-view px-3 py-1.5 rounded bg-indigo-600 text-white"
              href="/events/{{ event.id }}/proposal-discussion/{{ p.id }}">{{ t('proposal_discussion.view_rooms') }}</a>
-          <form method="post" action="/events/{{ event.id }}/proposal-discussion/{{ p.id }}/rooms" class="flex gap-2">
+             <form
+             method="post"
+             action="/events/{{ event.id }}/proposal-discussion/{{ p.id }}/rooms"
+             class="proposal-discussion-tour-create flex gap-2"
+           >
             <input name="title" class="border rounded px-2 py-1" placeholder="{{ t('proposal_discussion.new_room_title') }}" required>
             <input name="description" class="border rounded px-2 py-1" placeholder="{{ t('proposal_discussion.optional_description') }}">
-            <button class="px-3 py-1.5 rounded bg-slate-700 text-white">{{ t('common.create') }}</button>
+            <button class="proposal-discussion-tour-create-button px-3 py-1.5 rounded bg-slate-700 text-white">
+              {{ t('common.create') }}
+            </button>
           </form>
         </div>
       </li>
@@ -28,4 +46,69 @@
     {% endfor %}
   </ul>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:proposal-discussion:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#proposal-discussion-tour-list",
+        title: "Proposal Discussions",
+        text: "Each accepted agenda item can have one or more discussion rooms where participants work together on possible draft proposals.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-discussion-tour-item",
+        title: "Choose an Agenda Item",
+        text: "Each card represents an accepted agenda item. You can see how many discussion rooms already exist for it.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-discussion-tour-view",
+        title: "View Existing Rooms",
+        text: "Open the room list to see existing discussions and choose one to participate in.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-discussion-tour-create",
+        title: "Create a Discussion Room",
+        text: "You can also start a new room for this agenda item. Give the room a clear title and, optionally, a short description.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-discussion-tour-create-button",
+        title: "Start the Room",
+        text: "Create the room when you are ready. The new room becomes a workspace for discussion, drafting, and co-signing.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+
+    function startProposalDiscussionTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("proposal-discussion-tutorial")
+      ?.addEventListener("click", startProposalDiscussionTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startProposalDiscussionTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

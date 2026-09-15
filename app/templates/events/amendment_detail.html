@@ -4,11 +4,22 @@
 <p role="status" class="mb-4 rounded border bg-amber-50 p-3">{{ t('document.translation_disabled') }}</p>
 {% endif %}
 <div class="max-w-4xl mx-auto">
-  <div class="flex items-center justify-between mb-2">
-    <h1 class="text-2xl font-bold">{{ amend.label }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-2">
+    <h1 id="amendment-tour-title" class="text-2xl font-bold">
+      {{ amend.label }}
+    </h1>
+  
+    <button
+      type="button"
+      id="amendment-detail-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
   </div>
 
-  <div class="flex flex-wrap gap-2 mb-4">
+  <div id="amendment-tour-translations" class="flex flex-wrap gap-2 mb-4">
     {% for code, meta in supported_langs.items() %}
       <a
         href="{{ request.url.include_query_params(lang=code) }}"
@@ -30,7 +41,7 @@
     {% endfor %}
   </div>
 
-  <div class="text-sm text-slate-600 mb-6">
+  <div id="amendment-tour-parent" class="text-sm text-slate-600 mb-6">
     {{ t('document.for') }}
     <a
   class="text-blue-700 underline"
@@ -41,9 +52,69 @@
     • {{ t('document.submitted') }} {{ amend.created_at|jst }}
   </div>
 
-  <section class="rounded-2xl border bg-white p-6 whitespace-pre-wrap"
-           dir="{{ lang_meta.dir }}">
-    {{ body_show }}
-  </section>
+  <section
+  id="amendment-tour-body"
+  class="rounded-2xl border bg-white p-6 whitespace-pre-wrap"
+  dir="{{ lang_meta.dir }}"
+>
+  {{ body_show }}
+</section>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+  
+    const storageKey =
+      "dialogue-tour:amendment-detail:v1:user-{{ user.id if user else 'guest' }}";
+  
+    const steps = [
+      {
+        target: "#amendment-tour-title",
+        title: "Amendment",
+        text: "This page shows a submitted amendment to an existing draft document.",
+        placement: "bottom",
+        padding: 8
+      },
+  
+      {
+        target: "#amendment-tour-translations",
+        title: "Translation",
+        text: "Choose a language here to read the amendment in one of the supported translations.",
+        placement: "bottom",
+        padding: 8
+      },
+  
+      {
+        target: "#amendment-tour-parent",
+        title: "Original Draft",
+        text: "This shows which draft document the amendment belongs to. Select the draft title to return to the full document.",
+        placement: "bottom",
+        padding: 8
+      },
+  
+      {
+        target: "#amendment-tour-body",
+        title: "Proposed Changes",
+        text: "This is the submitted amendment. Read the proposed changes here before the amendment proceeds through deliberation.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+  
+    function startAmendmentDetailTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+  
+    document
+      .getElementById("amendment-detail-tutorial")
+      ?.addEventListener("click", startAmendmentDetailTour);
+  
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startAmendmentDetailTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

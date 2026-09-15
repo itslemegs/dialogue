@@ -1,10 +1,26 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{{ t('event.general_floor') }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <h1 id="general-floor-index-tour-title" class="text-2xl font-bold">
+        {{ t('event.general_floor') }}
+      </h1>
+
+      {% if event %}
+      <button
+        type="button"
+        id="general-floor-index-tutorial"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+      >
+        <span aria-hidden="true">?</span>
+        <span>Tutorial</span>
+      </button>
+      {% endif %}
+    </div>
+
     {% if event %}
-      <div class="text-sm text-slate-600">
+      <div id="general-floor-index-tour-event" class="text-sm text-slate-600">
         <span class="font-medium">{{ event.title }}</span>
       </div>
     {% endif %}
@@ -16,13 +32,13 @@
     </div>
   {% else %}
     {% if proposals and proposals|length %}
-      <ul class="space-y-3">
+    <ul id="general-floor-index-tour-list" class="space-y-3">
         {% for p in proposals %}
-          <li class="bg-white border rounded-2xl p-5 hover:shadow transition">
-            <a class="text-lg font-semibold text-indigo-700 hover:underline break-words"
-               href="/events/{{ event.id }}/general-floor/{{ p.id }}">{{ p.title }}</a>
+        <li class="general-floor-index-tour-item bg-white border rounded-2xl p-5 hover:shadow transition">
+          <a class="general-floor-index-tour-open text-lg font-semibold text-indigo-700 hover:underline break-words"
+          href="/events/{{ event.id }}/general-floor/{{ p.id }}">{{ p.title }}</a>
             <div class="mt-2 text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap">{{ p.background }}</div>
-            <div class="mt-2 text-xs text-slate-500">
+            <div class="general-floor-index-tour-meta mt-2 text-xs text-slate-500">
               {{ t('agenda.proposed_at', time=p.created_at|jst) }}
               • {{ t('agenda.proposer') }}
               {% if p.proposer %}{{ p.proposer.handle }}{% else %}<em>{{ t('common.anonymous') }}</em>{% endif %}
@@ -38,4 +54,77 @@
     {% endif %}
   {% endif %}
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:general-floor-index:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#general-floor-index-tour-title",
+        title: "General Floor",
+        text: "The General Floor is organized by accepted agenda item. Choose the topic you want to enter and discuss.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#general-floor-index-tour-event",
+        title: "Current Event",
+        text: "This shows which event these General Floor discussions belong to.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#general-floor-index-tour-list",
+        title: "Accepted Agenda Items",
+        text: "Each card represents an accepted agenda item with its background information and proposer details.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".general-floor-index-tour-item",
+        title: "Agenda Item",
+        text: "Review the topic and background before entering its General Floor discussion.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".general-floor-index-tour-meta",
+        title: "Agenda Information",
+        text: "This area shows when the agenda item was proposed, who proposed it, and any supporting source when available.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".general-floor-index-tour-open",
+        title: "Enter the General Floor",
+        text: "Select the agenda title to enter its General Floor, where you can participate in the live deliberation.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+
+    function startGeneralFloorIndexTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("general-floor-index-tutorial")
+      ?.addEventListener("click", startGeneralFloorIndexTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startGeneralFloorIndexTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

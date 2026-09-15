@@ -7,17 +7,33 @@
     <!-- Left: Events -->
     <section class="min-h-0">
       <div class="h-full min-h-0 rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col">
-        <div class="shrink-0 px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+        <div class="shrink-0 px-6 py-5 border-b border-slate-200 flex items-center justify-between gap-4">
           <div>
-            <h2 class="text-2xl font-semibold text-slate-900">{{ t('dashboard.events') }}</h2>
+            <h2 id="dashboard-tour-events-title"
+                class="text-2xl font-semibold text-slate-900">
+              {{ t('dashboard.events') }}
+            </h2>
             <p class="text-sm text-slate-500 mt-1">{{ t('dashboard.sessions') }}</p>
           </div>
-          <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700">
-            {{ dashboard_events|length }}
-          </span>
+
+          <div class="flex items-center gap-3">
+            <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+              {{ dashboard_events|length }}
+            </span>
+
+            <button
+              type="button"
+              id="dashboard-tutorial"
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+            >
+              <span aria-hidden="true">?</span>
+              <span>Tutorial</span>
+            </button>
+          </div>
         </div>
 
-        <div class="flex-1 min-h-0 p-4 md:p-5 space-y-4 overflow-y-auto">
+        <div id="dashboard-tour-events"
+     class="flex-1 min-h-0 p-4 md:p-5 space-y-4 overflow-y-auto">
           {% if dashboard_events %}
             {% for ev in dashboard_events %}
               <a href="{{ ev.menu_href }}"
@@ -96,7 +112,7 @@
                     </div>
                   </div>
 
-                  <div class="mt-6 flex flex-wrap gap-2">
+                  <div class="dashboard-tour-stages mt-6 flex flex-wrap gap-2">
                     {% for st in ev.stages_json %}
                       <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-white/15 text-white border border-white/15">
                         {{ st.name }}
@@ -119,7 +135,8 @@
     <!-- Right: Department of Records -->
     <aside class="min-h-0">
       <a href="/records/menu"
-         class="group relative flex flex-col justify-between border rounded-2xl overflow-hidden hover:shadow-lg transition min-h-[20rem] xl:min-h-full">
+   id="dashboard-tour-records"
+   class="group relative flex flex-col justify-between border rounded-2xl overflow-hidden hover:shadow-lg transition min-h-[20rem] xl:min-h-full">
 
         <div class="absolute inset-0 bg-cover bg-center"
              style="background-image: url('/static/img/home-bg.jpg');"></div>
@@ -333,5 +350,102 @@
 })();
 </script>
 {% endif %}
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:dashboard:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#dashboard-tour-events-title",
+        title: "Your Dashboard",
+        text: "This is your starting point in d¡alogüe. Events available to you appear here.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#dashboard-tour-events",
+        title: "Events",
+        text: "Your available event sessions are listed here. Each event card shows its timing, status, and stages.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".js-event-card",
+        title: "Open an Event",
+        text: "Select an event card to enter its Event Menu and access agenda setting, deliberation, drafting, voting, and decisions.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".js-event-badge",
+        title: "Event Status",
+        text: "This badge shows whether the event is upcoming, live, or ended.",
+        placement: "left",
+        padding: 6
+      },
+
+      {
+        target: ".js-countdown-wrap",
+        title: "Upcoming Event",
+        text: "Before an event begins, this countdown shows how much time remains until its scheduled start.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".js-live-wrap",
+        title: "Live Event",
+        text: "While an event is running, this area shows the current stage, remaining time, and progress through that stage.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".js-ended-wrap",
+        title: "Ended Event",
+        text: "When an event has finished, its card remains available so you can revisit its records and outcomes.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".dashboard-tour-stages",
+        title: "Event Stages",
+        text: "These labels show the stages configured for the event.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#dashboard-tour-records",
+        title: "Department of Records",
+        text: "Use the Department of Records to review material preserved from the deliberation process, including agendas, speaker records, and decisions.",
+        placement: "left",
+        padding: 8
+      }
+    ];
+
+    function startDashboardTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("dashboard-tutorial")
+      ?.addEventListener("click", startDashboardTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startDashboardTour, 700);
+    }
+  });
+  </script>
 
 {% endblock %}

@@ -1,9 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex items-center justify-between gap-4 mb-6">
     <h1 class="text-2xl font-bold">{{ t('agenda.review') }}</h1>
-    {% if event %}<div class="text-sm text-slate-600"><span class="font-medium">{{ event.title }}</span></div>{% endif %}
+
+    <div class="flex items-center gap-3">
+      {% if event %}
+        <div class="text-sm text-slate-600">
+          <span class="font-medium">{{ event.title }}</span>
+        </div>
+      {% endif %}
+
+      <button
+        type="button"
+        id="review-agenda-tutorial"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+      >
+        <span aria-hidden="true">?</span>
+        <span>Tutorial</span>
+      </button>
+    </div>
   </div>
 
   {% if ok %}
@@ -13,12 +29,12 @@
     <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3">⚠️ {{ t('review.error_missing') if err == 'Proposal not found' else err }}</div>
   {% endif %}
 
-  <section class="mb-10">
+  <section id="review-tour-pending" class="mb-10">
     <h2 class="text-lg font-semibold mb-3">{{ t('agenda.status.pending') }}</h2>
     {% if pending and pending|length %}
       <ul class="space-y-4">
         {% for p in pending %}
-          <li class="bg-white border rounded-2xl p-5">
+        <li class="bg-white border rounded-2xl p-5 review-tour-proposal">
             <div class="flex items-start justify-between gap-4">
               <div class="min-w-0">
                 <div class="font-semibold text-slate-900 break-words">{{ p.title }}</div>
@@ -42,11 +58,11 @@
                   data-target-type="agenda_proposal"
                   data-target-id="{{ p.id }}"
                 >
-                  <textarea
-                    name="notes"
+                <textarea
+                name="notes"
+                class="review-tour-notes w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                     rows="3"
                     placeholder="{{ t('review.notes_optional') }}"
-                    class="w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                   ></textarea>
 
                   <div class="flex gap-2">
@@ -83,7 +99,7 @@
     {% endif %}
   </section>
 
-  <section>
+  <section id="review-tour-recent">
     <h2 class="text-lg font-semibold mb-3">{{ t('review.recent') }}</h2>
     {% if decided and decided|length %}
       <ul class="space-y-3">
@@ -112,4 +128,85 @@
     {% endif %}
   </section>
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:review-agenda:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#review-tour-pending",
+        title: "Pending Agenda Proposals",
+        text: "Agenda proposals waiting for a decision appear here. Review each proposal before deciding whether it should enter the event agenda.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".review-tour-proposal",
+        title: "Review the Proposal",
+        text: "Read the title, background, supporting source, submission time, and proposer information before making a decision.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: ".review-tour-notes",
+        title: "Review Note",
+        text: "You may leave an optional note explaining or documenting the decision.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: "button[data-log-action='CLICK_ACCEPT_AGENDA']",
+        title: "Accept",
+        text: "Accepting the proposal marks it as an accepted agenda item so it can proceed into the event's deliberation workflow.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "button[data-log-action='CLICK_REJECT_AGENDA']",
+        title: "Reject",
+        text: "Rejecting the proposal records it as rejected instead of adding it to the accepted agenda.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#review-tour-recent",
+        title: "Recent Decisions",
+        text: "Previously reviewed proposals appear here with their decision, time, and review note.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#review-tour-recent button[value='reopen']",
+        title: "Reopen a Decision",
+        text: "If a proposal needs to be reconsidered, reopen it to return it to the pending review queue.",
+        placement: "left",
+        padding: 8
+      }
+    ];
+
+    function startReviewAgendaTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("review-agenda-tutorial")
+      ?.addEventListener("click", startReviewAgendaTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startReviewAgendaTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

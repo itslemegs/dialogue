@@ -2,8 +2,21 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{{ t('event.decision') }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-6">
+    <div class="flex items-center gap-3">
+      <h1 id="decision-tour-title" class="text-2xl font-bold">
+        {{ t('event.decision') }}
+      </h1>
+
+      <button
+        type="button"
+        id="decision-tutorial"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+      >
+        <span aria-hidden="true">?</span>
+        <span>Tutorial</span>
+      </button>
+    </div>
 
     {% if event %}
       <div class="text-sm text-slate-600 text-right">
@@ -22,13 +35,14 @@
     </div>
   {% else %}
 
-    <p class="mb-4 text-sm text-slate-600">
+  <p id="decision-tour-description" class="mb-4 text-sm text-slate-600">
       {{ t('decision.description') }}
     </p>
 
     {# ===================== DRAFT RESOLUTIONS (L docs) ===================== #}
     {% if results_drafts %}
-      <h2 class="mt-6 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <h2 id="decision-tour-drafts"
+    class="mt-6 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
         {{ t('decision.drafts') }}
       </h2>
 
@@ -48,7 +62,7 @@
           } %}
           {% set badge_class = badge_classes.get(outcome, "bg-slate-100 text-slate-700") %}
 
-          <div class="rounded-2xl border bg-white p-5 sm:p-6">
+          <div class="decision-tour-draft-card rounded-2xl border bg-white p-5 sm:p-6">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
               <div>
                 <div class="text-xs font-mono text-slate-500">
@@ -67,7 +81,7 @@
               </div>
 
               <div class="flex flex-col items-start sm:items-end gap-1">
-                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
+                <span class="decision-tour-draft-outcome inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
                   {{ result_label(outcome) }}
                 </span>
                 <p class="text-xs text-slate-500">
@@ -78,7 +92,7 @@
 
             {# Early voting block (if it existed) #}
             {% if evote %}
-              <div class="mt-4">
+            <div class="decision-tour-early-vote mt-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {{ t('vote.early_test') }}
                   {% if evote.is_open %}
@@ -110,7 +124,7 @@
 
             {# Formal voting block (if it existed) #}
             {% if fvote %}
-              <div class="mt-4 border-t pt-4">
+            <div class="decision-tour-formal-vote mt-4 border-t pt-4">
                 <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {{ t('vote.formal_heading') }}
                   {% if fvote.is_open %}
@@ -146,7 +160,8 @@
 
     {# =========================== AMENDMENTS =========================== #}
     {% if results_amendments %}
-    <h2 class="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+    <h2 id="decision-tour-amendments"
+    class="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
         {{ t('proposal_floor.amendments') }}
     </h2>
 
@@ -166,7 +181,7 @@
         } %}
         {% set badge_class = badge_classes.get(outcome, "bg-slate-100 text-slate-700") %}
 
-        <div class="rounded-2xl border bg-white p-5 sm:p-6">
+        <div class="decision-tour-amendment-card rounded-2xl border bg-white p-5 sm:p-6">
             <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
                 <div class="text-xs font-mono text-slate-500">
@@ -188,12 +203,12 @@
             </div>
 
             <div class="flex flex-col items-start sm:items-end gap-1">
-                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
+              <span class="decision-tour-amendment-outcome inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ badge_class }}">
                 {{ result_label(outcome) }}
                 </span>
 
                 {% if v %}
-                <p class="text-xs text-slate-500">
+<div class="decision-tour-amendment-vote mt-4">
                     {{ t('vote.label') }} {{ t('vote.open_lower') if v.is_open else t('vote.closed_lower') }}
                 </p>
                 {% endif %}
@@ -263,4 +278,117 @@
 
   {% endif %}
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:decision:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#decision-tour-title",
+        title: "Decision",
+        text: "This page summarizes the outcomes of draft resolutions and amendments considered during the event.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#decision-tour-description",
+        title: "Final Results",
+        text: "Use this page to review what happened to each submitted draft and amendment after deliberation and voting.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#decision-tour-drafts",
+        title: "Draft Resolutions",
+        text: "This section lists the submitted draft resolutions and their final or current outcomes.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-draft-card",
+        title: "Draft Result",
+        text: "Each card identifies the draft, its sponsor and co-signers, its status, and the outcome reached during the event.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-draft-outcome",
+        title: "Outcome",
+        text: "The outcome badge shows whether the draft was adopted, not adopted, withdrawn, reintroduced, or is still pending.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-early-vote",
+        title: "Early Consensus Test",
+        text: "If an early consensus test was held, its YES, NO, and ABSTAIN counts appear here.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-formal-vote",
+        title: "Formal Vote",
+        text: "If the draft proceeded to formal voting, the final YES, NO, and ABSTAIN totals are shown here.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#decision-tour-amendments",
+        title: "Amendments",
+        text: "This section summarizes the outcomes of amendments proposed to draft resolutions.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-amendment-card",
+        title: "Amendment Result",
+        text: "Each amendment result identifies the amendment, the draft it belongs to, who submitted it, and its outcome.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-amendment-outcome",
+        title: "Amendment Outcome",
+        text: "This badge shows whether the amendment was adopted, adopted by consensus, not adopted, or remains pending.",
+        placement: "left",
+        padding: 8
+      },
+
+      {
+        target: ".decision-tour-amendment-vote",
+        title: "Amendment Vote",
+        text: "When a vote was recorded, the YES, NO, and ABSTAIN totals and the resulting decision appear here.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+
+    function startDecisionTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("decision-tutorial")
+      ?.addEventListener("click", startDecisionTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startDecisionTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

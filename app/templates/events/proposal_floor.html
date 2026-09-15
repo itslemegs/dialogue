@@ -12,7 +12,20 @@
 {% set pf_closed_rows = closed_rows if closed_rows is defined else [] %}
 
 <div class="max-w-4xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">{{ t('event.proposal_floor') }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-4">
+    <h1 id="proposal-floor-index-tour-title" class="text-2xl font-bold">
+      {{ t('event.proposal_floor') }}
+    </h1>
+
+    <button
+      type="button"
+      id="proposal-floor-index-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
+  </div>
 
   {% if not rows or rows|length == 0 %}
   <div class="p-4 border rounded bg-white text-slate-600">
@@ -25,7 +38,7 @@
      OPEN PROPOSAL FLOORS
      ============================================================ #}
   {% if pf_open_rows %}
-    <section class="mb-8">
+  <section id="proposal-floor-index-tour-open" class="mb-8">
       <div class="flex items-center gap-3 mb-4">
         <h2 class="text-lg font-semibold text-slate-900">Open</h2>
         <span class="text-xs font-medium px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
@@ -35,12 +48,12 @@
 
       <div class="space-y-4">
         {% for row in pf_open_rows %}
-          <section class="bg-white border rounded p-4">
+        <section class="proposal-floor-index-tour-open-card bg-white border rounded p-4">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
 
               <div>
-                <div class="text-sm text-slate-500">
-                  {{ t('proposal_floor.agenda') }} {{ row.proposal.title }}
+                <div class="proposal-floor-index-tour-sponsor text-xs text-slate-500">
+                  {{ t('proposal_floor.sponsor') }}
                 </div>
 
                 <h3 class="text-lg font-semibold mt-0.5">
@@ -57,17 +70,17 @@
 
               <div class="flex gap-2">
                 <a
-                  href="/events/{{ event.id }}/proposal-floor/draft/{{ row.draft.id }}"
-                  class="px-3 py-1.5 rounded bg-indigo-600 text-white"
-                >
+  href="/events/{{ event.id }}/proposal-floor/draft/{{ row.draft.id }}"
+  class="proposal-floor-index-tour-open-link px-3 py-1.5 rounded bg-indigo-600 text-white"
+>
                   {{ t('common.open') }}
                 </a>
 
                 {% if row.amendments and row.amendments|length %}
-                  <a
-                    href="/events/{{ event.id }}/proposal-floor/amendment/{{ row.amendments[0].id }}"
-                    class="px-3 py-1.5 rounded bg-fuchsia-700 text-white"
-                  >
+                <a
+                href="/events/{{ event.id }}/proposal-floor/amendment/{{ row.amendments[0].id }}"
+                class="proposal-floor-index-tour-amendment-link px-3 py-1.5 rounded bg-fuchsia-700 text-white"
+              >
                     {{ t('proposal_floor.amendment_count', count=row.amendments|length) }}
                   </a>
                 {% endif %}
@@ -85,7 +98,7 @@
      CLOSED PROPOSAL FLOORS
      ============================================================ #}
   {% if pf_closed_rows %}
-    <section>
+  <section id="proposal-floor-index-tour-closed">
       <div class="flex items-center gap-3 mb-4">
         <h2 class="text-lg font-semibold text-slate-700">Closed</h2>
         <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-200 text-slate-600">
@@ -95,7 +108,7 @@
 
       <div class="space-y-4">
         {% for row in pf_closed_rows %}
-          <section class="bg-slate-50 border border-slate-200 rounded p-4">
+        <section class="proposal-floor-index-tour-closed-card bg-slate-50 border border-slate-200 rounded p-4">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
 
               <div>
@@ -115,7 +128,7 @@
                 </div>
               </div>
 
-              <span class="self-start sm:self-auto px-3 py-1.5 rounded-full bg-slate-200 text-slate-600 text-sm font-medium">
+              <span class="proposal-floor-index-tour-closed-badge self-start sm:self-auto px-3 py-1.5 rounded-full bg-slate-200 text-slate-600 text-sm font-medium">
                 Closed
               </span>
 
@@ -128,4 +141,101 @@
 
 {% endif %}
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:proposal-floor-index:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#proposal-floor-index-tour-title",
+        title: "Proposal Floor",
+        text: "This page lists the draft resolutions currently being considered on the Proposal Floor, as well as floors that have already closed.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#proposal-floor-index-tour-open",
+        title: "Open Proposal Floors",
+        text: "These draft resolutions are still active on the Proposal Floor and can be opened for deliberation and voting.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-floor-index-tour-open-card",
+        title: "Draft Resolution",
+        text: "Each card identifies the agenda item, draft number and title, sponsor, and any amendments associated with the draft.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-floor-index-tour-sponsor",
+        title: "Sponsor",
+        text: "This shows the sponsor responsible for the submitted draft resolution.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-floor-index-tour-open-link",
+        title: "Open the Draft Floor",
+        text: "Enter the draft's Proposal Floor to join its discussion and participate in voting when voting is available.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-floor-index-tour-amendment-link",
+        title: "Amendments",
+        text: "If amendments have been proposed, use this button to enter the Proposal Floor for an amendment.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#proposal-floor-index-tour-closed",
+        title: "Closed Proposal Floors",
+        text: "Drafts whose Proposal Floor discussion has ended are listed separately here.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-floor-index-tour-closed-card",
+        title: "Closed Draft",
+        text: "A closed floor remains visible as part of the event record, but it is no longer an active deliberation space.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".proposal-floor-index-tour-closed-badge",
+        title: "Closed",
+        text: "This badge indicates that the Proposal Floor for this draft has been closed.",
+        placement: "left",
+        padding: 8
+      }
+    ];
+
+    function startProposalFloorIndexTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("proposal-floor-index-tutorial")
+      ?.addEventListener("click", startProposalFloorIndexTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startProposalFloorIndexTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

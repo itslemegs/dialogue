@@ -1,8 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{{ t('document.index') }}</h1>
+  <div class="flex items-center justify-between gap-4 mb-6">
+    <h1 id="draft-index-tour-title" class="text-2xl font-bold">
+      {{ t('document.index') }}
+    </h1>
+
+    <button
+      type="button"
+      id="draft-index-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
   </div>
 
   {% if (active|length == 0) and (withdrawn|length == 0) %}
@@ -12,12 +23,13 @@
   {% endif %}
 
   {% if active|length %}
-    <section class="mb-8">
+  <section id="draft-index-tour-active" class="mb-8">
       <h2 class="text-lg font-semibold mb-3">{{ t('document.active') }}</h2>
       <ul class="space-y-2">
         {% for d in active %}
         <li>
-          <a href="/drafts/{{ d.id }}" class="block rounded-xl border bg-white p-4 hover:shadow-sm transition">
+          <a href="/drafts/{{ d.id }}"
+   class="draft-index-tour-active-card block rounded-xl border bg-white p-4 hover:shadow-sm transition">
             <div class="flex items-center justify-between">
               <div class="text-base font-semibold">{{ d.l_number }} — {{ d.title }}</div>
               <div class="text-xs text-slate-500">{{ d.submitted_at|jst }}</div>
@@ -26,7 +38,7 @@
               {{ t('document.agenda') }} <span class="font-medium">{{ d.agenda_label }}</span>
               • {{ t('document.sponsor') }} <span class="font-medium">{{ d.sponsor_name }}</span>
               {% if d.status == "REINTRODUCED" %}
-                <span class="ml-2 inline-block px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-800">{{ t('decision.reintroduced') }}</span>
+              <span class="draft-index-tour-reintroduced ml-2 inline-block px-2 py-0.5 text-xs rounded bg-amber-100 text-amber-800">{{ t('decision.reintroduced') }}</span>
               {% endif %}
             </div>
           </a>
@@ -37,11 +49,11 @@
   {% endif %}
 
   {% if withdrawn|length %}
-    <section class="mb-8">
+  <section id="draft-index-tour-withdrawn" class="mb-8">
       <h2 class="text-lg font-semibold mb-3">{{ t('document.withdrawn_heading') }}</h2>
       <ul class="space-y-2">
         {% for d in withdrawn %}
-        <li class="rounded-xl border bg-white p-4">
+        <li class="draft-index-tour-withdrawn-card rounded-xl border bg-white p-4">
           <div class="flex items-center justify-between">
             <div class="text-base font-semibold">{{ d.l_number }} — {{ d.title }}</div>
             <div class="text-xs text-slate-500">{{ d.submitted_at|jst }}</div>
@@ -51,7 +63,11 @@
             • {{ t('document.withdrawn_sponsor') }} <span class="font-medium">{{ d.sponsor_name }}</span>
           </div>
           {% if user %}
-          <form method="post" action="/drafts/{{ d.id }}/reintroduce" class="mt-3">
+          <form
+  method="post"
+  action="/drafts/{{ d.id }}/reintroduce"
+  class="draft-index-tour-reintroduce mt-3"
+>
             <button class="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700">{{ t('document.reintroduce') }}</button>
           </form>
           {% endif %}
@@ -61,4 +77,85 @@
     </section>
   {% endif %}
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:view-draft-index:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#draft-index-tour-title",
+        title: "Tabled Draft Resolutions",
+        text: "This page lists draft resolutions that have been formally submitted during the event.",
+        placement: "bottom",
+        padding: 8
+      },
+
+      {
+        target: "#draft-index-tour-active",
+        title: "Active Drafts",
+        text: "These drafts are currently active in the deliberation process. Select a draft to read its full text, sponsors, co-signers, and amendments.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".draft-index-tour-active-card",
+        title: "Open a Draft",
+        text: "Each card shows the draft number, title, agenda item, sponsor, and submission time. Select the card to open the full draft.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".draft-index-tour-reintroduced",
+        title: "Reintroduced Draft",
+        text: "This label means the draft was previously withdrawn and has since been returned to the active deliberation process.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: "#draft-index-tour-withdrawn",
+        title: "Withdrawn Drafts",
+        text: "Drafts that have been withdrawn are kept here as part of the event record instead of disappearing completely.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".draft-index-tour-withdrawn-card",
+        title: "Withdrawn Draft",
+        text: "A withdrawn draft is no longer active, but its identifying information and sponsor remain visible.",
+        placement: "top",
+        padding: 8
+      },
+
+      {
+        target: ".draft-index-tour-reintroduce",
+        title: "Reintroduce a Draft",
+        text: "Use this control to return a withdrawn draft to the active deliberation process.",
+        placement: "top",
+        padding: 8
+      }
+    ];
+
+    function startDraftIndexTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("draft-index-tutorial")
+      ?.addEventListener("click", startDraftIndexTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startDraftIndexTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

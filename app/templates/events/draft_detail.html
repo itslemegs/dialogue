@@ -268,7 +268,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
 <section id="doc_body" class="rounded-2xl border bg-white p-6 prose max-w-none"
@@ -1714,6 +1714,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:draft-detail:v2:user-{{ user.id if user else 'guest' }}"
@@ -1721,16 +1722,16 @@
     const steps = [
       {
         target: "#doc_body",
-        title: "Official Draft",
-        text: "This is the submitted draft document. Its contents are now presented as an official draft rather than an editable workspace.",
+        title: tr("tutorial.draft_detail.official_draft_title"),
+        text: tr("tutorial.draft_detail.official_draft_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#draft-tour-cosigners",
-        title: "Co-signers",
-        text: "Support is recorded in two stages. Co-signatures made before submission appear as original co-signers, while later support is recorded separately in the addendum.",
+        title: tr("tutorial.draft_detail.co_signers_title"),
+        text: tr("tutorial.draft_detail.co_signers_text"),
         placement: "right",
         padding: 8
       },
@@ -1738,8 +1739,8 @@
       {% if can_cosign %}
       {
         target: "#draft-tour-late-cosign",
-        title: "Late Co-signing",
-        text: "You can still add your support after submission. Your co-signature will be recorded in the document addendum rather than as an original co-signer.",
+        title: tr("tutorial.draft_detail.late_co_signing_title"),
+        text: tr("tutorial.draft_detail.late_co_signing_text"),
         placement: "right",
         padding: 8
       },
@@ -1747,24 +1748,24 @@
 
       {
         target: "#draft-tour-amendments",
-        title: "Existing Amendments",
-        text: "Amendments that have already been proposed for this draft are listed here. Open one to read the proposed changes.",
+        title: tr("tutorial.draft_detail.existing_amendments_title"),
+        text: tr("tutorial.draft_detail.existing_amendments_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#draft-tour-amendment-builder",
-        title: "Propose an Amendment",
-        text: "Use this area when you want to propose a specific change to the submitted draft.",
+        title: tr("tutorial.draft_detail.propose_an_amendment_title"),
+        text: tr("tutorial.draft_detail.propose_an_amendment_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#draft-tour-amendment-guidance",
-        title: "How Amendments Work",
-        text: "An amendment can ADD new text, REMOVE existing text, or REPLACE existing text. Choose whether the change affects a preambular or operative clause.",
+        title: tr("tutorial.draft_detail.how_amendments_work_title"),
+        text: tr("tutorial.draft_detail.how_amendments_work_text"),
         placement: "top",
         padding: 8
       },
@@ -1772,16 +1773,16 @@
       {% if ai_features_enabled %}
       {
         target: "#am_plain_text",
-        title: "Describe the Change",
-        text: "You may describe the amendment in plain language here. The AI amendment builder can turn your description into structured amendment operations.",
+        title: tr("tutorial.draft_detail.describe_the_change_title"),
+        text: tr("tutorial.draft_detail.describe_the_change_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: "#am_btn_generate",
-        title: "Generate Operations",
-        text: "Generate a proposed set of amendment operations, then review them carefully before submitting.",
+        title: tr("tutorial.draft_detail.generate_operations_title"),
+        text: tr("tutorial.draft_detail.generate_operations_text"),
         placement: "top",
         padding: 8
       },
@@ -1789,24 +1790,24 @@
 
       {
         target: "#add-op",
-        title: "Add an Operation",
-        text: "You can build the amendment manually by adding one or more operations.",
+        title: tr("tutorial.draft_detail.add_an_operation_title"),
+        text: tr("tutorial.draft_detail.add_an_operation_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: "#draft-tour-amendment-operations",
-        title: "Amendment Operations",
-        text: "Each operation specifies what to change, which clause it affects, and any text that should be added or used as a replacement.",
+        title: tr("tutorial.draft_detail.amendment_operations_title"),
+        text: tr("tutorial.draft_detail.amendment_operations_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#amend-form",
-        title: "Submit the Amendment",
-        text: "Review all operations carefully, then submit the amendment. It will appear in the amendment list for further deliberation.",
+        title: tr("tutorial.draft_detail.submit_the_amendment_title"),
+        text: tr("tutorial.draft_detail.submit_the_amendment_text"),
         placement: "top",
         padding: 8
       }

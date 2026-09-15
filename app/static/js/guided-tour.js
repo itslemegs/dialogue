@@ -1,6 +1,15 @@
 (function () {
     "use strict";
 
+    // English fallback keeps the shared engine usable without the page catalogue.
+    function tr(key, fallback, params = {}) {
+      if (window.UII18n && typeof window.UII18n.t === "function") {
+        return window.UII18n.t(key, params);
+      }
+      return fallback.replace(/\{(\w+)\}/g, (match, name) =>
+        Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match);
+    }
+
     let steps = [];
     let currentIndex = 0;
     let active = false;
@@ -51,7 +60,7 @@
               type="button"
               id="dialogue-tour-close"
               class="text-slate-400 hover:text-slate-700 text-xl leading-none"
-              aria-label="Close tutorial"
+              aria-label=""
             >
               ×
             </button>
@@ -68,7 +77,7 @@
               id="dialogue-tour-skip"
               class="text-sm text-slate-500 hover:text-slate-800"
             >
-              Skip tutorial
+
             </button>
 
             <div class="flex gap-2">
@@ -77,7 +86,7 @@
                 id="dialogue-tour-back"
                 class="px-3 py-2 text-sm border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
               >
-                Back
+
               </button>
 
               <button
@@ -85,12 +94,19 @@
                 id="dialogue-tour-next"
                 class="px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
               >
-                Next
+
               </button>
             </div>
           </div>
         </div>
       `;
+
+      popover.querySelector("#dialogue-tour-close").setAttribute(
+        "aria-label", tr("tutorial.common.close", "Close tutorial"));
+      popover.querySelector("#dialogue-tour-skip").textContent =
+        tr("tutorial.common.skip", "Skip tutorial");
+      popover.querySelector("#dialogue-tour-back").textContent =
+        tr("tutorial.common.back", "Back");
 
       document.body.appendChild(overlay);
       document.body.appendChild(spotlight);
@@ -249,7 +265,7 @@
         }
 
       popover.querySelector("#dialogue-tour-step").textContent =
-        `Step ${currentIndex + 1} of ${steps.length}`;
+        tr("tutorial.common.step", "Step {current} of {total}", {current: currentIndex + 1, total: steps.length});
 
       popover.querySelector("#dialogue-tour-title").textContent =
         step.title || "";
@@ -268,8 +284,8 @@
 
       popover.querySelector("#dialogue-tour-next").textContent =
         currentIndex === steps.length - 1
-          ? "Done"
-          : "Next";
+          ? tr("tutorial.common.done", "Done")
+          : tr("tutorial.common.next", "Next");
 
       window.setTimeout(positionCurrentStep, 260);
     }

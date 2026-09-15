@@ -14,7 +14,7 @@
         class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
       >
         <span aria-hidden="true">?</span>
-        <span>Tutorial</span>
+        <span>{{ t('tutorial.common.button') }}</span>
       </button>
       {% endif %}
     </div>
@@ -58,6 +58,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:general-floor-index:v1:user-{{ user.id if user else 'guest' }}";
@@ -65,48 +66,48 @@
     const steps = [
       {
         target: "#general-floor-index-tour-title",
-        title: "General Floor",
-        text: "The General Floor is organized by accepted agenda item. Choose the topic you want to enter and discuss.",
+        title: tr("tutorial.general_floor_index.general_floor_title"),
+        text: tr("tutorial.general_floor_index.general_floor_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#general-floor-index-tour-event",
-        title: "Current Event",
-        text: "This shows which event these General Floor discussions belong to.",
+        title: tr("tutorial.general_floor_index.current_event_title"),
+        text: tr("tutorial.general_floor_index.current_event_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#general-floor-index-tour-list",
-        title: "Accepted Agenda Items",
-        text: "Each card represents an accepted agenda item with its background information and proposer details.",
+        title: tr("tutorial.general_floor_index.accepted_agenda_items_title"),
+        text: tr("tutorial.general_floor_index.accepted_agenda_items_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".general-floor-index-tour-item",
-        title: "Agenda Item",
-        text: "Review the topic and background before entering its General Floor discussion.",
+        title: tr("tutorial.general_floor_index.agenda_item_title"),
+        text: tr("tutorial.general_floor_index.agenda_item_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".general-floor-index-tour-meta",
-        title: "Agenda Information",
-        text: "This area shows when the agenda item was proposed, who proposed it, and any supporting source when available.",
+        title: tr("tutorial.general_floor_index.agenda_information_title"),
+        text: tr("tutorial.general_floor_index.agenda_information_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".general-floor-index-tour-open",
-        title: "Enter the General Floor",
-        text: "Select the agenda title to enter its General Floor, where you can participate in the live deliberation.",
+        title: tr("tutorial.general_floor_index.enter_the_general_floor_title"),
+        text: tr("tutorial.general_floor_index.enter_the_general_floor_text"),
         placement: "top",
         padding: 8
       }

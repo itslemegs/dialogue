@@ -17,7 +17,7 @@
         class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
       >
         <span aria-hidden="true">?</span>
-        <span>Tutorial</span>
+        <span>{{ t('tutorial.common.button') }}</span>
       </button>
     </div>
   </div>
@@ -72,6 +72,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:view-agenda:v1:user-{{ user.id if user else 'guest' }}";
@@ -79,32 +80,32 @@
     const steps = [
       {
         target: "#view-tour-agenda-list",
-        title: "Accepted Agenda",
-        text: "This page shows the agenda proposals that have been accepted for this event.",
+        title: tr("tutorial.view_agenda.accepted_agenda_title"),
+        text: tr("tutorial.view_agenda.accepted_agenda_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".view-tour-agenda-item",
-        title: "Agenda Item",
-        text: "Each accepted item includes its title, background, proposer information, and submission time.",
+        title: tr("tutorial.view_agenda.agenda_item_title"),
+        text: tr("tutorial.view_agenda.agenda_item_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".view-tour-source",
-        title: "Supporting Source",
-        text: "When a source was provided, you can open it to review supporting material for the agenda item.",
+        title: tr("tutorial.view_agenda.supporting_source_title"),
+        text: tr("tutorial.view_agenda.supporting_source_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".view-tour-status",
-        title: "Accepted Status",
-        text: "This badge confirms that the proposal passed agenda review and is now part of the accepted event agenda.",
+        title: tr("tutorial.view_agenda.accepted_status_title"),
+        text: tr("tutorial.view_agenda.accepted_status_text"),
         placement: "left",
         padding: 8
       }

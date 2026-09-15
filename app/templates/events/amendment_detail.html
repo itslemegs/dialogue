@@ -15,7 +15,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
 
@@ -64,6 +64,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
   
     const storageKey =
       "dialogue-tour:amendment-detail:v1:user-{{ user.id if user else 'guest' }}";
@@ -71,32 +72,32 @@
     const steps = [
       {
         target: "#amendment-tour-title",
-        title: "Amendment",
-        text: "This page shows a submitted amendment to an existing draft document.",
+        title: tr("tutorial.amendment_detail.amendment_title"),
+        text: tr("tutorial.amendment_detail.amendment_text"),
         placement: "bottom",
         padding: 8
       },
   
       {
         target: "#amendment-tour-translations",
-        title: "Translation",
-        text: "Choose a language here to read the amendment in one of the supported translations.",
+        title: tr("tutorial.amendment_detail.translation_title"),
+        text: tr("tutorial.amendment_detail.translation_text"),
         placement: "bottom",
         padding: 8
       },
   
       {
         target: "#amendment-tour-parent",
-        title: "Original Draft",
-        text: "This shows which draft document the amendment belongs to. Select the draft title to return to the full document.",
+        title: tr("tutorial.amendment_detail.original_draft_title"),
+        text: tr("tutorial.amendment_detail.original_draft_text"),
         placement: "bottom",
         padding: 8
       },
   
       {
         target: "#amendment-tour-body",
-        title: "Proposed Changes",
-        text: "This is the submitted amendment. Read the proposed changes here before the amendment proceeds through deliberation.",
+        title: tr("tutorial.amendment_detail.proposed_changes_title"),
+        text: tr("tutorial.amendment_detail.proposed_changes_text"),
         placement: "top",
         padding: 8
       }

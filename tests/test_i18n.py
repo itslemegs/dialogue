@@ -215,6 +215,56 @@ class RequestTests(unittest.TestCase):
         values.update(context)
         return self.templates.env.get_template(name).render(**values)
 
+    def test_tutorial_buttons_and_restricted_review_step(self):
+        for locale, label in [('en', 'Tutorial'), ('ja', 'チュートリアル')]:
+            ctx = self.phase3_context()
+            for allowed in (False, True):
+                ctx['flags'] = dict(IS_PRESIDENT=allowed, IS_CHAIR=False)
+                html = self.render_phase2('events_menu.html', locale, **ctx)
+                self.assertIn('<span>' + label + '</span>', html)
+                self.assertEqual('target: \'[data-key="review_agenda"]\'' in html, allowed)
+                self.assertIn(ctx['event']['title'], html)
+            for page in ('events/draft_detail.html', 'events/amendment_detail.html'):
+                ctx = self.document_context()
+                html = self.render_room(page, locale, **ctx)
+                self.assertIn('<span>' + label + '</span>', html)
+                from html import unescape
+                self.assertIn(ctx['draft'].title, unescape(html))
+                if page.endswith('amendment_detail.html'):
+                    self.assertIn(ctx['amend'].body_markdown, unescape(html))
+
+    def test_tutorial_steps_execute_in_both_locales(self):
+        import re, shutil, subprocess
+        if not shutil.which('node'):
+            self.skipTest('Node required for tutorial execution')
+        fixtures = []
+        pages = [
+            'dashboard.html', 'events_menu.html', 'events/propose_agenda.html',
+            'events/review_agenda.html', 'events/view_agenda.html',
+            'events/general_floor.html', 'events/general_floor_item.html',
+            'proposal_discussion/index.html', 'rooms/index.html', 'rooms/show.html',
+            'events/view_draft_index.html', 'events/draft_detail.html',
+            'events/amendment_detail.html', 'events/proposal_floor.html',
+            'events/proposal_floor_item.html', 'events/decision.html',
+        ]
+        for page in pages:
+            source = (ROOT/'app/templates'/page).read_text()
+            script = next(block for block in re.findall(r'<script[^>]*>(.*?)</script>', source, re.S)
+                          if 'window.DialogueTour' in block)
+            for privileged in (False, True):
+                context = dict(user=SimpleNamespace(id=1), room=SimpleNamespace(sponsor_id=1 if privileged else 2),
+                    draft=SimpleNamespace(is_submitted=False), mode='DRAFT',
+                    IS_PRESIDENT=privileged, IS_CHAIR=False, flags=dict(IS_PRESIDENT=privileged, IS_CHAIR=False),
+                    ai_features_enabled=privileged, can_cosign=privileged)
+                rendered = self.templates.env.from_string(script).render(**context)
+                for locale in ('en', 'ja'):
+                    fixtures.append(dict(page=page, privileged=privileged, locale=locale, script=rendered,
+                        messages={key:i18n.translate(locale,key) for key in i18n.JS_KEYS}))
+        result = subprocess.run(['node', 'tests/guided_tour_i18n.js'], input=json.dumps(fixtures),
+            text=True, capture_output=True, cwd=ROOT, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('64 tutorial variants passed', result.stdout)
+
     def test_phase2_public_account_pages(self):
         examples = {
             'home.html': ('Download User Manual', '利用マニュアルをダウンロード'),

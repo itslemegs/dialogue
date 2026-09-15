@@ -537,7 +537,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
   <div class="gf-layout grid grid-cols-1 md:grid-cols-12 gap-4 xl:gap-5 items-stretch max-w-[1600px] mx-auto h-full min-h-0">
@@ -1575,6 +1575,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const tourRole =
       {% if IS_PRESIDENT or IS_CHAIR %}
@@ -1589,27 +1590,27 @@
     const steps = [
       {
         target: "#gf-tour-agenda",
-        title: "Current Agenda",
-        text: "This panel shows the agenda item currently being discussed.",
+        title: tr("tutorial.general_floor.current_agenda_title"),
+        text: tr("tutorial.general_floor.current_agenda_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#gf-tour-discussion",
-        title: "Discussion",
-        text: "Contributions from recognized speakers appear here as the discussion develops.",
+        title: tr("tutorial.general_floor.discussion_title"),
+        text: tr("tutorial.general_floor.discussion_text"),
         placement: "auto",
         padding: 8
       },
 
       {
         target: "#gf-tour-speakers",
-        title: "Speaker Queue",
+        title: tr("tutorial.general_floor.speaker_queue_title"),
         text: {% if IS_PRESIDENT or IS_CHAIR %}
-          "Manage the speaking order here. You can recognize speakers and move the discussion forward."
+          tr("tutorial.general_floor.speaker_queue_chair_text")
         {% else %}
-          "See who is speaking, who is waiting, and request the floor from this area."
+          tr("tutorial.general_floor.speaker_queue_member_text")
         {% endif %},
         placement: "left",
         padding: 8
@@ -1618,8 +1619,8 @@
       {% if IS_PRESIDENT or IS_CHAIR %}
       {
         target: "#admin-queue-ui",
-        title: "Chair Controls",
-        text: "Use these controls to manage the current speaker and upcoming speaking order.",
+        title: tr("tutorial.general_floor.chair_controls_title"),
+        text: tr("tutorial.general_floor.chair_controls_text"),
         placement: "left",
         padding: 8
       },
@@ -1627,8 +1628,8 @@
 
       {
         target: "#gf-tour-composer",
-        title: "Your Contribution",
-        text: "When you are recognized to speak, use this area to submit your contribution.",
+        title: tr("tutorial.general_floor.your_contribution_title"),
+        text: tr("tutorial.general_floor.your_contribution_text"),
         placement: "left",
         padding: 8
       }
@@ -1637,8 +1638,8 @@
       ,
       {
         target: "#gf-tour-summary",
-        title: "Live Summary",
-        text: "This panel provides a running summary of the discussion as it develops.",
+        title: tr("tutorial.general_floor.live_summary_title"),
+        text: tr("tutorial.general_floor.live_summary_text"),
         placement: "right",
         padding: 8
       }

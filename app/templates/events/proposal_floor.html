@@ -23,7 +23,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
 
@@ -145,6 +145,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:proposal-floor-index:v1:user-{{ user.id if user else 'guest' }}";
@@ -152,72 +153,72 @@
     const steps = [
       {
         target: "#proposal-floor-index-tour-title",
-        title: "Proposal Floor",
-        text: "This page lists the draft resolutions currently being considered on the Proposal Floor, as well as floors that have already closed.",
+        title: tr("tutorial.proposal_floor_index.proposal_floor_title"),
+        text: tr("tutorial.proposal_floor_index.proposal_floor_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#proposal-floor-index-tour-open",
-        title: "Open Proposal Floors",
-        text: "These draft resolutions are still active on the Proposal Floor and can be opened for deliberation and voting.",
+        title: tr("tutorial.proposal_floor_index.open_proposal_floors_title"),
+        text: tr("tutorial.proposal_floor_index.open_proposal_floors_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".proposal-floor-index-tour-open-card",
-        title: "Draft Resolution",
-        text: "Each card identifies the agenda item, draft number and title, sponsor, and any amendments associated with the draft.",
+        title: tr("tutorial.proposal_floor_index.draft_resolution_title"),
+        text: tr("tutorial.proposal_floor_index.draft_resolution_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".proposal-floor-index-tour-sponsor",
-        title: "Sponsor",
-        text: "This shows the sponsor responsible for the submitted draft resolution.",
+        title: tr("tutorial.proposal_floor_index.sponsor_title"),
+        text: tr("tutorial.proposal_floor_index.sponsor_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".proposal-floor-index-tour-open-link",
-        title: "Open the Draft Floor",
-        text: "Enter the draft's Proposal Floor to join its discussion and participate in voting when voting is available.",
+        title: tr("tutorial.proposal_floor_index.open_the_draft_floor_title"),
+        text: tr("tutorial.proposal_floor_index.open_the_draft_floor_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".proposal-floor-index-tour-amendment-link",
-        title: "Amendments",
-        text: "If amendments have been proposed, use this button to enter the Proposal Floor for an amendment.",
+        title: tr("tutorial.proposal_floor_index.amendments_title"),
+        text: tr("tutorial.proposal_floor_index.amendments_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#proposal-floor-index-tour-closed",
-        title: "Closed Proposal Floors",
-        text: "Drafts whose Proposal Floor discussion has ended are listed separately here.",
+        title: tr("tutorial.proposal_floor_index.closed_proposal_floors_title"),
+        text: tr("tutorial.proposal_floor_index.closed_proposal_floors_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".proposal-floor-index-tour-closed-card",
-        title: "Closed Draft",
-        text: "A closed floor remains visible as part of the event record, but it is no longer an active deliberation space.",
+        title: tr("tutorial.proposal_floor_index.closed_draft_title"),
+        text: tr("tutorial.proposal_floor_index.closed_draft_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".proposal-floor-index-tour-closed-badge",
-        title: "Closed",
-        text: "This badge indicates that the Proposal Floor for this draft has been closed.",
+        title: tr("tutorial.proposal_floor_index.closed_title"),
+        text: tr("tutorial.proposal_floor_index.closed_text"),
         placement: "left",
         padding: 8
       }

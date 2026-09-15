@@ -17,7 +17,7 @@
         class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
       >
         <span aria-hidden="true">?</span>
-        <span>Tutorial</span>
+        <span>{{ t('tutorial.common.button') }}</span>
       </button>
     </div>
   </div>
@@ -132,6 +132,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:review-agenda:v1:user-{{ user.id if user else 'guest' }}";
@@ -139,56 +140,56 @@
     const steps = [
       {
         target: "#review-tour-pending",
-        title: "Pending Agenda Proposals",
-        text: "Agenda proposals waiting for a decision appear here. Review each proposal before deciding whether it should enter the event agenda.",
+        title: tr("tutorial.review_agenda.pending_agenda_proposals_title"),
+        text: tr("tutorial.review_agenda.pending_agenda_proposals_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".review-tour-proposal",
-        title: "Review the Proposal",
-        text: "Read the title, background, supporting source, submission time, and proposer information before making a decision.",
+        title: tr("tutorial.review_agenda.review_the_proposal_title"),
+        text: tr("tutorial.review_agenda.review_the_proposal_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".review-tour-notes",
-        title: "Review Note",
-        text: "You may leave an optional note explaining or documenting the decision.",
+        title: tr("tutorial.review_agenda.review_note_title"),
+        text: tr("tutorial.review_agenda.review_note_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: "button[data-log-action='CLICK_ACCEPT_AGENDA']",
-        title: "Accept",
-        text: "Accepting the proposal marks it as an accepted agenda item so it can proceed into the event's deliberation workflow.",
+        title: tr("tutorial.review_agenda.accept_title"),
+        text: tr("tutorial.review_agenda.accept_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "button[data-log-action='CLICK_REJECT_AGENDA']",
-        title: "Reject",
-        text: "Rejecting the proposal records it as rejected instead of adding it to the accepted agenda.",
+        title: tr("tutorial.review_agenda.reject_title"),
+        text: tr("tutorial.review_agenda.reject_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#review-tour-recent",
-        title: "Recent Decisions",
-        text: "Previously reviewed proposals appear here with their decision, time, and review note.",
+        title: tr("tutorial.review_agenda.recent_decisions_title"),
+        text: tr("tutorial.review_agenda.recent_decisions_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#review-tour-recent button[value='reopen']",
-        title: "Reopen a Decision",
-        text: "If a proposal needs to be reconsidered, reopen it to return it to the pending review queue.",
+        title: tr("tutorial.review_agenda.reopen_a_decision_title"),
+        text: tr("tutorial.review_agenda.reopen_a_decision_text"),
         placement: "left",
         padding: 8
       }

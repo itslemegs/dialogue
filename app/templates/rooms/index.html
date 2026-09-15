@@ -11,7 +11,7 @@
     class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
   >
     <span aria-hidden="true">?</span>
-    <span>Tutorial</span>
+    <span>{{ t('tutorial.common.button') }}</span>
   </button>
 </div>
 
@@ -57,6 +57,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:rooms-index:v1:user-{{ user.id if user else 'guest' }}";
@@ -64,40 +65,40 @@
     const steps = [
       {
         target: "#rooms-tour-create",
-        title: "Create a Discussion Room",
-        text: "Start a new room for this agenda item by giving it a title and, optionally, a short description.",
+        title: tr("tutorial.rooms_index.create_a_discussion_room_title"),
+        text: tr("tutorial.rooms_index.create_a_discussion_room_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#rooms-tour-list",
-        title: "Existing Rooms",
-        text: "Existing discussion rooms for this agenda item appear here.",
+        title: tr("tutorial.rooms_index.existing_rooms_title"),
+        text: tr("tutorial.rooms_index.existing_rooms_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".rooms-tour-item",
-        title: "Room",
-        text: "Each room is a separate workspace where participants can discuss the agenda item and develop a draft proposal.",
+        title: tr("tutorial.rooms_index.room_title"),
+        text: tr("tutorial.rooms_index.room_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".rooms-tour-sponsor",
-        title: "Room Sponsor",
-        text: "The sponsor is the participant who created the room and manages the draft being developed there.",
+        title: tr("tutorial.rooms_index.room_sponsor_title"),
+        text: tr("tutorial.rooms_index.room_sponsor_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".rooms-tour-open",
-        title: "Open the Room",
-        text: "Open a room to join its discussion and view or contribute to the shared draft.",
+        title: tr("tutorial.rooms_index.open_the_room_title"),
+        text: tr("tutorial.rooms_index.open_the_room_text"),
         placement: "top",
         padding: 8
       }

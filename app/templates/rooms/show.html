@@ -1056,7 +1056,7 @@
     class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
   >
     <span aria-hidden="true">?</span>
-    <span>Tutorial</span>
+    <span>{{ t('tutorial.common.button') }}</span>
   </button>
 </div>
 
@@ -2409,6 +2409,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const isSponsor =
       {{ 'true' if user and user.id == room.sponsor_id else 'false' }};
@@ -2430,24 +2431,24 @@
     const steps = [
       {
         target: "#room-tour-discussion",
-        title: "Room Discussion",
-        text: "Use this space to coordinate with the other participants working on this proposal.",
+        title: tr("tutorial.room.room_discussion_title"),
+        text: tr("tutorial.room.room_discussion_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#room-tour-draft",
-        title: "Shared Draft",
-        text: "This panel contains the proposal being developed by the room.",
+        title: tr("tutorial.room.shared_draft_title"),
+        text: tr("tutorial.room.shared_draft_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: "#room-tour-guide",
-        title: "Drafting Guide",
-        text: "This guide explains the basic structure: a clear title, preambular clauses, and operative clauses.",
+        title: tr("tutorial.room.drafting_guide_title"),
+        text: tr("tutorial.room.drafting_guide_text"),
         placement: "left",
         padding: 8
       },
@@ -2455,8 +2456,8 @@
       {% if not draft.is_submitted and not (user and user.id == room.sponsor_id) %}
       {
         target: "#room-tour-early-cosign",
-        title: "Co-sign the Draft",
-        text: "Before submission, you can add or remove your co-signature to show support for this developing draft.",
+        title: tr("tutorial.room.co_sign_the_draft_title"),
+        text: tr("tutorial.room.co_sign_the_draft_text"),
         placement: "left",
         padding: 8
       },
@@ -2464,8 +2465,8 @@
 
       {
         target: "#room-tour-cosigner-list",
-        title: "Sponsor and Co-signers",
-        text: "This area shows the proposal sponsor and the participants who currently support the draft as co-signers.",
+        title: tr("tutorial.room.sponsor_and_co_signers_title"),
+        text: tr("tutorial.room.sponsor_and_co_signers_text"),
         placement: "left",
         padding: 8
       },
@@ -2473,8 +2474,8 @@
       {% if user and user.id == room.sponsor_id and not draft.is_submitted %}
       {
         target: "#room-tour-editor",
-        title: "Editing Workspace",
-        text: "As the sponsor, you can edit and prepare the shared draft in this workspace.",
+        title: tr("tutorial.room.editing_workspace_title"),
+        text: tr("tutorial.room.editing_workspace_text"),
         placement: "left",
         padding: 8
       },
@@ -2482,8 +2483,8 @@
       {% if ai_features_enabled %}
       {
         target: "#room-tour-ai",
-        title: "AI Drafting",
-        text: "You may describe what you want to draft here and generate a starting point to review and edit.",
+        title: tr("tutorial.room.ai_drafting_title"),
+        text: tr("tutorial.room.ai_drafting_text"),
         placement: "left",
         padding: 8
       },
@@ -2491,24 +2492,24 @@
 
       {
         target: "#room-tour-draft-form",
-        title: "Manual Drafting",
-        text: "Write and revise the title, preambular clauses, and operative clauses directly here.",
+        title: tr("tutorial.room.manual_drafting_title"),
+        text: tr("tutorial.room.manual_drafting_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: "button[data-log-action='CLICK_SAVE_DRAFT']",
-        title: "Save Your Work",
-        text: "Save your changes while the proposal is still being developed.",
+        title: tr("tutorial.room.save_your_work_title"),
+        text: tr("tutorial.room.save_your_work_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "button[data-log-action='CLICK_SUBMIT_DRAFT_AS_L_DOC']",
-        title: "Submit the Draft",
-        text: "When the draft is ready, the sponsor submits it for consideration as an official draft document.",
+        title: tr("tutorial.room.submit_the_draft_title"),
+        text: tr("tutorial.room.submit_the_draft_text"),
         placement: "top",
         padding: 8
       }

@@ -27,7 +27,7 @@
               class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
             >
               <span aria-hidden="true">?</span>
-              <span>Tutorial</span>
+              <span>{{ t('tutorial.common.button') }}</span>
             </button>
           </div>
         </div>
@@ -354,6 +354,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:dashboard:v1:user-{{ user.id if user else 'guest' }}";
@@ -361,72 +362,72 @@
     const steps = [
       {
         target: "#dashboard-tour-events-title",
-        title: "Your Dashboard",
-        text: "This is your starting point in d¡alogüe. Events available to you appear here.",
+        title: tr("tutorial.dashboard.your_dashboard_title"),
+        text: tr("tutorial.dashboard.your_dashboard_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#dashboard-tour-events",
-        title: "Events",
-        text: "Your available event sessions are listed here. Each event card shows its timing, status, and stages.",
+        title: tr("tutorial.dashboard.events_title"),
+        text: tr("tutorial.dashboard.events_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".js-event-card",
-        title: "Open an Event",
-        text: "Select an event card to enter its Event Menu and access agenda setting, deliberation, drafting, voting, and decisions.",
+        title: tr("tutorial.dashboard.open_an_event_title"),
+        text: tr("tutorial.dashboard.open_an_event_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: ".js-event-badge",
-        title: "Event Status",
-        text: "This badge shows whether the event is upcoming, live, or ended.",
+        title: tr("tutorial.dashboard.event_status_title"),
+        text: tr("tutorial.dashboard.event_status_text"),
         placement: "left",
         padding: 6
       },
 
       {
         target: ".js-countdown-wrap",
-        title: "Upcoming Event",
-        text: "Before an event begins, this countdown shows how much time remains until its scheduled start.",
+        title: tr("tutorial.dashboard.upcoming_event_title"),
+        text: tr("tutorial.dashboard.upcoming_event_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".js-live-wrap",
-        title: "Live Event",
-        text: "While an event is running, this area shows the current stage, remaining time, and progress through that stage.",
+        title: tr("tutorial.dashboard.live_event_title"),
+        text: tr("tutorial.dashboard.live_event_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".js-ended-wrap",
-        title: "Ended Event",
-        text: "When an event has finished, its card remains available so you can revisit its records and outcomes.",
+        title: tr("tutorial.dashboard.ended_event_title"),
+        text: tr("tutorial.dashboard.ended_event_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".dashboard-tour-stages",
-        title: "Event Stages",
-        text: "These labels show the stages configured for the event.",
+        title: tr("tutorial.dashboard.event_stages_title"),
+        text: tr("tutorial.dashboard.event_stages_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#dashboard-tour-records",
-        title: "Department of Records",
-        text: "Use the Department of Records to review material preserved from the deliberation process, including agendas, speaker records, and decisions.",
+        title: tr("tutorial.dashboard.department_of_records_title"),
+        text: tr("tutorial.dashboard.department_of_records_text"),
         placement: "left",
         padding: 8
       }

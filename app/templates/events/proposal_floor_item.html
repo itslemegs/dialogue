@@ -857,7 +857,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
   <div class="pf-layout grid grid-cols-1 md:grid-cols-12 gap-4 xl:gap-5 items-stretch max-w-[1600px] mx-auto h-full min-h-0">
@@ -1869,6 +1869,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:proposal-floor:v1:user-{{ user.id }}:{{ mode|lower }}";
@@ -1876,40 +1877,40 @@
     const steps = [
       {
         target: "#pf-tour-document",
-        title: "Current Document",
-        text: "This panel shows the draft or amendment currently being discussed.",
+        title: tr("tutorial.proposal_floor.current_document_title"),
+        text: tr("tutorial.proposal_floor.current_document_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#pf-voting",
-        title: "Voting",
-        text: "Voting controls and results appear here when voting is opened.",
+        title: tr("tutorial.proposal_floor.voting_title"),
+        text: tr("tutorial.proposal_floor.voting_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#pf-tour-discussion",
-        title: "Discussion",
-        text: "The discussion record appears here as participants contribute to the floor.",
+        title: tr("tutorial.proposal_floor.discussion_title"),
+        text: tr("tutorial.proposal_floor.discussion_text"),
         placement: "auto",
         padding: 8
       },
 
       {
         target: ".pf-right-speakers",
-        title: "Speaker Queue",
-        text: "This area shows who is speaking and who is waiting for the floor.",
+        title: tr("tutorial.proposal_floor.speaker_queue_title"),
+        text: tr("tutorial.proposal_floor.speaker_queue_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: ".pf-right-composer",
-        title: "Speaking",
-        text: "When you have the floor, use this area to submit your contribution.",
+        title: tr("tutorial.proposal_floor.speaking_title"),
+        text: tr("tutorial.proposal_floor.speaking_text"),
         placement: "left",
         padding: 8
       }

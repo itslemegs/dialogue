@@ -14,7 +14,7 @@
         class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
       >
         <span aria-hidden="true">?</span>
-        <span>Tutorial</span>
+        <span>{{ t('tutorial.common.button') }}</span>
       </button>
       {% endif %}
     </div>
@@ -374,6 +374,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:event-menu:v1:user-{{ user.id if user else 'guest' }}:event-{{ event.id if event else 'none' }}";
@@ -381,24 +382,24 @@
     const steps = [
       {
         target: "#event-menu-tour-title",
-        title: "Event Menu",
-        text: "This is the main navigation hub for the event. Each card represents a stage or workspace in the deliberation process.",
+        title: tr("tutorial.event_menu.event_menu_title"),
+        text: tr("tutorial.event_menu.event_menu_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#event-meta",
-        title: "Current Event",
-        text: "This shows the event you are currently participating in.",
+        title: tr("tutorial.event_menu.current_event_title"),
+        text: tr("tutorial.event_menu.current_event_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#menu-grid",
-        title: "Event Workflow",
-        text: "The cards below take you through agenda setting, deliberation, drafting, voting, and the final decision. Availability depends on the event schedule and your role.",
+        title: tr("tutorial.event_menu.event_workflow_title"),
+        text: tr("tutorial.event_menu.event_workflow_text"),
         placement: "top",
         padding: 8
       },
@@ -406,8 +407,8 @@
       {% if flags and (flags.IS_PRESIDENT or flags.IS_CHAIR) %}
         {
           target: '[data-key="review_agenda"]',
-          title: "2. Review Agenda",
-          text: "Authorized chairs or presidents review submitted agenda proposals and decide which items enter the accepted agenda.",
+          title: tr("tutorial.event_menu.review_agenda_title"),
+          text: tr("tutorial.event_menu.review_agenda_text"),
           placement: "right",
           padding: 8
         },
@@ -415,56 +416,56 @@
 
       {
         target: '[data-key="view_agenda"]',
-        title: "3. View Agenda",
-        text: "See the agenda items that have been accepted for deliberation during the event.",
+        title: tr("tutorial.event_menu.view_agenda_title"),
+        text: tr("tutorial.event_menu.view_agenda_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: '[data-key="general_floor"]',
-        title: "4. General Floor",
-        text: "Join the broad discussion of accepted agenda items, take the floor, respond to other participants, and develop the direction of deliberation.",
+        title: tr("tutorial.event_menu.general_floor_title"),
+        text: tr("tutorial.event_menu.general_floor_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: '[data-key="proposal_discussion"]',
-        title: "5. Proposal Discussion",
-        text: "Move from general discussion into focused drafting rooms, where participants can develop a formal proposal and gather co-signers.",
+        title: tr("tutorial.event_menu.proposal_discussion_title"),
+        text: tr("tutorial.event_menu.proposal_discussion_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: '[data-key="view_draft_resolution"]',
-        title: "6. View Tabled Drafts",
-        text: "Read draft resolutions that have been formally submitted, including their text, sponsors, co-signers, and proposed amendments.",
+        title: tr("tutorial.event_menu.view_tabled_drafts_title"),
+        text: tr("tutorial.event_menu.view_tabled_drafts_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: '[data-key="proposal_floor"]',
-        title: "7. Proposal Floor",
-        text: "Discuss tabled drafts and amendments, participate in the speaker process, and vote when voting is opened.",
+        title: tr("tutorial.event_menu.proposal_floor_title"),
+        text: tr("tutorial.event_menu.proposal_floor_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: '[data-key="decision"]',
-        title: "8. Decision",
-        text: "Review the recorded outcomes of draft resolutions and amendments, including voting results and final statuses.",
+        title: tr("tutorial.event_menu.decision_title"),
+        text: tr("tutorial.event_menu.decision_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: '[data-key="propose_agenda"] .status-badge',
-        title: "Open and Locked Stages",
-        text: "Each card displays its current availability. A stage may be open or locked depending on the event schedule. Locked cards also explain when they open or why they are unavailable.",
+        title: tr("tutorial.event_menu.open_and_locked_stages_title"),
+        text: tr("tutorial.event_menu.open_and_locked_stages_text"),
         placement: "bottom",
         padding: 6
       }

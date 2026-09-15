@@ -12,7 +12,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
 
@@ -81,6 +81,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:view-draft-index:v1:user-{{ user.id if user else 'guest' }}";
@@ -88,56 +89,56 @@
     const steps = [
       {
         target: "#draft-index-tour-title",
-        title: "Tabled Draft Resolutions",
-        text: "This page lists draft resolutions that have been formally submitted during the event.",
+        title: tr("tutorial.view_draft_index.tabled_draft_resolutions_title"),
+        text: tr("tutorial.view_draft_index.tabled_draft_resolutions_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#draft-index-tour-active",
-        title: "Active Drafts",
-        text: "These drafts are currently active in the deliberation process. Select a draft to read its full text, sponsors, co-signers, and amendments.",
+        title: tr("tutorial.view_draft_index.active_drafts_title"),
+        text: tr("tutorial.view_draft_index.active_drafts_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".draft-index-tour-active-card",
-        title: "Open a Draft",
-        text: "Each card shows the draft number, title, agenda item, sponsor, and submission time. Select the card to open the full draft.",
+        title: tr("tutorial.view_draft_index.open_a_draft_title"),
+        text: tr("tutorial.view_draft_index.open_a_draft_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".draft-index-tour-reintroduced",
-        title: "Reintroduced Draft",
-        text: "This label means the draft was previously withdrawn and has since been returned to the active deliberation process.",
+        title: tr("tutorial.view_draft_index.reintroduced_draft_title"),
+        text: tr("tutorial.view_draft_index.reintroduced_draft_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#draft-index-tour-withdrawn",
-        title: "Withdrawn Drafts",
-        text: "Drafts that have been withdrawn are kept here as part of the event record instead of disappearing completely.",
+        title: tr("tutorial.view_draft_index.withdrawn_drafts_title"),
+        text: tr("tutorial.view_draft_index.withdrawn_drafts_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".draft-index-tour-withdrawn-card",
-        title: "Withdrawn Draft",
-        text: "A withdrawn draft is no longer active, but its identifying information and sponsor remain visible.",
+        title: tr("tutorial.view_draft_index.withdrawn_draft_title"),
+        text: tr("tutorial.view_draft_index.withdrawn_draft_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".draft-index-tour-reintroduce",
-        title: "Reintroduce a Draft",
-        text: "Use this control to return a withdrawn draft to the active deliberation process.",
+        title: tr("tutorial.view_draft_index.reintroduce_a_draft_title"),
+        text: tr("tutorial.view_draft_index.reintroduce_a_draft_text"),
         placement: "top",
         padding: 8
       }

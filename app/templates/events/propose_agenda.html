@@ -16,7 +16,7 @@
       class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
     >
       <span aria-hidden="true">?</span>
-      <span>Tutorial</span>
+      <span>{{ t('tutorial.common.button') }}</span>
     </button>
   </div>
 </div>
@@ -150,6 +150,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:propose-agenda:v1:user-{{ user.id if user else 'guest' }}";
@@ -157,48 +158,48 @@
     const steps = [
       {
         target: "#agenda-tour-form",
-        title: "Propose an Agenda Item",
-        text: "Use this form to suggest an issue for the event to consider. Your proposal will be reviewed before it becomes part of the agenda.",
+        title: tr("tutorial.propose_agenda.propose_an_agenda_item_title"),
+        text: tr("tutorial.propose_agenda.propose_an_agenda_item_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#title",
-        title: "Agenda Title",
-        text: "Give the proposed issue a short, clear title so participants can immediately understand what it is about.",
+        title: tr("tutorial.propose_agenda.agenda_title_title"),
+        text: tr("tutorial.propose_agenda.agenda_title_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#background",
-        title: "Background",
-        text: "Explain the issue, provide enough context to understand it, and describe why it should be considered.",
+        title: tr("tutorial.propose_agenda.background_title"),
+        text: tr("tutorial.propose_agenda.background_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#source_url",
-        title: "Supporting Source",
-        text: "If useful, add a link to a report, article, official document, or other source that supports the proposal.",
+        title: tr("tutorial.propose_agenda.supporting_source_title"),
+        text: tr("tutorial.propose_agenda.supporting_source_text"),
         placement: "right",
         padding: 8
       },
 
       {
         target: "#submit_anonymously",
-        title: "Anonymous Submission",
-        text: "Choose this option if you want the agenda proposal to be submitted without publicly identifying you as the proposer.",
+        title: tr("tutorial.propose_agenda.anonymous_submission_title"),
+        text: tr("tutorial.propose_agenda.anonymous_submission_text"),
         placement: "right",
         padding: 12
       },
 
       {
         target: "button[data-log-action='CLICK_SUBMIT_AGENDA_PROPOSAL']",
-        title: "Submit for Review",
-        text: "When the proposal is ready, submit it for review. Submission does not automatically place it on the accepted agenda.",
+        title: tr("tutorial.propose_agenda.submit_for_review_title"),
+        text: tr("tutorial.propose_agenda.submit_for_review_text"),
         placement: "top",
         padding: 8
       }
@@ -207,8 +208,8 @@
       ,
       {
         target: "#agenda-tour-mine",
-        title: "Your Proposals",
-        text: "After submission, you can track your agenda proposals here and see whether each one is pending, accepted, or rejected.",
+        title: tr("tutorial.propose_agenda.your_proposals_title"),
+        text: tr("tutorial.propose_agenda.your_proposals_text"),
         placement: "top",
         padding: 8
       }

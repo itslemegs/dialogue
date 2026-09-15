@@ -14,7 +14,7 @@
         class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
       >
         <span aria-hidden="true">?</span>
-        <span>Tutorial</span>
+        <span>{{ t('tutorial.common.button') }}</span>
       </button>
     </div>
 
@@ -282,6 +282,7 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     if (!window.DialogueTour) return;
+    const tr = window.UII18n.t;
 
     const storageKey =
       "dialogue-tour:decision:v1:user-{{ user.id if user else 'guest' }}";
@@ -289,88 +290,88 @@
     const steps = [
       {
         target: "#decision-tour-title",
-        title: "Decision",
-        text: "This page summarizes the outcomes of draft resolutions and amendments considered during the event.",
+        title: tr("tutorial.decision.decision_title"),
+        text: tr("tutorial.decision.decision_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#decision-tour-description",
-        title: "Final Results",
-        text: "Use this page to review what happened to each submitted draft and amendment after deliberation and voting.",
+        title: tr("tutorial.decision.final_results_title"),
+        text: tr("tutorial.decision.final_results_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: "#decision-tour-drafts",
-        title: "Draft Resolutions",
-        text: "This section lists the submitted draft resolutions and their final or current outcomes.",
+        title: tr("tutorial.decision.draft_resolutions_title"),
+        text: tr("tutorial.decision.draft_resolutions_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: ".decision-tour-draft-card",
-        title: "Draft Result",
-        text: "Each card identifies the draft, its sponsor and co-signers, its status, and the outcome reached during the event.",
+        title: tr("tutorial.decision.draft_result_title"),
+        text: tr("tutorial.decision.draft_result_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".decision-tour-draft-outcome",
-        title: "Outcome",
-        text: "The outcome badge shows whether the draft was adopted, not adopted, withdrawn, reintroduced, or is still pending.",
+        title: tr("tutorial.decision.outcome_title"),
+        text: tr("tutorial.decision.outcome_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: ".decision-tour-early-vote",
-        title: "Early Consensus Test",
-        text: "If an early consensus test was held, its YES, NO, and ABSTAIN counts appear here.",
+        title: tr("tutorial.decision.early_consensus_test_title"),
+        text: tr("tutorial.decision.early_consensus_test_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".decision-tour-formal-vote",
-        title: "Formal Vote",
-        text: "If the draft proceeded to formal voting, the final YES, NO, and ABSTAIN totals are shown here.",
+        title: tr("tutorial.decision.formal_vote_title"),
+        text: tr("tutorial.decision.formal_vote_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: "#decision-tour-amendments",
-        title: "Amendments",
-        text: "This section summarizes the outcomes of amendments proposed to draft resolutions.",
+        title: tr("tutorial.decision.amendments_title"),
+        text: tr("tutorial.decision.amendments_text"),
         placement: "bottom",
         padding: 8
       },
 
       {
         target: ".decision-tour-amendment-card",
-        title: "Amendment Result",
-        text: "Each amendment result identifies the amendment, the draft it belongs to, who submitted it, and its outcome.",
+        title: tr("tutorial.decision.amendment_result_title"),
+        text: tr("tutorial.decision.amendment_result_text"),
         placement: "top",
         padding: 8
       },
 
       {
         target: ".decision-tour-amendment-outcome",
-        title: "Amendment Outcome",
-        text: "This badge shows whether the amendment was adopted, adopted by consensus, not adopted, or remains pending.",
+        title: tr("tutorial.decision.amendment_outcome_title"),
+        text: tr("tutorial.decision.amendment_outcome_text"),
         placement: "left",
         padding: 8
       },
 
       {
         target: ".decision-tour-amendment-vote",
-        title: "Amendment Vote",
-        text: "When a vote was recorded, the YES, NO, and ABSTAIN totals and the resulting decision appear here.",
+        title: tr("tutorial.decision.amendment_vote_title"),
+        text: tr("tutorial.decision.amendment_vote_text"),
         placement: "top",
         padding: 8
       }

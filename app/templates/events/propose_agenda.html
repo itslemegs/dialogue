@@ -1,12 +1,25 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-3xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{{ t('agenda.propose_item') }}</h1>
+<div class="flex items-center justify-between gap-4 mb-6">
+  <h1 class="text-2xl font-bold">{{ t('agenda.propose_item') }}</h1>
+
+  <div class="flex items-center gap-3">
     {% if event %}
-      <div class="text-sm text-slate-600"><span class="font-medium">{{ event.title }}</span></div>
+      <div class="text-sm text-slate-600">
+        <span class="font-medium">{{ event.title }}</span>
+      </div>
     {% endif %}
+
+    <button
+      type="button"
+      id="propose-agenda-tutorial"
+      class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition"
+    >
+      <span aria-hidden="true">?</span>
+      <span>Tutorial</span>
+    </button>
   </div>
+</div>
 
   {% if ok %}
     <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3">
@@ -19,7 +32,10 @@
     </div>
   {% endif %}
 
-  <form method="post" action="/events/{{ event.id }}/propose-agenda" data-log-action="SUBMIT_AGENDA_PROPOSAL" data-target-type="event" data-target-id="{{ event.id }}" class="bg-white border rounded-2xl p-6 space-y-4">
+  <form
+  id="agenda-tour-form"
+  method="post"
+  action="/events/{{ event.id }}/propose-agenda" data-log-action="SUBMIT_AGENDA_PROPOSAL" data-target-type="event" data-target-id="{{ event.id }}" class="bg-white border rounded-2xl p-6 space-y-4">
     <div>
       <label for="title" class="block text-sm font-medium text-slate-700">{{ t('agenda.title') }} <span class="text-rose-500">*</span></label>
       <input id="title" name="title" required maxlength="160"
@@ -67,7 +83,7 @@
     </div>
   </form>
 
-  <section class="mt-8">
+  <section id="agenda-tour-mine" class="mt-8">
     <h2 class="text-lg font-semibold mb-3">{{ t('agenda.mine') }}</h2>
     {% if user %}
       {% if mine and mine|length > 0 %}
@@ -130,4 +146,88 @@
   }
 })();
 </script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (!window.DialogueTour) return;
+
+    const storageKey =
+      "dialogue-tour:propose-agenda:v1:user-{{ user.id if user else 'guest' }}";
+
+    const steps = [
+      {
+        target: "#agenda-tour-form",
+        title: "Propose an Agenda Item",
+        text: "Use this form to suggest an issue for the event to consider. Your proposal will be reviewed before it becomes part of the agenda.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#title",
+        title: "Agenda Title",
+        text: "Give the proposed issue a short, clear title so participants can immediately understand what it is about.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#background",
+        title: "Background",
+        text: "Explain the issue, provide enough context to understand it, and describe why it should be considered.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#source_url",
+        title: "Supporting Source",
+        text: "If useful, add a link to a report, article, official document, or other source that supports the proposal.",
+        placement: "right",
+        padding: 8
+      },
+
+      {
+        target: "#submit_anonymously",
+        title: "Anonymous Submission",
+        text: "Choose this option if you want the agenda proposal to be submitted without publicly identifying you as the proposer.",
+        placement: "right",
+        padding: 12
+      },
+
+      {
+        target: "button[data-log-action='CLICK_SUBMIT_AGENDA_PROPOSAL']",
+        title: "Submit for Review",
+        text: "When the proposal is ready, submit it for review. Submission does not automatically place it on the accepted agenda.",
+        placement: "top",
+        padding: 8
+      }
+
+      {% if user %}
+      ,
+      {
+        target: "#agenda-tour-mine",
+        title: "Your Proposals",
+        text: "After submission, you can track your agenda proposals here and see whether each one is pending, accepted, or rejected.",
+        placement: "top",
+        padding: 8
+      }
+      {% endif %}
+    ];
+
+    function startProposeAgendaTour() {
+      window.DialogueTour.start(steps, {
+        storageKey: storageKey
+      });
+    }
+
+    document
+      .getElementById("propose-agenda-tutorial")
+      ?.addEventListener("click", startProposeAgendaTour);
+
+    if (!window.DialogueTour.completed(storageKey)) {
+      window.setTimeout(startProposeAgendaTour, 500);
+    }
+  });
+  </script>
 {% endblock %}

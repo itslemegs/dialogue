@@ -723,6 +723,8 @@
   "tutorial.event_menu.current_event_text": "This shows the event you are currently participating in.",
   "tutorial.event_menu.event_workflow_title": "Event Workflow",
   "tutorial.event_menu.event_workflow_text": "The cards below take you through agenda setting, deliberation, drafting, voting, and the final decision. Availability depends on the event schedule and your role.",
+  "tutorial.event_menu.propose_agenda_title": "1. Propose Agenda",
+  "tutorial.event_menu.propose_agenda_text": "Submit an issue or topic that you want the event to consider. Proposed agenda items are reviewed before becoming part of the accepted agenda.",
   "tutorial.event_menu.review_agenda_title": "2. Review Agenda",
   "tutorial.event_menu.review_agenda_text": "Authorized chairs or presidents review submitted agenda proposals and decide which items enter the accepted agenda.",
   "tutorial.event_menu.view_agenda_title": "3. View Agenda",

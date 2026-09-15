@@ -39,6 +39,8 @@ JS_KEYS = (
     "tutorial.event_menu.current_event_text",
     "tutorial.event_menu.event_workflow_title",
     "tutorial.event_menu.event_workflow_text",
+    "tutorial.event_menu.propose_agenda_title",
+    "tutorial.event_menu.propose_agenda_text",
     "tutorial.event_menu.review_agenda_title",
     "tutorial.event_menu.review_agenda_text",
     "tutorial.event_menu.view_agenda_title",

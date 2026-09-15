@@ -404,6 +404,14 @@
         padding: 8
       },
 
+      {
+        target: '[data-key="propose_agenda"]',
+        title: tr("tutorial.event_menu.propose_agenda_title"),
+        text: tr("tutorial.event_menu.propose_agenda_text"),
+        placement: "right",
+        padding: 8
+      },
+
       {% if flags and (flags.IS_PRESIDENT or flags.IS_CHAIR) %}
         {
           target: '[data-key="review_agenda"]',

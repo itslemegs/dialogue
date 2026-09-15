@@ -723,6 +723,8 @@
   "tutorial.event_menu.current_event_text": "現在参加しているイベントが表示されます。",
   "tutorial.event_menu.event_workflow_title": "イベントの流れ",
   "tutorial.event_menu.event_workflow_text": "以下のカードから、議題設定、討論、起草、投票、最終決定へと進めます。利用できる機能は、イベントの日程と役割によって異なります。",
+  "tutorial.event_menu.propose_agenda_title": "1. 議題を提案",
+  "tutorial.event_menu.propose_agenda_text": "イベントで検討してほしい課題やテーマを提出します。提案された議題は審査を経て、承認済みの議題に加えられます。",
   "tutorial.event_menu.review_agenda_title": "2. 議題を審査",
   "tutorial.event_menu.review_agenda_text": "権限を持つ議長または総会議長が提出された議題案を審査し、議題として承認する項目を決めます。",
   "tutorial.event_menu.view_agenda_title": "3. 議題を確認",

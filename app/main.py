@@ -7788,9 +7788,9 @@ def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request)
             },
         )
 
-    # Return outside the proposal floor after closing the draft discussion.
+    # Return to the Proposal Floor listing after closing the draft discussion.
     return RedirectResponse(
-        f"/events/{event_id}/view-draft?closed=1",
+        f"/events/{event_id}/proposal-floor",
         status_code=303,
     )
 

@@ -1859,9 +1859,266 @@ def admin_create_event(
 from sqlalchemy import text, bindparam
 
 def hard_delete_event(session, event_id: int):
-    session.exec(text("DELETE FROM agenda_proposal WHERE event_id = :id"), {"id": event_id})
-    session.exec(text("DELETE FROM event_stage WHERE event_id = :id"), {"id": event_id})
-    session.exec(text("DELETE FROM event WHERE id = :id"), {"id": event_id})
+    """
+    Permanently delete an Event and all event-owned data.
+
+    Deletion is intentionally explicit because a number of legacy/model
+    foreign keys do not have ON DELETE CASCADE.
+    The caller owns the transaction and must commit/rollback.
+    """
+    params = {"id": event_id}
+
+    def run(sql: str):
+        session.exec(text(sql), params=params)
+
+    # ============================================================
+    # LIVE SUMMARY
+    #
+    # LiveSummary has several non-cascading FKs, so remove summaries
+    # before deleting any of their scoped objects.
+    # ============================================================
+    run("""
+        DELETE FROM live_summary
+        WHERE event_id = :id
+           OR question_id IN (
+                SELECT id FROM question WHERE event_id = :id
+           )
+           OR proposal_id IN (
+                SELECT id FROM agendaproposal WHERE event_id = :id
+           )
+           OR room_id IN (
+                SELECT id FROM proposalroom WHERE event_id = :id
+           )
+           OR draft_id IN (
+                SELECT id FROM proposaldraft WHERE event_id = :id
+           )
+           OR amendment_id IN (
+                SELECT a.id
+                FROM amendment a
+                JOIN proposaldraft d ON d.id = a.draft_id
+                WHERE d.event_id = :id
+           )
+    """)
+
+    # ============================================================
+    # PROPOSAL FLOOR
+    #
+    # Delete floor state first because it may point at the current
+    # speaker request.
+    # ============================================================
+    run("""
+        DELETE FROM proposal_floor_state
+        WHERE event_id = :id
+    """)
+
+    # Ballots reference proposals/drafts/amendments/vote objects.
+    run("""
+        DELETE FROM proposal_early_ballot
+        WHERE event_id = :id
+    """)
+
+    run("""
+        DELETE FROM proposal_formal_ballot
+        WHERE event_id = :id
+    """)
+
+    # Interventions and speaker requests have non-cascading scope FKs.
+    run("""
+        DELETE FROM proposal_intervention
+        WHERE event_id = :id
+    """)
+
+    run("""
+        DELETE FROM proposal_speaker_request
+        WHERE event_id = :id
+    """)
+
+    # Vote containers can now safely disappear.
+    run("""
+        DELETE FROM proposal_early_vote
+        WHERE event_id = :id
+    """)
+
+    run("""
+        DELETE FROM proposal_formal_vote
+        WHERE event_id = :id
+    """)
+
+    # ============================================================
+    # AMENDMENTS
+    # ============================================================
+    run("""
+        DELETE FROM amendment_vote
+        WHERE amendment_id IN (
+            SELECT a.id
+            FROM amendment a
+            JOIN proposaldraft d ON d.id = a.draft_id
+            WHERE d.event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM amendment_vote_state
+        WHERE amendment_id IN (
+            SELECT a.id
+            FROM amendment a
+            JOIN proposaldraft d ON d.id = a.draft_id
+            WHERE d.event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM amendment
+        WHERE draft_id IN (
+            SELECT id
+            FROM proposaldraft
+            WHERE event_id = :id
+        )
+    """)
+
+    # ============================================================
+    # PROPOSAL DRAFTS / ROOMS
+    # ============================================================
+    run("""
+        DELETE FROM drafttranslation
+        WHERE draft_id IN (
+            SELECT id
+            FROM proposaldraft
+            WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM proposaldraft
+        WHERE event_id = :id
+    """)
+
+    run("""
+        DELETE FROM proposalmessage
+        WHERE room_id IN (
+            SELECT id
+            FROM proposalroom
+            WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM proposalroom
+        WHERE event_id = :id
+    """)
+
+    # ============================================================
+    # GENERAL FLOOR / QUESTION DATA
+    # ============================================================
+
+    # Floor state may itself hold pointers into the speaker queue,
+    # so remove it first.
+    run("""
+        DELETE FROM floorstate
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM notification
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM rorinvite
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM speakerrequest
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM intervention
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM proposal
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM objection
+        WHERE draft_id IN (
+            SELECT d.id
+            FROM draft d
+            JOIN question q ON q.id = d.question_id
+            WHERE q.event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM draft
+        WHERE question_id IN (
+            SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    # Bridge between AgendaProposal and Question.
+    run("""
+        DELETE FROM general_floor_link
+        WHERE proposal_id IN (
+                SELECT id FROM agendaproposal WHERE event_id = :id
+        )
+           OR question_id IN (
+                SELECT id FROM question WHERE event_id = :id
+        )
+    """)
+
+    run("""
+        DELETE FROM question
+        WHERE event_id = :id
+    """)
+
+    # ============================================================
+    # AGENDA PROPOSALS
+    # ============================================================
+    run("""
+        DELETE FROM agendaproposal
+        WHERE event_id = :id
+    """)
+
+    # ============================================================
+    # DIRECT EVENT CHILDREN
+    # ============================================================
+    run("""
+        DELETE FROM eventsequence
+        WHERE event_id = :id
+    """)
+
+    run("""
+        DELETE FROM event_access_grant
+        WHERE event_id = :id
+    """)
+
+    run("""
+        DELETE FROM event_stage
+        WHERE event_id = :id
+    """)
+
+    # Finally the event itself.
+    run("""
+        DELETE FROM event
+        WHERE id = :id
+    """)
 
 # GET -> show a tiny confirm page with a POST form (so clicks on links won't 405)
 @app.get("/admin/events/{event_id}/delete")
@@ -1886,18 +2143,29 @@ def admin_delete_event_confirm(event_id: int, request: Request, next: Optional[s
 
 # POST/DELETE -> perform deletion, always redirect (no JSON)
 @app.api_route("/admin/events/{event_id}/delete", methods=["POST", "DELETE"])
-@app.api_route("/admin/events/{event_id}/delete/", methods=["POST", "DELETE"], include_in_schema=False)
-def admin_delete_event(request: Request, event_id: int, next: Optional[str] = Query("/admin/events/?deleted=1")):
+@app.api_route(
+    "/admin/events/{event_id}/delete/",
+    methods=["POST", "DELETE"],
+    include_in_schema=False,
+)
+def admin_delete_event(
+    request: Request,
+    event_id: int,
+    next: Optional[str] = Query("/admin/events/?deleted=1"),
+):
     dest = next or "/admin/events/?deleted=1"
+
     with get_session() as s:
         ev = s.get(Event, event_id)
+
         if ev:
-            s.delete(ev)
             try:
+                hard_delete_event(s, event_id)
                 s.commit()
             except Exception:
                 s.rollback()
                 raise
+
     return RedirectResponse(dest, status_code=303)
 
 @app.get("/admin/events")

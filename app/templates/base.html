@@ -90,7 +90,7 @@
 
         {% if user %}
           <span class="mr-3">
-            {{ t('account.greeting') }} {{ uf.flair_for_user(u=user, roles_list=roles_from_flags) }}
+            {{ t('account.greeting') }} {{ uf.flair_for_user(u=user, roles_list=roles_from_flags, handle_href='/change-password') }}
           </span>
           <a href="/dashboard" class="mr-3 text-blue-600">{{ t('nav.dashboard') }}</a>
           {% if flags.IS_ADMIN or flags.IS_PRESIDENT or flags.IS_CHAIR %}

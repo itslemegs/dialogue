@@ -1,5 +1,5 @@
 {# app/templates/macros/user_flair.html #}
-{% macro flair_for_user(u=None, roles_list=None, handle_text=None, chairman_label=None) %}
+{% macro flair_for_user(u=None, roles_list=None, handle_text=None, chairman_label=None, handle_href=None) %}
   {# Decide handle text #}
   {% set handle = handle_text or ("@" ~ (u.handle if u and u.handle else "user")) %}
 
@@ -14,7 +14,17 @@
   {% endif %}
 
   <span class="user-with-flair" style="display:inline-flex; align-items:center; gap:.4rem;">
-    <span class="handle">{{ handle }}</span>
+    {% if handle_href %}
+      <a
+        href="{{ handle_href }}"
+        class="handle hover:text-indigo-600 hover:underline transition"
+        title="Change password"
+      >
+        {{ handle }}
+      </a>
+    {% else %}
+      <span class="handle">{{ handle }}</span>
+    {% endif %}
 
     {# Show badges in priority order #}
     {% if 'admin' in roles %}

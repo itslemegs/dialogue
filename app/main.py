@@ -750,6 +750,86 @@ def logout():
     resp.delete_cookie("session", path="/")
     return resp
 
+@app.get("/change-password", response_class=HTMLResponse)
+def get_change_password(request: Request):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    return render(
+        "change_password.html",
+        request,
+        user=user,
+        error=None,
+        success=None,
+    )
+
+
+@app.post("/change-password", response_class=HTMLResponse)
+def post_change_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+):
+    user = current_user(request)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    if new_password != confirm_password:
+        return render(
+            "change_password.html",
+            request,
+            user=user,
+            error="New passwords do not match.",
+            success=None,
+        )
+
+    if len(new_password) < 8:
+        return render(
+            "change_password.html",
+            request,
+            user=user,
+            error="New password must be at least 8 characters.",
+            success=None,
+        )
+
+    with get_session() as db:
+        db_user = db.get(User, user.id)
+        if not db_user:
+            raise HTTPException(404)
+
+        if not verify_password(current_password, db_user.password_hash):
+            return render(
+                "change_password.html",
+                request,
+                user=user,
+                error="Current password is incorrect.",
+                success=None,
+            )
+
+        # Optional but useful: don't allow replacing it with the same password.
+        if verify_password(new_password, db_user.password_hash):
+            return render(
+                "change_password.html",
+                request,
+                user=user,
+                error="New password must be different from your current password.",
+                success=None,
+            )
+
+        db_user.password_hash = hash_password(new_password)
+        db.add(db_user)
+        db.commit()
+
+    return render(
+        "change_password.html",
+        request,
+        user=user,
+        error=None,
+        success="Password changed successfully.",
+    )
+
 from app.routes.live_summary_fragment import router as live_summary_fragment_router
 
 app.include_router(live_summary_fragment_router)

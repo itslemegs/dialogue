@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -167,6 +168,70 @@ def details_to_json(details: dict[str, Any] | None) -> Optional[str]:
     return text
 
 
+def page_log_context(path: str | None) -> dict[str, Any]:
+    """Categorical context from known participant paths; no DB or query values.
+
+    This describes the page/route, not proof that an action succeeded. Explicit
+    semantic targets and details remain authoritative over these defaults.
+    """
+    path = (path or "").split("?", 1)[0].rstrip("/")
+    if path == "/dashboard":
+        return {"phase": "dashboard", "page_kind": "dashboard"}
+    event = re.match(r"^/events/(\d+)(?:/|$)", path)
+    context = {"event_id": int(event[1])} if event else {}
+    tail = path[event.end(1):] if event else path
+    pages = {
+        "/menu": ("event_menu", "event_menu"),
+        "/propose-agenda": ("agenda_setting", "propose_agenda"),
+        "/review-agenda": ("agenda_review", "review_agenda"),
+        "/view-agenda": ("agenda_setting", "view_agenda"),
+        "/general-floor": ("general_floor", "general_floor_index"),
+        "/proposal-discussion": ("proposal_discussion", "proposal_discussion_index"),
+        "/proposal-floor": ("proposal_floor", "proposal_floor_index"),
+        "/view-draft": ("proposal_discussion", "view_draft_index"),
+        "/decision": ("decision", "decision"),
+    }
+    if event and tail in pages:
+        phase, page_kind = pages[tail]
+        return dict(context, phase=phase, page_kind=page_kind,
+                    target_type="event", target_id=context["event_id"])
+    match = re.match(r"^/(general-floor|review-agenda|proposal-discussion)/(\d+)(?:/|$)", tail)
+    if event and match:
+        section, proposal_id = match[1], int(match[2])
+        phase, page_kind = {
+            "general-floor": ("general_floor", "general_floor_item"),
+            "review-agenda": ("agenda_review", "review_agenda"),
+            "proposal-discussion": ("proposal_discussion", "rooms_index"),
+        }[section]
+        context.update(phase=phase, page_kind=page_kind, proposal_id=proposal_id,
+                       target_type="agenda_proposal", target_id=proposal_id)
+        room = re.match(r"^/proposal-discussion/\d+/rooms/(\d+)(?:/|$)", tail)
+        if room:
+            context.update(room_id=int(room[1]), page_kind="proposal_room",
+                           target_type="proposal_room", target_id=int(room[1]))
+            draft = re.match(r"^/proposal-discussion/\d+/rooms/\d+/drafts/(\d+)(?:/|$)", tail)
+            if draft:
+                context.update(draft_id=int(draft[1]), page_kind="draft_detail",
+                               target_type="proposal_draft", target_id=int(draft[1]))
+                amendment = re.search(r"/amendments/(\d+)(?:/|$)", tail)
+                if amendment:
+                    context.update(amendment_id=int(amendment[1]), page_kind="amendment_detail",
+                                   target_type="amendment", target_id=int(amendment[1]))
+        return context
+    match = re.match(r"^/proposal-floor/(draft|amendment)/(\d+)(?:/|$)", tail)
+    if event and match:
+        kind, item_id = match[1], int(match[2])
+        context.update(phase="proposal_floor", page_kind="proposal_floor_item",
+                       target_type=kind, target_id=item_id)
+        context[kind + "_id"] = item_id
+        return context
+    match = re.match(r"^/drafts/(\d+)(?:/|$)", tail)
+    if match:
+        context.update(phase="proposal_discussion", page_kind="draft_detail",
+                       draft_id=int(match[1]), target_type="proposal_draft", target_id=int(match[1]))
+    return context
+
+
 def add_session_log(
     db: Session,
     *,
@@ -216,6 +281,33 @@ def add_session_log(
 
         if method is None:
             method = request.method
+
+    context = page_log_context(page)
+    # Resolved document context is supplied by routes already loading the object.
+    # Never derive client identity/access from client-reported paths or details.
+    if request is not None and source != "client":
+        context.update(getattr(request.state, "session_log_context", None) or {})
+        if route is None:
+            route = getattr(request.scope.get("route"), "path", None)
+        if event_id is None:
+            event_id = context.get("event_id")
+    supplied = details or {}
+    phase = phase or supplied.get("phase") or context.get("phase")
+    inferred_target = target_type is None and target_id is None
+    if inferred_target:
+        target_type = context.get("target_type")
+        target_id = context.get("target_id")
+    context_details = {key: value for key, value in context.items()
+                       if key not in {"phase", "event_id", "target_type", "target_id"}}
+    details = {**context_details, **supplied}
+    if inferred_target and target_type is not None:
+        details["target_inferred_from"] = "page" if source == "client" else "route"
+    # Created objects may not yet occur in the request path (rooms/interventions).
+    id_key = {"agenda_proposal": "proposal_id", "proposal_room": "room_id",
+              "proposal_draft": "draft_id", "draft": "draft_id",
+              "amendment": "amendment_id"}.get(target_type)
+    if id_key and target_id is not None and str(target_id).isdigit():
+        details.setdefault(id_key, int(target_id))
 
     log = ExperimentSessionLog(
         event_id=event_id,

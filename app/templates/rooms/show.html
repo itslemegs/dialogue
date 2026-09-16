@@ -1527,6 +1527,7 @@
   <button formaction="/events/{{ event.id }}/proposal-discussion/{{ proposal.id }}/rooms/{{ room.id }}/draft/submit"
           class="px-3 py-1.5 bg-emerald-600 text-white rounded"
           data-log-action="CLICK_SUBMIT_DRAFT_AS_L_DOC"
+          data-log-submit-action="SUBMIT_DRAFT_AS_L_DOC"
           data-target-type="proposal_draft"
           data-target-id="{{ draft.id }}"
           data-hint="{{ t('draft.submit_hint') }}"

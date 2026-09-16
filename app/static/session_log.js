@@ -35,10 +35,10 @@
   
     function send(action, details) {
       const payload = {
-        event_id: getEventId(),
+        event_id: (details && details.event_id) || getEventId(),
         action: action,
         page: window.location.pathname,
-        phase: document.body ? document.body.dataset.phase || null : null,
+        phase: (details && details.phase) || (document.body ? document.body.dataset.phase || null : null),
         target_type: details && details.target_type ? details.target_type : null,
         target_id: details && details.target_id ? details.target_id : null,
         details: Object.assign(
@@ -93,11 +93,14 @@
           "button, a, input[type='submit'], input[type='button'], [data-log-action]"
         );
   
-        if (!el) return;
+        // A labeled ancestor form is not a click action. Its submission is
+        // recorded by the submit listener, not by clicks while editing fields.
+        if (!el || el.tagName === "FORM") return;
   
         const info = elementInfo(el);
   
         send(info.data_log_action || "CLICK", {
+          interaction: "click",
           element: info,
           target_type: info.target_type,
           target_id: info.target_id,
@@ -111,6 +114,8 @@
       function (event) {
         const form = event.target;
         const fields = [];
+        const submitter = event.submitter;
+        const submitData = submitter ? submitter.dataset : {};
   
         try {
           for (const el of form.elements) {
@@ -135,13 +140,18 @@
           }
         } catch (e) {}
   
-        send(form.dataset.logAction || "FORM_SUBMIT", {
+        send(submitData.logSubmitAction || form.dataset.logAction || "FORM_SUBMIT", {
+          interaction: "submit",
+          submitter_action: submitData.logAction || null,
           form_id: form.id || null,
           form_name: form.getAttribute("name") || null,
-          action_path: form.action ? new URL(form.action).pathname : null,
-          method: form.method || null,
-          target_type: form.dataset.targetType || null,
-          target_id: form.dataset.targetId || null,
+          action_path: submitter && submitter.hasAttribute("formaction")
+            ? new URL(submitter.formAction).pathname
+            : (form.action ? new URL(form.action).pathname : null),
+          method: submitter && submitter.hasAttribute("formmethod")
+            ? submitter.formMethod : (form.method || null),
+          target_type: submitData.targetType || form.dataset.targetType || null,
+          target_id: submitData.targetId || form.dataset.targetId || null,
           fields: fields,
         });
       },

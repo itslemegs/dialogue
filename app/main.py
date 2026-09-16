@@ -4816,6 +4816,13 @@ def draft_detail(draft_id: int, request: Request):
                 status_code=403,
             )
 
+        if hasattr(request, "state"):
+            request.state.session_log_context = {
+                "event_id": getattr(d, "event_id", None),
+                "proposal_id": getattr(d, "proposal_id", None),
+                "room_id": getattr(d, "room_id", None), "draft_id": draft_id,
+            }
+
         qid, agenda_label = _agenda_for_draft(db, d)
         sponsor = db.get(User, d.sponsor_id)
 
@@ -5063,6 +5070,13 @@ def cosign_draft(draft_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     with get_session() as db:
         d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
+        if hasattr(request, "state"):
+            request.state.session_log_context = {
+                "event_id": getattr(d, "event_id", None),
+                "proposal_id": getattr(d, "proposal_id", None),
+                "room_id": getattr(d, "room_id", None), "draft_id": draft_id,
+            }
+
         if d.status == ProposalDraftStatus.ADOPTED:
             raise HTTPException(403, translate(request_locale(request), 'document.error.cosign_closed'))
         if user.id == d.sponsor_id:
@@ -5115,6 +5129,13 @@ def reintroduce_draft(draft_id: int, request: Request):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
     with get_session() as db:
         d = db.get(ProposalDraft, draft_id) or (_ for _ in ()).throw(HTTPException(404))
+        if hasattr(request, "state"):
+            request.state.session_log_context = {
+                "event_id": getattr(d, "event_id", None),
+                "proposal_id": getattr(d, "proposal_id", None),
+                "room_id": getattr(d, "room_id", None), "draft_id": draft_id,
+            }
+
         if d.status != ProposalDraftStatus.WITHDRAWN:
             raise HTTPException(400, translate(request_locale(request), 'document.error.reintroduce'))
         d.status = ProposalDraftStatus.REINTRODUCED

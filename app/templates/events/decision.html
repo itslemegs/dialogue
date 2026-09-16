@@ -49,6 +49,7 @@
       <div class="space-y-4">
         {% for item in results_drafts %}
           {% set d = item.draft %}
+          {% set closure = draft_closures.get(d.id) if draft_closures is defined else none %}
           {% set evote = item.early_vote %}
           {% set fvote = item.formal_vote %}
           {% set outcome = item.outcome %}
@@ -154,6 +155,8 @@
               </div>
             {% endif %}
           </div>
+          <a class="inline-block my-2 text-sm text-indigo-700 underline" href="/events/{{ event.id }}/proposal-floor/draft/{{ d.id }}">{{ t('proposal_floor.closing.view') }}</a>
+          {% include 'partials/pfloor_closing_revision.html' %}
         {% endfor %}
       </div>
     {% endif %}
@@ -169,6 +172,7 @@
         {% for item in results_amendments %}
         {# expected structure: item.amendment, item.draft (optional), item.vote_state, item.outcome #}
         {% set a = item.amendment %}
+          {% set closure = amendment_closures.get(a.id) if amendment_closures is defined else none %}
         {% set d = item.draft %}
         {% set v = item.vote_state %}
         {% set outcome = item.outcome %}
@@ -272,6 +276,8 @@
             </div>
             {% endif %}
         </div>
+          <a class="inline-block my-2 text-sm text-indigo-700 underline" href="/events/{{ event.id }}/proposal-floor/amendment/{{ a.id }}">{{ t('proposal_floor.closing.view') }}</a>
+          {% include 'partials/pfloor_closing_revision.html' %}
         {% endfor %}
     </div>
     {% endif %}

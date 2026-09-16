@@ -62,7 +62,7 @@
 
         <div data-post-actions class="mt-2 flex items-center gap-4 text-sm">
           {% if not (IS_PRESIDENT or IS_CHAIR or IS_ADMIN) and not can_speak %}
-  <form method="post" action="/events/{{ event_id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/register" class="inline ror-form">
+  {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event_id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/register" class="inline ror-form">
     <input type="hidden" name="kind_req" value="ROR">
     <input type="hidden" name="relates_to_id" value="{{ it.id }}">
     <button class="text-fuchsia-700 hover:underline"
@@ -70,11 +70,11 @@
         data-hint-side="top">
   {{ t('floor.ror.request') }}
 </button>
-  </form>
+  </form>{% endif %}
 {% endif %}
 
 {% if IS_PRESIDENT or IS_CHAIR %}
-  <form method="post" action="/events/{{ event_id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/invite_ror" class="inline ml-2 js-ajax-invite ror-invite">
+  {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event_id }}/proposal-floor/{{ kind }}/{{ item_id }}/floor/invite_ror" class="inline ml-2 js-ajax-invite ror-invite">
     <input type="hidden" name="relates_to_id" value="{{ it.id }}">
     <input type="hidden" name="ror_kind" value="ROR">
     <input name="to_handle"
@@ -89,7 +89,7 @@
         data-hint-side="top">
   {{ t('floor.ror.invite') }}
 </button>
-  </form>
+  </form>{% endif %}
 {% endif %}
 
           {% if it.parent_id %}

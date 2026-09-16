@@ -629,6 +629,10 @@ class ProposalFloorState(SQLModel, table=True):
     draft_id: Optional[int] = Field(default=None, foreign_key="proposaldraft.id", index=True)
     amendment_id: Optional[int] = Field(default=None, foreign_key="amendment.id", index=True)
 
+    closing_revision_text: Optional[str] = Field(default=None, sa_column=sa.Column(sa.Text(), nullable=True))
+    closing_revision_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    closing_revision_at: Optional[datetime] = Field(default=None, sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True))
+
     is_open: bool = Field(default=True)
     speaking_time_sec: int = Field(default=120)
 

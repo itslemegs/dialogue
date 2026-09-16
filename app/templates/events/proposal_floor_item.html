@@ -13,6 +13,9 @@
 
 
 <style>
+  .pf-read-only form[method="post"], .pf-read-only [data-post-actions], .pf-read-only #composer-locked { display: none !important; }
+  #pf-archive-banner { display: none; }
+  .pf-read-only #pf-archive-banner { display: block; }
   /* Proposal Floor visual polish — behavior-safe: keeps existing IDs/actions/scripts intact. */
   .pf-page {
     height: calc(100vh - 2rem);
@@ -849,7 +852,7 @@
 </style>
 
 
-<div class="pf-page {% if IS_PRESIDENT or IS_CHAIR %}pf-page-admin{% else %}pf-page-member{% endif %} -mx-2 md:-mx-4 px-2 md:px-4 py-3 md:py-4">
+<div id="pf-floor-view" class="pf-page {% if pfloor and not pfloor.is_open %}pf-read-only{% endif %} {% if IS_PRESIDENT or IS_CHAIR %}pf-page-admin{% else %}pf-page-member{% endif %} -mx-2 md:-mx-4 px-2 md:px-4 py-3 md:py-4">
   <div class="max-w-[1600px] mx-auto mb-3 flex justify-end">
     <button
       type="button"
@@ -864,6 +867,11 @@
   <!-- LEFT: Document -->
   <aside class="pf-sidebar md:col-span-3 flex flex-col gap-4 overflow-y-auto pf-scroll md:h-full min-h-0 pr-1">
     <section id="pf-tour-document" class="pf-card p-4">
+  <div id="pf-archive-banner" role="status" class="max-w-[1600px] mx-auto mb-3 rounded-xl bg-slate-100 p-3">
+    <strong>{{ t('proposal_floor.closing.closed') }}</strong>
+    <p class="text-sm">{{ t('proposal_floor.closing.archive') }}</p>
+  </div>
+
       <div class="pf-kicker">
         {{ t('proposal_floor.amendment') if mode == 'AMENDMENT' else t('proposal_floor.tabled_draft') }}
       </div>
@@ -888,7 +896,7 @@
 
       {% if IS_PRESIDENT or IS_CHAIR %}
       {% if mode == 'DRAFT' %}
-      <form
+      {% if not pfloor or pfloor.is_open %}<form
         class="mt-3"
         method="post"
         action="/events/{{ event.id }}/proposal-floor/draft/{{ draft.id }}/invite_sponsors"
@@ -899,10 +907,11 @@
       <button class="px-3.5 py-2 rounded-xl bg-fuchsia-700 hover:bg-fuchsia-800 text-white font-semibold shadow-sm"
       data-hint="{{ t('proposal_floor.invite_sponsors_hint') }}"
       data-hint-side="right">{{ t('proposal_floor.invite_sponsors') }}</button>
-      </form>
+      </form>{% endif %}
       {% endif %}
       {% endif %}
 
+      <h3 class="mt-4 font-semibold">{{ t('proposal_floor.closing.original_amendment') if mode == 'AMENDMENT' else t('proposal_floor.closing.original_draft') }}</h3>
       <!-- Document body -->
       <div class="pf-document-body mt-4 space-y-3 prose max-w-none">
         {% if mode == 'AMENDMENT' %}
@@ -975,7 +984,7 @@
 
       <!-- Request / Withdraw -->
       <div class="pf-speaker-actions pf-scroll mt-3 flex flex-wrap gap-2 items-center w-full max-w-full">
-        <form id="btn-request-floor"
+        {% if not pfloor or pfloor.is_open %}<form id="btn-request-floor"
               method="post"
               action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/register"
               class="{{ 'hidden' if not initial.visible('btn-request-floor') else '' }} w-full sm:w-auto"
@@ -989,9 +998,9 @@
         data-target-id="{{ ITEM_ID }}"
         data-hint="{{ t('floor.hint.request') }}"
         data-hint-side="left">{{ t('floor.request') }}</button>
-        </form>
+        </form>{% endif %}
 
-        <form
+        {% if not pfloor or pfloor.is_open %}<form
           id="btn-withdraw"
           method="post"
           action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/withdraw"
@@ -1010,10 +1019,10 @@
       >
         {{ t('floor.leave') }}
       </button>
-        </form>
+        </form>{% endif %}
 
         {% if IS_PRESIDENT or IS_CHAIR %}
-        <form
+        {% if not pfloor or pfloor.is_open %}<form
             method="post"
             action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/toggle"
             class="w-full sm:w-auto"
@@ -1026,9 +1035,9 @@
           data-hint-side="left">
     {{ t('floor.chair.close_list') if pfloor.is_open else t('floor.chair.open_list') }}
   </button>
-          </form>
+          </form>{% endif %}
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/call_next" id="form-call-next" class="w-full sm:w-auto"
+          {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/call_next" id="form-call-next" class="w-full sm:w-auto"
                 data-log-action="PFLOOR_CALL_NEXT"
                 data-target-type="{{ KIND }}"
                 data-target-id="{{ ITEM_ID }}" {{ initial.display('form-call-next') }}>
@@ -1039,9 +1048,9 @@
                 data-target-id="{{ ITEM_ID }}"
                 data-hint="{{ t('floor.hint.next') }}"
                 data-hint-side="left">{{ t('floor.chair.next') }}</button>
-          </form>
+          </form>{% endif %}
 
-          <form
+          {% if not pfloor or pfloor.is_open %}<form
             method="post"
             action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/finish_current"
             id="form-finish-current"
@@ -1061,9 +1070,9 @@
         >
           {{ t('floor.chair.finish') }}
         </button>
-          </form>
+          </form>{% endif %}
 
-          <form
+          {% if not pfloor or pfloor.is_open %}<form
             method="post"
             action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/floor/take_now"
             class="flex items-center gap-2 w-full max-w-full"
@@ -1080,7 +1089,7 @@
 <button class="px-3.5 py-2 bg-slate-950 hover:bg-black text-white rounded-xl font-semibold shadow-sm w-full sm:w-auto"
         data-hint="{{ t('proposal_floor.announcement_hint') }}"
         data-hint-side="left">{{ t('floor.announcement') }}</button>
-          </form>
+          </form>{% endif %}
 
 
       <!-- Admin queue UI -->
@@ -1152,7 +1161,7 @@
         </div>
 
         <!-- IMPORTANT: post to the general-floor endpoint for this agenda item -->
-        <form id="composer-box"
+        {% if not pfloor or pfloor.is_open %}<form id="composer-box"
                 method="post"
                 action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/interventions"
                 class="space-y-2 {{ 'hidden' if not initial.visible('composer-box') else '' }}"
@@ -1180,13 +1189,13 @@
               data-hint="{{ t('floor.hint.clear_reply') }}"
               data-hint-side="top">{{ t('floor.clear_reply') }}</button>
             </div>
-        </form>
+        </form>{% endif %}
 
         <div id="composer-locked" class="text-sm text-slate-600" {{ initial.display('composer-locked') }}>
             {{ t('floor.composer_locked') }}
         </div>
     </section>
-    <aside class="pf-live-summary shrink-0">
+    {% if pfloor.is_open %}<aside class="pf-live-summary shrink-0">
       <div class="pf-card overflow-hidden">
         <div class="px-4 py-3 border-b pf-divider flex items-center justify-between bg-slate-50/70">
           <div class="pf-panel-title flex items-center gap-2"><span>✦</span><span>{{ t('floor.summary') }}</span></div>
@@ -1199,6 +1208,8 @@
       </div>
     </aside>
 
+    {% endif %}
+    {% if pfloor.is_open %}
     {% if ai_features_enabled %}
 <script>
       (function () {
@@ -1220,7 +1231,7 @@
         let inflight = false;
 
         async function tick() {
-          if (inflight) return;
+          if (inflight || document.getElementById("pf-floor-view")?.classList.contains("pf-read-only")) return;
           inflight = true;
           status.textContent = window.UII18n.t('floor.updating');
 
@@ -1251,6 +1262,7 @@
         setInterval(tick, 5000);
       })();
     </script>
+{% endif %}
 {% endif %}
   </aside>
   </div>
@@ -1506,12 +1518,13 @@
   window.__shownRorInviteIds = window.__shownRorInviteIds || new Set();
   
   async function pullNotifications(){
+    if (document.getElementById("pf-floor-view")?.classList.contains("pf-read-only")) return;
     try {
       const res = await fetch('/notifications/pull', {
         credentials: 'include'
       });
   
-      if (!res.ok) return;
+      if (!res.ok || document.getElementById("pf-floor-view")?.classList.contains("pf-read-only")) return;
   
       const items = await res.json();
   

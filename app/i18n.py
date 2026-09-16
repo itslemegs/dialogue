@@ -439,6 +439,8 @@ def javascript_catalogue(context):
 
 # Known application UI messages only; machine/provider details pass through.
 UI_ERROR_KEYS = {
+    "Discussion is closed": "proposal_floor.closing.closed",
+    "A closing revision is already recorded": "proposal_floor.closing.already_recorded",
     'Unauthorized': 'error.unauthorized',
     'Forbidden': 'error.forbidden',
     'Not Found': 'error.not_found',

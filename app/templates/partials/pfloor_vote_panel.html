@@ -16,7 +16,7 @@
 
         <div class="mt-2 flex flex-wrap gap-2">
             {% if can_vote %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
             data-log-action="CAST_EARLY_VOTE"
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
@@ -27,8 +27,8 @@
         data-target-id="{{ ITEM_ID }}"
         data-hint="{{ t('vote.early_yes_hint') }}"
         data-hint-side="right">{{ t('vote.yes') }}</button>
-            </form>
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            </form>{% endif %}
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
             data-log-action="CAST_EARLY_VOTE"
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
@@ -39,8 +39,8 @@
         data-target-id="{{ ITEM_ID }}"
         data-hint="{{ t('vote.early_no_hint') }}"
         data-hint-side="right">{{ t('vote.no') }}</button>
-            </form>
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
+            </form>{% endif %}
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/vote"
             data-log-action="CAST_EARLY_VOTE"
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
@@ -51,7 +51,7 @@
         data-target-id="{{ ITEM_ID }}"
         data-hint="{{ t('vote.early_abstain_hint') }}"
         data-hint-side="right">{{ t('vote.abstain') }}</button>
-            </form>
+            </form>{% endif %}
             {% else %}
             <p class="text-xs text-slate-400">
                 {% if not early_vote %}
@@ -66,20 +66,20 @@
 
             {% if IS_PRESIDENT or IS_CHAIR %}
             {% if early_vote.is_open %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/close">
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/close">
               <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm text-xs"
               data-hint="{{ t('vote.early_close_hint') }}"
               data-hint-side="right">{{ t('vote.close_action') }}</button>
-            </form>
+            </form>{% endif %}
             {% else %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/open"
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/early/open"
             data-log-action="OPEN_EARLY_VOTE"
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
             <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm text-xs"
             data-hint="{{ t('vote.early_open_hint') }}"
             data-hint-side="right">{{ t('vote.open_action') }}</button>
-            </form>
+            </form>{% endif %}
             {% endif %}
             {% endif %}
         </div>
@@ -191,7 +191,7 @@
 
           {% if (not formal_locked) and (formal_vote.is_open) %}
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
           data-log-action="CAST_FORMAL_VOTE"
           data-target-type="{{ KIND }}"
           data-target-id="{{ ITEM_ID }}">
@@ -206,9 +206,9 @@
 >
   {{ t('vote.yes') }}
 </button>
-          </form>
+          </form>{% endif %}
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
           data-log-action="CAST_FORMAL_VOTE"
           data-target-type="{{ KIND }}"
           data-target-id="{{ ITEM_ID }}">
@@ -223,9 +223,9 @@
 >
   {{ t('vote.no') }}
 </button>
-          </form>
+          </form>{% endif %}
 
-          <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
+          {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/vote"
           data-log-action="CAST_FORMAL_VOTE"
           data-target-type="{{ KIND }}"
           data-target-id="{{ ITEM_ID }}">
@@ -240,7 +240,7 @@
 >
   {{ t('vote.abstain') }}
 </button>
-          </form>
+          </form>{% endif %}
 
           {% else %}
           {% if formal_vote and not formal_vote.is_open %}
@@ -256,20 +256,20 @@
 
           {% if IS_PRESIDENT or IS_CHAIR %}
             {% if formal_vote.is_open %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/close">
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/close">
               <button class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-semibold shadow-sm"
         data-hint="{{ t('vote.formal_close_hint') }}"
         data-hint-side="right">{{ t('vote.close_action') }}</button>
-            </form>
+            </form>{% endif %}
             {% else %}
-            <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/open"
+            {% if not pfloor or pfloor.is_open %}<form method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/formal/open"
             data-log-action="OPEN_FORMAL_VOTE"
             data-target-type="{{ KIND }}"
             data-target-id="{{ ITEM_ID }}">
             <button class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-semibold shadow-sm"
             data-hint="{{ t('vote.formal_open_hint') }}"
             data-hint-side="right">{{ t('vote.open_action') }}</button>
-            </form>
+            </form>{% endif %}
             {% endif %}
           {% endif %}
         </div>
@@ -302,17 +302,12 @@
       {% if (IS_PRESIDENT or IS_CHAIR) and (early_done or formal_locked) %}
       <section class="pf-vote-section mt-5">
         {% if IS_PRESIDENT or IS_CHAIR %}
-          <form class="mt-3" method="post" action="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/close_discussion"
-          data-log-action="CLOSE_PFLOOR_DISCUSSION"
-          data-target-type="{{ KIND }}"
-          data-target-id="{{ ITEM_ID }}">
-          <button class="px-3.5 py-2 rounded-xl bg-slate-950 hover:bg-black text-white font-semibold shadow-sm"
-          data-log-action="CLICK_CLOSE_PFLOOR_DISCUSSION"
-          data-target-type="{{ KIND }}"
-          data-target-id="{{ ITEM_ID }}"
-          data-hint="{{ t('proposal_floor.close_discussion_hint') }}"
-          data-hint-side="right">{{ t('proposal_floor.close_discussion') }}</button>
-          </form>
+          {% if not pfloor or pfloor.is_open %}
+          <a class="inline-block mt-3 px-3.5 py-2 rounded-xl bg-slate-950 text-white font-semibold"
+             href="/events/{{ event.id }}/proposal-floor/{{ KIND }}/{{ ITEM_ID }}/close_discussion"
+             data-log-action="CLICK_CLOSE_PFLOOR_DISCUSSION" data-target-type="{{ KIND }}" data-target-id="{{ ITEM_ID }}">{{ t('proposal_floor.close_discussion') }}</a>{% endif %}
         {% endif %}
       </section>
       {% endif %}
+
+{% set closure = pfloor %}{% include 'partials/pfloor_closing_revision.html' %}

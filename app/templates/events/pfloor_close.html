@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-2xl mx-auto rounded-2xl border bg-white p-6">
+  <h1 class="text-xl font-bold">{{ t('proposal_floor.close_discussion') }}</h1>
+  <p class="mt-2 text-sm text-slate-600">{{ amendment.label if amendment else draft.l_number }} — {{ draft.title }}</p>
+  <p class="my-4 text-sm text-slate-600">{{ t('proposal_floor.closing.help') }}</p>
+  <form method="post" action="/events/{{ event.id }}/proposal-floor/{{ kind }}/{{ item_id }}/close_discussion"
+        data-log-action="CLOSE_PFLOOR_DISCUSSION" data-target-type="{{ kind }}" data-target-id="{{ item_id }}">
+    {% if not pfloor or not pfloor.closing_revision_text %}
+    <label for="closing-revision" class="block font-medium">{{ t('proposal_floor.closing.amendment') if amendment else t('proposal_floor.closing.text') }} — {{ t('proposal_floor.closing.optional') }}</label>
+    <textarea id="closing-revision" name="closing_revision" rows="10" class="mt-2 w-full rounded-lg border p-3"></textarea>
+    {% else %}
+    <p class="text-sm">{{ t('proposal_floor.closing.preserved') }}</p>
+    {% endif %}
+    <div class="mt-4 flex gap-3">
+      <a class="rounded-lg border px-4 py-2" href="/events/{{ event.id }}/proposal-floor/{{ kind }}/{{ item_id }}">{{ t('common.cancel') }}</a>
+      <button class="rounded-lg bg-slate-900 text-white px-4 py-2">{{ t('proposal_floor.close_discussion') }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

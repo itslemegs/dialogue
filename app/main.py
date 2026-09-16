@@ -1258,6 +1258,8 @@ def _pfloor_enqueue_from_invite(
     Enqueue a proposal-floor speaker request from a RoR invite.
     """
 
+    _require_open_pfloor_scope(db, event_id=event_id, proposal_id=proposal_id, draft_id=draft_id, amendment_id=amendment_id)
+
     # "ROR" / "ROR_ALL" / etc.
     kind = getattr(invite, "kind", None) or ("ROR" if invite.target_intervention_id else "ROR_ALL")
 
@@ -1357,9 +1359,9 @@ def invite_accept(iid: int, request: Request, ajax: int = 0):
         pfloor_scope = payload.get("pfloor") if is_pfloor else None
 
         if inv.status == "PENDING":
-            inv.status = "ACCEPTED"
-            db.add(inv)
-
+            if not is_pfloor:
+                inv.status = "ACCEPTED"
+                db.add(inv)
             if is_pfloor:
                 # --- Proposal-floor enqueue ---
                 kind = (pfloor_scope or {}).get("kind")
@@ -1390,6 +1392,9 @@ def invite_accept(iid: int, request: Request, ajax: int = 0):
                 # general floor: existing behavior
                 _enqueue_from_invite(db, inv)
 
+            if is_pfloor:
+                inv.status = "ACCEPTED"
+                db.add(inv)
             db.commit()
             _notify_chair_invite_result(db, inv, "ACCEPTED")
 
@@ -2935,6 +2940,7 @@ def _floor_snapshot(db, state, speakers, user, proposal_floor=False):
     target_model = ProposalIntervention if proposal_floor else Intervention
     target_row = db.get(target_model, target) if target else None
     return {
+        "read_only": bool(proposal_floor and state and not state.is_open),
         "is_open": bool(state and state.is_open),
         "speaking_time_sec": state.speaking_time_sec if state else 120,
         "current_req_id": current.id if current else None,
@@ -2943,7 +2949,7 @@ def _floor_snapshot(db, state, speakers, user, proposal_floor=False):
         "current_target_intervention_id": target,
         "current_target_local_no": target_row.local_no if target_row else None,
         "can_manage": bool(flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT")),
-        "can_speak": bool((current and current.user_id == user.id) or flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT")),
+        "can_speak": bool((not proposal_floor or not state or state.is_open) and ((current and current.user_id == user.id) or flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"))),
         "speakers": [{"id": r.id, "user_id": r.user_id, "handle": handles.get(r.user_id, str(r.user_id)),
                       "kind": r.kind, "status": r.status, "position": r.position,
                       "created_at": r.created_at.isoformat()} for r in speakers],
@@ -5604,6 +5610,23 @@ def view_amendment_legacy(amend_id: int, request: Request, lang: str = "en"):
 
 from sqlalchemy import case as sa_case
 
+def _require_open_pfloor(st):
+    """Closure freezes all participation; an existing privileged toggle may reopen it."""
+    if st is not None and not st.is_open:
+        raise HTTPException(409, "Discussion is closed")
+
+
+def _require_open_pfloor_scope(db, *, event_id, proposal_id, draft_id, amendment_id):
+    st = db.exec(select(ProposalFloorState).where(
+        ProposalFloorState.event_id == event_id,
+        ProposalFloorState.proposal_id == proposal_id,
+        ProposalFloorState.draft_id == draft_id,
+        ProposalFloorState.amendment_id == amendment_id,
+    ).with_for_update()).first()
+    _require_open_pfloor(st)
+    return st
+
+
 def _pfloor_target_check(draft_id: int | None, amend_id: int | None):
     if (not draft_id and not amend_id) or (draft_id and amend_id):
         raise HTTPException(400, "Specify exactly one of draft_id or amendment_id")
@@ -5615,7 +5638,7 @@ def _pfloor_get_or_create_state(db, *, event_id: int, proposal_id: int, draft_id
         ProposalFloorState.proposal_id == proposal_id,
         (ProposalFloorState.draft_id == draft_id) if draft_id else (ProposalFloorState.amendment_id == amendment_id),
     )
-    st = db.exec(q).first()
+    st = db.exec(q.with_for_update()).first()
     if st:
         return st
     st = ProposalFloorState(
@@ -5747,6 +5770,8 @@ def proposal_floor_index(event_id: int, request: Request):
         rows = []
         open_rows = []
         closed_rows = []
+        open_amendment_rows = []
+        closed_amendment_rows = []
 
         for it in items:
             drafts = db.exec(
@@ -5788,6 +5813,17 @@ def proposal_floor_index(event_id: int, request: Request):
                     "is_open": is_open,
                 }
 
+                amendment_states = {st.amendment_id: st for st in db.exec(select(ProposalFloorState).where(
+                    ProposalFloorState.event_id == event.id,
+                    ProposalFloorState.proposal_id == it.id,
+                    ProposalFloorState.draft_id.is_(None),
+                    ProposalFloorState.amendment_id.in_([am.id for am in ams]),
+                )).all()} if ams else {}
+                for am in ams:
+                    am_state = amendment_states.get(am.id)
+                    am_row = {"draft": d, "amendment": am, "proposal": it}
+                    (closed_amendment_rows if am_state and not am_state.is_open else open_amendment_rows).append(am_row)
+
                 rows.append(row)
 
                 if is_open:
@@ -5806,6 +5842,8 @@ def proposal_floor_index(event_id: int, request: Request):
             "rows": rows,
             "open_rows": open_rows,
             "closed_rows": closed_rows,
+            "open_amendment_rows": open_amendment_rows,
+            "closed_amendment_rows": closed_amendment_rows,
         },
     )
 
@@ -6012,6 +6050,8 @@ def amendment_vote(event_id: int, amend_id: int, request: Request, choice: str =
 
         am, d, prop = _get_event_amendment_or_404(db, event_id, amend_id)
 
+        _require_open_pfloor_scope(db, event_id=event_id, proposal_id=prop.id, draft_id=None, amendment_id=am.id)
+
         if prop.status != ProposalStatus.accepted:
             raise HTTPException(404, "Agenda item not accepted")
 
@@ -6041,6 +6081,8 @@ def amendment_vote_open(event_id: int, amend_id: int, request: Request):
 
         am, d, prop = _get_event_amendment_or_404(db, event_id, amend_id)
 
+        _require_open_pfloor_scope(db, event_id=event_id, proposal_id=prop.id, draft_id=None, amendment_id=am.id)
+
         if prop.status != ProposalStatus.accepted:
             raise HTTPException(404, "Agenda item not accepted")
 
@@ -6068,6 +6110,8 @@ def amendment_vote_close(event_id: int, amend_id: int, request: Request):
         _require_event_access(db=db, user=user, event_id=event_id)
 
         am, d, prop = _get_event_amendment_or_404(db, event_id, amend_id)
+
+        _require_open_pfloor_scope(db, event_id=event_id, proposal_id=prop.id, draft_id=None, amendment_id=am.id)
 
         if prop.status != ProposalStatus.accepted:
             raise HTTPException(404, "Agenda item not accepted")
@@ -6210,22 +6254,10 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
         if prop.status != ProposalStatus.accepted:
             raise HTTPException(404, "Agenda item not accepted")
 
-        st = _pfloor_get_or_create_state(
-            db,
-            event_id=event.id,
-            proposal_id=d.proposal_id,
-            draft_id=d.id,
-            amendment_id=None,
-        )
-
-        if not st.is_open:
-            return RedirectResponse(
-                f"/events/{event_id}/view-draft?closed=1",
-                status_code=303,
-            )
-
-        # Initial discussion/state must obey the same visibility policy as polling.
-        _, _, _, _, scope, _ = _pfloor_poll_context(db, user, event.id, "draft", d.id)
+        # Read-only scope lookup validates visibility before any optional initialization.
+        _, _, _, _, scope, st = _pfloor_poll_context(db, user, event.id, "draft", d.id)
+        if st is None:
+            st = _pfloor_get_or_create_state(db, **scope)
 
         voting = _pfloor_voting_context(db, st, user, d, "DRAFT")
 
@@ -6234,7 +6266,8 @@ def proposal_floor_draft(event_id: int, draft_id: int, request: Request):
         if f.get("IS_CHAIR") or f.get("IS_PRESIDENT"):
             can_speak = True
 
-        q = ensure_general_floor_question(db, prop)
+        can_speak = can_speak and st.is_open
+        q = ensure_general_floor_question(db, prop) if st.is_open else None
 
         users = db.exec(select(User).options(selectinload(User.roles))).all()
         user_map = {u.id: u for u in users}
@@ -6283,22 +6316,10 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
         if prop.status != ProposalStatus.accepted:
             raise HTTPException(404, "Agenda item not accepted")
 
-        st = _pfloor_get_or_create_state(
-            db,
-            event_id=event.id,
-            proposal_id=prop.id,
-            draft_id=None,
-            amendment_id=am.id,
-        )
-
-        if not st.is_open:
-            return RedirectResponse(
-                f"/events/{event_id}/proposal-floor/draft/{d.id}?amendment_closed={am.id}",
-                status_code=303,
-            )
-
-        # Initial discussion/state must obey the same visibility policy as polling.
-        _, _, _, _, scope, _ = _pfloor_poll_context(db, user, event.id, "amendment", am.id)
+        # Read-only scope lookup validates visibility before any optional initialization.
+        _, _, _, _, scope, st = _pfloor_poll_context(db, user, event.id, "amendment", am.id)
+        if st is None:
+            st = _pfloor_get_or_create_state(db, **scope)
 
         voting = _pfloor_voting_context(db, st, user, d, "AMENDMENT")
 
@@ -6307,7 +6328,8 @@ def proposal_floor_amendment(event_id: int, amendment_id: int, request: Request)
         if f.get("IS_CHAIR") or f.get("IS_PRESIDENT"):
             can_speak = True
 
-        q = ensure_general_floor_question(db, prop)
+        can_speak = can_speak and st.is_open
+        q = ensure_general_floor_question(db, prop) if st.is_open else None
 
         users = db.exec(select(User).options(selectinload(User.roles))).all()
         user_map = {u.id: u for u in users}
@@ -6411,7 +6433,7 @@ def pfloor_interventions_fragment(event_id: int, kind: str, item_id: int, reques
         can_speak = bool((st and _pf_user_has_floor(db, state=st, user_id=user.id)) or flags.get("IS_CHAIR") or flags.get("IS_PRESIDENT"))
         context = dict(request=request, user=user, flags=flags, threads=_thread_rows(rows, "parent_id"),
                        user_map={u.id: u for u in users}, role_map={u.id: sorted({r.name for r in u.roles}) for u in users},
-                       event_id=event.id, kind=kind, item_id=item_id, can_speak=can_speak,
+                       event_id=event.id, kind=kind, item_id=item_id, can_speak=can_speak, pfloor=st,
                        discussion_revision=_rows_revision(rows), last_any_id=max((r.id for r in rows), default=0))
     return templates.TemplateResponse(request, "partials/pfloor_interventions_list.html", context,
                                       headers={"Cache-Control": "private, no-store"})
@@ -6471,6 +6493,7 @@ def proposal_floor_post_intervention(
         }
 
         st = _pfloor_get_or_create_state(db, **scope)
+        _require_open_pfloor(st)
 
         flags = effective_flags(user)
 
@@ -6653,6 +6676,7 @@ def pfloor_invite_ror(
         else:
             raise HTTPException(400, "kind must be draft|amendment")
 
+        _require_open_pfloor_scope(db, **scope)
         to_user = db.exec(
             select(User).where(User.handle == to_handle.lstrip("@"))
         ).first()
@@ -6915,9 +6939,7 @@ async def pfloor_register(
             draft_id=draft_id,
             amendment_id=amend_id,
         )
-
-        if not st.is_open and kind_req not in ("ROR", "ROR_ALL"):
-            raise HTTPException(400, "Speaker list is closed. Use Right of Reply.")
+        _require_open_pfloor(st)
 
         exists = db.exec(
             select(ProposalSpeakerRequest).where(
@@ -7013,6 +7035,7 @@ def pfloor_withdraw(kind: str, id: int, request: Request, event_id: int):
         )
         if ev_id != event_id:
             raise HTTPException(404)
+        _require_open_pfloor_scope(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
         req = db.exec(
             select(ProposalSpeakerRequest).where(
                 ProposalSpeakerRequest.event_id == ev_id,
@@ -7077,6 +7100,7 @@ def pfloor_call_next(kind: str, id: int, request: Request, event_id: int):
         if ev_id != event_id:
             raise HTTPException(404)
         st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
+        _require_open_pfloor(st)
 
         next_req = db.exec(
             select(ProposalSpeakerRequest).where(
@@ -7147,6 +7171,7 @@ def pfloor_finish_current(kind: str, id: int, request: Request, event_id: int):
         if ev_id != event_id:
             raise HTTPException(404)
         st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
+        _require_open_pfloor(st)
         if st.current_speaker_request_id:
             cur = db.get(ProposalSpeakerRequest, st.current_speaker_request_id)
             if cur and cur.status == "SPEAKING":
@@ -7168,9 +7193,12 @@ def pfloor_state(kind: str, id: int, request: Request, event_id: int):
         from types import SimpleNamespace
         mode = "AMENDMENT" if amendment else "DRAFT"
         voting = _pfloor_voting_context(db, st or SimpleNamespace(**scope), user, draft, mode)
+        author_id = getattr(st, "closing_revision_by_id", None)
+        closure_author = db.get(User, author_id) if author_id else None
         data["voting_html"] = templates.env.get_template("partials/pfloor_vote_panel.html").render(
             request=request, event=event, proposal=prop, draft=draft, amendment=amendment,
-            mode=mode, user=user, flags=effective_flags(user), pfloor=st, **voting)
+            mode=mode, user=user, flags=effective_flags(user), pfloor=st,
+            user_map={author_id: closure_author} if closure_author else {}, **voting)
     return _poll_json(data)
 
 # chair announcement (no thread)
@@ -7188,6 +7216,7 @@ def pfloor_take_now(kind: str, id: int, request: Request, event_id: int, message
         if ev_id != event_id:
             raise HTTPException(404)
         st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
+        _require_open_pfloor(st)
 
         # finish current
         if st.current_speaker_request_id:
@@ -7259,6 +7288,7 @@ def pfloor_invite_sponsors(event_id: int, draft_id: int, request: Request):
             draft_id=d.id,
             amendment_id=None,
         )
+        _require_open_pfloor(st)
 
         for uid in _early_cosigner_ids(d):
             if uid == user.id:
@@ -7366,6 +7396,7 @@ def pfloor_early_open(event_id: int, kind: str, id: int, request: Request):
             draft_id=draft_id,
             amendment_id=amend_id,
         )
+        _require_open_pfloor(st)
 
         v = _get_or_create_early_vote(db, st)
         v.is_open = True
@@ -7425,6 +7456,7 @@ def pfloor_early_close(event_id: int, kind: str, id: int, request: Request):
             draft_id=draft_id,
             amendment_id=amend_id,
         )
+        _require_open_pfloor(st)
 
         v = _get_early_vote(db, st)
         if v is None:
@@ -7491,6 +7523,7 @@ def pfloor_early_vote(event_id: int, kind: str, id: int, request: Request, choic
             draft_id=draft_id,
             amendment_id=amend_id,
         )
+        _require_open_pfloor(st)
 
         v = _get_early_vote(db, st)
         if v is None or not v.is_open:
@@ -7580,6 +7613,7 @@ def pfloor_formal_open(kind: str, id: int, request: Request, event_id: int):
             raise HTTPException(404)
         
         st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
+        _require_open_pfloor(st)
         
         # Check if early voting has already accepted the proposal
         evote = db.exec(
@@ -7652,6 +7686,7 @@ def pfloor_formal_vote(kind: str, id: int, request: Request, event_id: int, choi
             draft_id=draft_id,
             amendment_id=amend_id,
         )
+        _require_open_pfloor(st)
 
         v = _get_or_create_formal_vote(db, st)
         if not v.is_open:
@@ -7736,6 +7771,7 @@ def pfloor_formal_close(kind: str, id: int, request: Request, event_id: int):
             raise HTTPException(404)
         
         st = _pfloor_get_or_create_state(db, event_id=ev_id, proposal_id=prop_id, draft_id=draft_id, amendment_id=amend_id)
+        _require_open_pfloor(st)
         
         # Check for early vote adoption before closing the formal vote
         evote = db.exec(
@@ -7790,8 +7826,22 @@ def _formal_result(v: ProposalFormalVote) -> dict:
     status = "accepted" if v.yes > v.no else ("rejected" if v.no >= v.yes else "rejected")  # ties rejected
     return {"yes": v.yes, "no": v.no, "abstain": v.abstain, "counted_total": counted_total, "status": status}
 
+@app.get("/events/{event_id}/proposal-floor/{kind}/{id}/close_discussion", response_class=HTMLResponse)
+def pfloor_close_confirmation(event_id: int, kind: str, id: int, request: Request):
+    user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
+    flags = effective_flags(user)
+    if not (flags["IS_CHAIR"] or flags["IS_PRESIDENT"]):
+        raise HTTPException(403)
+    with get_session() as db:
+        event, prop, draft, amendment, scope, st = _pfloor_poll_context(db, user, event_id, kind, id)
+        _require_open_pfloor(st)
+    return templates.TemplateResponse(request, "events/pfloor_close.html", dict(
+        request=request, user=user, flags=flags, event=event, kind=kind, item_id=id,
+        draft=draft, amendment=amendment, pfloor=st))
+
+
 @app.post("/events/{event_id}/proposal-floor/{kind}/{id}/close_discussion")
-def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request):
+def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request, closing_revision: str = Form("")):
     user = current_user(request) or (_ for _ in ()).throw(HTTPException(401))
 
     f = effective_flags(user)
@@ -7820,6 +7870,16 @@ def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request)
             draft_id=draft_id,
             amendment_id=amend_id,
         )
+        _require_open_pfloor(st)
+
+        # Store separately; never replace a previously recorded closure revision.
+        revision = closing_revision if isinstance(closing_revision, str) else ""
+        if revision.strip():
+            if st.closing_revision_text:
+                raise HTTPException(409, "A closing revision is already recorded")
+            st.closing_revision_text = revision
+            st.closing_revision_by_id = user.id
+            st.closing_revision_at = datetime.now(timezone.utc)
 
         # Close this discussion floor.
         st.is_open = False
@@ -7851,6 +7911,7 @@ def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request)
                     "draft_id": parent_draft.id,
                     "amendment_id": amend_id,
                     "mode": mode,
+                    "has_closing_revision": bool(st.closing_revision_text),
                 },
             )
 
@@ -7908,6 +7969,7 @@ def pfloor_close_discussion(event_id: int, kind: str, id: int, request: Request)
                 "proposal_id": prop_id,
                 "draft_id": draft_id,
                 "mode": mode,
+                "has_closing_revision": bool(st.closing_revision_text),
                 "adopted_by_consensus": bool(adopted_by_consensus),
                 "formally_adopted": bool(formally_adopted),
                 "final_draft_status": str(d.status),
@@ -8040,6 +8102,10 @@ def decision_page(event_id: int, request: Request):
             evote_by_draft = {v.draft_id: v for v in evotes_drafts}
             fvote_by_draft = {v.draft_id: v for v in fvotes_drafts}
 
+        floor_states = db.exec(select(ProposalFloorState).where(ProposalFloorState.event_id == event.id)).all()
+        draft_closures = {st.draft_id: st for st in floor_states if st.draft_id}
+        amendment_closures = {st.amendment_id: st for st in floor_states if st.amendment_id}
+
         results_drafts = []
 
         for d in drafts:
@@ -8166,6 +8232,8 @@ def decision_page(event_id: int, request: Request):
             "request": request,
             "event": event,
             "results_drafts": results_drafts,
+            "draft_closures": draft_closures,
+            "amendment_closures": amendment_closures,
             "results_amendments": results_amendments,
             "user": user,
             "flags": flags,

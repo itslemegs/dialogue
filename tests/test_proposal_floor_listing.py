@@ -241,7 +241,7 @@ class ProposalFloorListingTests(unittest.TestCase):
         self.assertEqual(len(context["closed_rows"]), 0)
         self.assertTrue(context["open_rows"][0]["is_open"])
 
-    def test_closed_section_has_no_action_links(self):
+    def test_closed_section_has_archive_links(self):
         source = TEMPLATE.read_text()
 
         self.assertIn("OPEN PROPOSAL FLOORS", source)
@@ -252,9 +252,8 @@ class ProposalFloorListingTests(unittest.TestCase):
             1,
         )[1]
 
-        # Closed drafts are historical display only:
-        # no Open button and no Amendment action.
-        self.assertNotIn(
+        # Historical records remain accessible, without a participation action.
+        self.assertIn(
             'href="/events/{{ event.id }}/proposal-floor/',
             closed_section,
         )

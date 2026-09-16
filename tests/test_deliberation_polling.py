@@ -846,7 +846,9 @@ class PollingTests(unittest.TestCase):
         proposal=self.client.get(self.floor+'/floor/state').json()
         self.assertEqual([r['id'] for r in proposal['speakers']],[9])
         self.assertEqual(proposal['current_kind'],'ROR_ALL')
-        self.assertIn('/formal/vote',proposal['voting_html'])
+        self.assertNotIn('/formal/vote',proposal['voting_html'])
+        self.assertTrue(proposal['read_only'])
+        self.assertFalse(proposal['can_speak'])
         for base in [self.general,self.floor]:
             for suffix in ['/interventions/head','/interventions/fragment']:
                 self.assertEqual(self.client.get(base+suffix).status_code,200)

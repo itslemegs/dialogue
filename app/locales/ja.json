@@ -984,5 +984,17 @@
   "admin.error.event_cover_size": "カバー画像は5 MB以下にしてください。",
   "admin.error.event_cover_invalid": "カバー画像を読み込めないか、対応していない形式です。2,000万画素以下の静止画像を使用してください。",
   "agenda.markdown_hint": "Markdown記法で書式を設定できます。",
-  "agenda.markdown_examples": "**太字** · _斜体_ · - リスト · ## 見出し · > 引用 · [リンク](https://...)"
+  "agenda.markdown_examples": "**太字** · _斜体_ · - リスト · ## 見出し · > 引用 · [リンク](https://...)",
+  "proposal_floor.closing.view": "討議を閲覧",
+  "proposal_floor.closing.closed": "討議は終了しました",
+  "proposal_floor.closing.archive": "このフロアは記録として保存されており、閲覧のみ可能です。",
+  "proposal_floor.closing.text": "討議終了時に記録された修正・最終文案",
+  "proposal_floor.closing.amendment": "討議終了時に記録された修正案の文面",
+  "proposal_floor.closing.optional": "任意",
+  "proposal_floor.closing.help": "修正が不要な場合は空欄にしてください。討議終了時の文案を記録し、提出された原文はそのまま保存します。文案の記録によって投票結果が変わることはありません。",
+  "proposal_floor.closing.preserved": "以前の討議終了時に記録された文案を保持します。",
+  "proposal_floor.closing.recorded": "討議終了時の記録",
+  "proposal_floor.closing.original_draft": "決議案の原文",
+  "proposal_floor.closing.original_amendment": "修正案の原文",
+  "proposal_floor.closing.already_recorded": "討議終了時の文案はすでに記録されています。"
 }

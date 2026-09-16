@@ -984,5 +984,17 @@
   "admin.error.event_cover_size": "The cover image must be 5 MB or smaller.",
   "admin.error.event_cover_invalid": "The cover image is unreadable or unsupported. Use a still image of at most 20 megapixels.",
   "agenda.markdown_hint": "Markdown formatting supported.",
-  "agenda.markdown_examples": "**bold** · _italic_ · - lists · ## headings · > quotes · [links](https://...)"
+  "agenda.markdown_examples": "**bold** · _italic_ · - lists · ## headings · > quotes · [links](https://...)",
+  "proposal_floor.closing.view": "View Discussion",
+  "proposal_floor.closing.closed": "Discussion Closed",
+  "proposal_floor.closing.archive": "This floor is archived and available for review only.",
+  "proposal_floor.closing.text": "Revised / Final Text Recorded at Closure",
+  "proposal_floor.closing.amendment": "Revised Amendment Text Recorded at Closure",
+  "proposal_floor.closing.optional": "Optional",
+  "proposal_floor.closing.help": "Leave blank if no revision is needed. This records the wording at the end of deliberation; the original submitted text is preserved. Recording text does not change the voting result.",
+  "proposal_floor.closing.preserved": "The previously recorded closing revision will be preserved.",
+  "proposal_floor.closing.recorded": "Recorded at closure",
+  "proposal_floor.closing.original_draft": "Original Draft Resolution",
+  "proposal_floor.closing.original_amendment": "Original Amendment",
+  "proposal_floor.closing.already_recorded": "A closing revision is already recorded."
 }

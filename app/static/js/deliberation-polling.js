@@ -249,7 +249,7 @@
     let recognition = options.initialState?.current_req_id ?? null;
     // The initial DOM already represents this snapshot. A state read is still
     // immediate, but unchanged state must not initialize/rearrange the UI again.
-    const floorKey = data => JSON.stringify([data.is_open, data.can_speak, data.can_manage,
+    const floorKey = data => JSON.stringify([data.is_open, data.can_speak, data.can_manage, data.read_only,
       data.current_req_id, data.current_user_id, data.current_kind,
       data.current_target_intervention_id, data.current_target_local_no, data.speakers]);
     let initialFloor = options.initialState ? floorKey(options.initialState) : null;
@@ -267,6 +267,9 @@
       const alreadyRendered = nextFloor === initialFloor;
       initialFloor = null;
       if (!reconcileActions && alreadyRendered) return;
+      const proposalView = document.getElementById("pf-floor-view");
+      proposalView?.classList.toggle("pf-read-only", !!data.read_only);
+      if (proposalView && data.read_only) show('notif-box', false);
       const speakers = data.speakers || [];
       const current = speakers.find(s => s.status === 'SPEAKING');
       const queued = speakers.filter(s => s.status === 'QUEUED');

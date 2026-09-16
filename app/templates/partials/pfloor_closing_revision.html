@@ -1,0 +1,8 @@
+{% if closure and closure.closing_revision_text %}
+<section class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4" data-closing-revision>
+  <h3 class="font-semibold">{{ t('proposal_floor.closing.amendment') if closure.amendment_id else t('proposal_floor.closing.text') }}</h3>
+  <p class="text-xs text-slate-500 mt-1">{{ t('proposal_floor.closing.recorded') }}{% if closure.closing_revision_at %} · {{ closure.closing_revision_at|jst }}{% endif %}
+  {% if user_map is defined and closure.closing_revision_by_id in user_map %} · @{{ user_map[closure.closing_revision_by_id].handle }}{% endif %}</p>
+  <div class="mt-3 whitespace-pre-wrap break-words">{{ closure.closing_revision_text }}</div>
+</section>
+{% endif %}

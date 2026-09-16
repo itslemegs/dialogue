@@ -232,6 +232,8 @@ templates = Jinja2Templates(directory="app/templates")
 templates.env.globals["getattr"] = getattr
 templates.env.globals["ai_features_enabled"] = AI_FEATURES_ENABLED
 templates.env.filters["jst"] = _format_jst
+from app.services.agenda_markdown import render_agenda_markdown
+templates.env.filters["agenda_markdown"] = render_agenda_markdown
 
 from app.i18n import install_jinja, normalize_locale, resolve_locale, safe_return_to, request_locale, translate
 from app.security import IS_PROD as UI_COOKIE_SECURE

@@ -1,4 +1,5 @@
 """UI locale regressions; no app.main/db import, startup, or real database."""
+from app.services.agenda_markdown import render_agenda_markdown
 import ast
 import asyncio
 import builtins
@@ -101,6 +102,7 @@ class RequestTests(unittest.TestCase):
     def setUp(self):
         self.ns = isolated_functions()
         self.templates = Jinja2Templates(directory=str(ROOT/'app/templates'))
+        self.templates.env.filters['agenda_markdown'] = render_agenda_markdown
         i18n.install_jinja(self.templates.env)
         self.templates.env.filters['jst'] = self.ns['_format_jst']
         self.templates.env.globals.update(ai_features_enabled=False, getattr=getattr)
@@ -427,7 +429,7 @@ class RequestTests(unittest.TestCase):
                 self.assertIn(f'<html lang="{locale}">', html)
                 self.assertIn(context['event']['title'].encode(), html.encode())
                 if name in ['events/propose_agenda.html','events/review_agenda.html','events/view_agenda.html']:
-                    for text in [context['mine'][0].title, context['mine'][0].background]:
+                    for text in [context['mine'][0].title, str(render_agenda_markdown(context['mine'][0].background))]:
                         self.assertIn(text.encode(), html.encode())
                     self.assertIn('2026-09-01 09:00 JST', html)
             if name == 'events/review_agenda.html':

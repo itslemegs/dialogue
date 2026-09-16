@@ -4,6 +4,7 @@ No app.main/app.db imports, application startup, SQL engine, network, or model
 initialization. The in-memory query double evaluates the handlers' predicates;
 any attempted persistence or AI call fails the test.
 """
+from app.services.agenda_markdown import render_agenda_markdown
 import ast
 import asyncio
 import time
@@ -127,6 +128,7 @@ class PollingTests(unittest.TestCase):
         self.db = ReadOnlyDB(self.rows)
         self.ai = Mock(side_effect=AssertionError('Unexpected AI/translation call'))
         self.templates = Jinja2Templates(directory=str(ROOT/'app/templates'))
+        self.templates.env.filters['agenda_markdown'] = render_agenda_markdown
         install_jinja(self.templates.env)
         self.templates.env.globals.update(getattr=getattr, ai_features_enabled=False)
         self.ns = dict(self.models, __name__='isolated_polling', Request=Request, HTTPException=HTTPException,

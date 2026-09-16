@@ -10,3 +10,4 @@ greenlet
 python-dotenv==1.1.1
 bcrypt==4.0.1
 Pillow
+markdown-it-py

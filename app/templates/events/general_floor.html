@@ -37,7 +37,7 @@
         <li class="general-floor-index-tour-item bg-white border rounded-2xl p-5 hover:shadow transition">
           <a class="general-floor-index-tour-open text-lg font-semibold text-indigo-700 hover:underline break-words"
           href="/events/{{ event.id }}/general-floor/{{ p.id }}">{{ p.title }}</a>
-            <div class="mt-2 text-sm text-slate-700 line-clamp-3 whitespace-pre-wrap">{{ p.background }}</div>
+            <div class="markdown-content mt-2 text-sm text-slate-700 line-clamp-3 ">{{ p.background | agenda_markdown }}</div>
             <div class="general-floor-index-tour-meta mt-2 text-xs text-slate-500">
               {{ t('agenda.proposed_at', time=p.created_at|jst) }}
               • {{ t('agenda.proposer') }}

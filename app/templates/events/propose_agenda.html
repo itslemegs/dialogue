@@ -50,6 +50,7 @@
                 class="mt-1 w-full rounded-lg border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
                 placeholder="{{ t('agenda.background_example') }}"></textarea>
       <p class="mt-1 text-xs text-slate-500">{{ t('agenda.background_help') }}</p>
+      <p class="mt-1 text-xs text-slate-500">{{ t('agenda.markdown_hint') }} <code>{{ t('agenda.markdown_examples') }}</code></p>
     </div>
 
     <div>
@@ -93,7 +94,7 @@
               <div class="flex items-start justify-between">
                 <div>
                   <div class="font-semibold">{{ p.title }}</div>
-                  <div class="mt-1 text-sm text-slate-600 line-clamp-3">{{ p.background }}</div>
+                  <div class="markdown-content mt-1 text-sm text-slate-600 line-clamp-3">{{ p.background | agenda_markdown }}</div>
                   {% if p.source_url %}
                     <div class="mt-1 text-xs">
                       <a class="text-indigo-600 hover:underline break-all" href="{{ p.source_url }}" target="_blank" rel="noopener">

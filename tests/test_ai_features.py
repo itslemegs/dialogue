@@ -5,6 +5,7 @@ Requires FastAPI, httpx, Jinja2 and python-multipart. Handlers are compiled from
 source because importing main performs database/model setup. The test ASGI app
 has no lifespan; all database, executor, network and model work is mocked.
 """
+from app.services.agenda_markdown import render_agenda_markdown
 import ast
 import asyncio
 import builtins
@@ -300,6 +301,7 @@ class DispatchTests(unittest.TestCase):
 class TemplateTests(unittest.TestCase):
     def test_changed_templates_parse_and_summary_polling_is_conditional(self):
         env = Environment(loader=FileSystemLoader(ROOT/'app/templates'))
+        env.filters['agenda_markdown'] = render_agenda_markdown
         from app.i18n import install_jinja
         install_jinja(env)
         names = ['rooms/show.html','events/draft_detail.html','events/amendment_detail.html',

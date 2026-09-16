@@ -557,7 +557,7 @@
           {% if item.source_url %} • <a class="text-indigo-600 hover:underline break-all" target="_blank" rel="noopener" href="{{ item.source_url }}">{{ t('floor.source') }}</a>{% endif %}
         </div>
   
-        <div class="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700 bg-slate-50/80 border border-slate-200 rounded-2xl p-3">{{ item.background }}</div>
+        <div class="markdown-content mt-4 text-sm leading-6 text-slate-700 bg-slate-50/80 border border-slate-200 rounded-2xl p-3">{{ item.background | agenda_markdown }}</div>
   
         {% if points and points|length %}
         <div class="mt-4">

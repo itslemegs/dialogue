@@ -52,8 +52,8 @@
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
 
               <div>
-                <div class="proposal-floor-index-tour-sponsor text-xs text-slate-500">
-                  {{ t('proposal_floor.sponsor') }}
+                <div class="text-sm text-slate-500">
+                  {{ t('proposal_floor.agenda') }} {{ row.proposal.title }}
                 </div>
 
                 <h3 class="text-lg font-semibold mt-0.5">
@@ -62,7 +62,7 @@
                   {{ row.draft.title or t('proposal_floor.untitled') }}
                 </h3>
 
-                <div class="text-xs text-slate-500">
+                <div class="proposal-floor-index-tour-sponsor text-xs text-slate-500">
                   {{ t('proposal_floor.sponsor') }}
                   @{{ (row.draft.sponsor_id in user_map) and user_map[row.draft.sponsor_id].handle or '—' }}
                 </div>

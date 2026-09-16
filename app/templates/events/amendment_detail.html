@@ -45,7 +45,7 @@
     {{ t('document.for') }}
     <a
   class="text-blue-700 underline"
-  href="/events/{{ draft.event_id }}/proposal-discussion/{{ draft.proposal_id }}/rooms/{{ draft.room_id }}/drafts/{{ draft.id }}"
+  href="/drafts/{{ draft.id }}"
 >
   {{ draft.l_number or "L" }} — {{ draft.title or t('document.untitled') }}
 </a>

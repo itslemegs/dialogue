@@ -212,8 +212,8 @@
                 </span>
 
                 {% if v %}
-<div class="decision-tour-amendment-vote mt-4">
-                    {{ t('vote.label') }} {{ t('vote.open_lower') if v.is_open else t('vote.closed_lower') }}
+                <p class="text-xs text-slate-500">
+                  {{ t('vote.label') }} {{ t('vote.open_lower') if v.is_open else t('vote.closed_lower') }}
                 </p>
                 {% endif %}
             </div>

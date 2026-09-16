@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from app.i18n import request_locale, translate
+from app.i18n import request_locale
 
 import csv
-import html
 import io
 import json
 from datetime import datetime
@@ -254,10 +253,6 @@ def export_session_log(event_id: int, request: Request, format: str = "csv"):
 
 @router.get("/events/{event_id}/session-log", response_class=HTMLResponse)
 def view_session_log(event_id: int, request: Request):
-    locale = request_locale(request)
-    def label(key, **params):
-        return html.escape(translate(locale, key, **params))
-
     with get_session() as db:
         _require_log_viewer(request, event_id, db)
         logs = db.exec(
@@ -271,110 +266,20 @@ def view_session_log(event_id: int, request: Request):
         users = db.exec(select(User).where(User.id.in_(user_ids))).all() if user_ids else []
         user_map = {u.id: u for u in users}
 
-    rows_html = []
+    return _render_log_view(logs, user_map, event_id, request)
 
+
+def _render_log_view(logs, user_map, event_id, request):
+    # Reuse the application's final Jinja environment, including t() and |jst.
+    from app.main import templates
+    from app.services.session_log_view import build_log_view
+
+    records = []
     for log in logs:
-        details = log.details_json or ""
-
-        user_label = ""
-        if log.user_id:
-            u = user_map.get(log.user_id)
-            if u:
-                user_label = f"@{u.handle} ({log.user_id})"
-            else:
-                user_label = str(log.user_id)
-
-        rows_html.append(
-            f"""
-            <tr>
-                <td>{html.escape(str(log.created_at))}</td>
-                <td>{html.escape(user_label)}</td>
-                <td>{html.escape(str(log.session_key or ""))[:8]}</td>
-                <td>{html.escape(log.source or "")}</td>
-                <td><strong>{html.escape(log.action or "")}</strong></td>
-                <td>{html.escape(log.phase or "")}</td>
-                <td>{html.escape(log.page or "")}</td>
-                <td>{html.escape(log.method or "")}</td>
-                <td>{html.escape(str(log.status_code or ""))}</td>
-                <td>{html.escape(str(log.duration_ms or ""))}</td>
-                <td>{html.escape(log.target_type or "")}</td>
-                <td>{html.escape(log.target_id or "")}</td>
-                <td><pre>{html.escape(details[:500])}</pre></td>
-            </tr>
-            """
-        )
-
-    return f"""
-    <!doctype html>
-    <html lang="{locale}">
-    <head>
-        <meta charset="utf-8">
-        <title>{label('logs.title', id=event_id)}</title>
-        <style>
-            body {{
-                font-family: system-ui, sans-serif;
-                padding: 24px;
-                background: #f7f7f7;
-            }}
-            table {{
-                border-collapse: collapse;
-                width: 100%;
-                background: white;
-                font-size: 13px;
-            }}
-            th, td {{
-                border: 1px solid #ddd;
-                padding: 8px;
-                vertical-align: top;
-            }}
-            th {{
-                background: #eee;
-                position: sticky;
-                top: 0;
-            }}
-            pre {{
-                white-space: pre-wrap;
-                max-width: 420px;
-                margin: 0;
-            }}
-            .links {{
-                margin-bottom: 16px;
-            }}
-            a {{
-                margin-right: 12px;
-            }}
-        </style>
-    </head>
-    <body>
-        <h1>{label('logs.title', id=event_id)}</h1>
-
-        <div class="links">
-            <a href="/events/{event_id}/session-log/export?format=csv">{label('logs.csv')}</a>
-            <a href="/events/{event_id}/session-log/export?format=json">{label('logs.json')}</a>
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>{label('logs.time')}</th>
-                    <th>{label('logs.user')}</th>
-                    <th>{label('logs.session')}</th>
-                    <th>{label('logs.source')}</th>
-                    <th>{label('logs.action')}</th>
-                    <th>{label('logs.phase')}</th>
-                    <th>{label('logs.page')}</th>
-                    <th>{label('logs.method')}</th>
-                    <th>{label('floor.queue.status')}</th>
-                    <th>ms</th>
-                    <th>{label('amendment.target')}</th>
-                    <th>ID</th>
-                    <th>{label('logs.details')}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {"".join(rows_html)}
-            </tbody>
-        </table>
-    </body>
-    </html>
-    """
+        record = _log_to_dict(log)
+        record["details_json"] = log.details_json  # Preserve even malformed/truncated legacy JSON.
+        records.append(record)
+    view = build_log_view(records, user_map, request_locale(request))
+    return templates.env.get_template("session_log.html").render(
+        request=request, event_id=event_id, view=view,
+    )

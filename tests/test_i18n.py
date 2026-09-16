@@ -1145,8 +1145,18 @@ class RequestTests(unittest.TestCase):
             action='PFLOOR_FORMAL_VOTE',phase='proposal_floor',page='/events/7',method='POST',status_code=200,
             duration_ms=12,target_type='DRAFT',target_id='40',details_json='{"choice":"YES","status":"TABLED"}')
         db.exec.return_value.all.return_value=[record]
+        from app.services.session_log_view import build_log_view
+        def render_logs(logs, user_map, event_id, req):
+            records = []
+            for log in logs:
+                row = vars(log).copy()
+                row['details'] = json.loads(log.details_json)
+                records.append(row)
+            return self.templates.env.get_template('session_log.html').render(
+                request=req, event_id=event_id,
+                view=build_log_view(records, user_map, i18n.request_locale(req)))
         ns=dict(Request=Request,get_session=lambda:db,_require_log_viewer=lambda *args:None,
-                select=MagicMock(),ExperimentSessionLog=MagicMock(),html=html,
+                select=MagicMock(),ExperimentSessionLog=MagicMock(),_render_log_view=render_logs,
                 request_locale=i18n.request_locale,translate=i18n.translate)
         exec(compile(ast.Module(body=[node],type_ignores=[]),'isolated_log_view','exec'),ns)
         for locale,label in [('en','Download CSV'),('ja','CSVをダウンロード')]:

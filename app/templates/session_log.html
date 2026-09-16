@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="{{ ui_locale() }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ t('logs.title', id=event_id) }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/js/session-log-view.js" defer></script>
+  <style>[hidden] { display: none !important; } summary { cursor: pointer; }</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+<main class="max-w-7xl mx-auto px-4 py-8 sm:px-8">
+  <header class="flex flex-wrap justify-between items-start gap-4 mb-6">
+    <div>
+      <a class="text-sm text-indigo-700 hover:underline" href="/events/{{ event_id }}/menu">{{ t('nav.back') }}</a>
+      <h1 class="text-3xl font-bold tracking-tight mt-2">{{ t('logs.title', id=event_id) }}</h1>
+      <p class="text-slate-500 mt-1">{{ t('logs.viewer.subtitle') }}</p>
+    </div>
+    <div class="flex gap-2">
+      <a class="rounded-lg bg-indigo-700 text-white px-4 py-2 text-sm font-semibold" href="/events/{{ event_id }}/session-log/export?format=csv">{{ t('logs.csv') }}</a>
+      <a class="rounded-lg border bg-white px-4 py-2 text-sm" href="/events/{{ event_id }}/session-log/export?format=json">{{ t('logs.json') }}</a>
+    </div>
+  </header>
+  <p class="text-sm text-slate-600 mb-2">{{ t('logs.viewer.limit') }}</p>
+  <p class="text-sm text-slate-600 mb-5">{{ t('logs.viewer.timezone') }}</p>
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6" aria-live="polite">
+    {% for key, value in [('visible', view.rows|length), ('sessions', view.sessions), ('semantic', view.semantic), ('client', view.client)] %}
+    <div class="bg-white border border-slate-200 rounded-xl px-4 py-3">
+      <div class="text-xs text-slate-500">{{ t('logs.viewer.' ~ key) }}</div>
+      <div class="text-2xl font-semibold tabular-nums" data-count="{{ key }}">{{ value }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <form id="log-filters" class="bg-white border border-slate-200 rounded-xl p-4 grid sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4" role="search">
+    <label class="text-xs font-semibold text-slate-600">{{ t('logs.viewer.activity') }}
+      <select name="activity" class="block w-full mt-1 border rounded-lg px-2 py-2 bg-white text-sm">
+        <option value="">{{ t('logs.viewer.all') }}</option>
+        {% for activity in view.groups %}<option value="{{ activity }}">{{ t('logs.viewer.group.' ~ activity) }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs font-semibold text-slate-600">{{ t('logs.source') }}
+      <select name="source" class="block w-full mt-1 border rounded-lg px-2 py-2 bg-white text-sm">
+        <option value="">{{ t('logs.viewer.all') }}</option>
+        {% for source in ['client','semantic','server'] %}<option value="{{ source }}">{{ t('logs.viewer.source.' ~ source) }} ({{ source }})</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs font-semibold text-slate-600">{{ t('logs.action') }}
+      <select name="action" class="block w-full mt-1 border rounded-lg px-2 py-2 bg-white text-sm">
+        <option value="">{{ t('logs.viewer.all') }}</option>
+        {% for action in view.actions %}{% if action %}<option value="{{ action }}">{{ action }}</option>{% endif %}{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs font-semibold text-slate-600">{{ t('logs.viewer.target_type') }}
+      <select name="target" class="block w-full mt-1 border rounded-lg px-2 py-2 bg-white text-sm">
+        <option value="">{{ t('logs.viewer.all') }}</option>
+        {% for target in view.targets %}{% if target %}<option value="{{ target }}">{{ target }}</option>{% endif %}{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs font-semibold text-slate-600">{{ t('logs.viewer.identity') }}
+      <input name="identity" type="search" class="block w-full mt-1 border rounded-lg px-2 py-2 text-sm" autocomplete="off">
+    </label>
+    <label class="text-xs font-semibold text-slate-600">{{ t('logs.viewer.search') }}
+      <input name="search" type="search" class="block w-full mt-1 border rounded-lg px-2 py-2 text-sm" autocomplete="off">
+    </label>
+    <button type="reset" class="text-sm text-indigo-700 text-left">{{ t('logs.viewer.reset') }}</button>
+  </form>
+  <p class="text-xs leading-relaxed text-slate-500 mb-6">{{ t('logs.viewer.legend') }}</p>
+  <noscript><p class="mb-4 text-sm">{{ t('logs.viewer.no_js') }}</p></noscript>
+  {% for activity, rows in view.groups.items() %}
+  <section data-log-group="{{ activity }}" class="mb-7">
+    <h2 class="flex items-center gap-3 text-sm font-bold text-slate-600 uppercase tracking-wide mb-2">
+      {{ t('logs.viewer.group.' ~ activity) }}
+      <span data-group-count class="rounded-full bg-slate-200 px-2 py-0.5 text-xs tabular-nums">{{ rows|length }}</span>
+    </h2>
+    <div class="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+    {% for row in rows %}
+      <article data-log-row data-activity="{{ activity }}" data-source="{{ row.source or '' }}" data-action="{{ row.action or '' }}"
+               data-target="{{ row.target_type or '' }}" data-session="{{ row.session_key or '' }}"
+               data-identity="{{ row.user_label }} {{ row.session_key or '' }}" data-search="{{ row.search }}"
+               class="px-4 py-4 grid md:grid-cols-[12rem_1fr] gap-2 md:gap-5">
+        <div class="text-xs text-slate-500">
+          <time class="font-mono tabular-nums text-slate-700" title="{{ row.created_at }}">{{ row.created_at|jst('%Y-%m-%d %H:%M:%S JST') }}</time>
+          <div class="mt-2 font-medium text-slate-700 break-words">{{ t('logs.user') }}: {{ row.user_label }}</div>
+          <div class="mt-1 break-all" title="{{ row.session_key or '' }}">{{ t('logs.session') }}: <code>{{ (row.session_key or '—')[:12] }}</code></div>
+        </div>
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 class="font-semibold break-words" title="{{ row.action }}">{{ row.action_label }}</h3>
+            {% set colors = {'client':'bg-blue-50 text-blue-800', 'semantic':'bg-emerald-50 text-emerald-800', 'server':'bg-slate-100 text-slate-600'} %}
+            <span class="rounded px-2 py-0.5 text-xs {{ colors.get(row.source, 'bg-slate-100 text-slate-600') }}">
+              {{ t('logs.viewer.source.' ~ row.source) if row.source in colors else (row.source or '—') }} · {{ row.source or '—' }}
+            </span>
+          </div>
+          <div class="text-sm text-slate-600 mt-1 break-words">
+            {% if row.target_type %}<span class="font-medium">{{ row.target_type|replace('_', ' ')|capitalize }}{% if row.target_id %} #{{ row.target_id }}{% endif %}</span>{% endif %}
+            {% for key, value in row.context %}<span class="ml-2">{{ t('logs.viewer.context.' ~ key) }} #{{ value }}</span>{% endfor %}
+          </div>
+          <div class="mt-1 text-xs text-slate-500 break-all"><code>{{ row.method or '' }} {{ row.page or row.route or '—' }}</code>
+            {% if row.status_code is not none %} · HTTP {{ row.status_code }}{% endif %}
+            {% if row.duration_ms is not none %} · {{ row.duration_ms }} ms{% endif %}
+          </div>
+          <details class="mt-2 text-xs">
+            <summary class="text-indigo-700">{{ t('logs.viewer.raw') }}</summary>
+            <pre class="mt-2 p-3 rounded-lg bg-slate-50 text-slate-600 whitespace-pre-wrap break-all max-h-96 overflow-auto">{{ row.raw_json }}</pre>
+          </details>
+        </div>
+      </article>
+    {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <p id="log-empty" class="p-8 text-center text-slate-500 border border-dashed rounded-xl" {% if view.rows %}hidden{% endif %}>{{ t('logs.viewer.empty') }}</p>
+</main>
+</body>
+</html>

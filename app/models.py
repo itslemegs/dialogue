@@ -327,6 +327,58 @@ class Event(SQLModel, table=True):
         ]
 
 
+class EventChairAssignment(SQLModel, table=True):
+    """Event-specific presiding-chair record; does not grant permissions."""
+    __tablename__ = "event_chair_assignment"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    event_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("event.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    chairman_user_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("user.id"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    assigned_by_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("user.id"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    assigned_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        )
+    )
+
+    acknowledged_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
+    )
+
+    ended_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
+    )
+
+
 class EventAccessGrant(SQLModel, table=True):
     __tablename__ = "event_access_grant"
     __table_args__ = (

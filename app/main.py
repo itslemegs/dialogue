@@ -31,6 +31,7 @@ from app.models import (
     Notification,
     RorInvite,
     Event,
+    EventChairAssignment,
     EventStage,
     AgendaProposal,
     GeneralFloorLink,
@@ -2449,12 +2450,216 @@ def events_index(request: Request):
         },
     )
 
+
+def _current_event_chair_assignment(db, event_id: int, *, for_update: bool = False):
+    """Return the one active Chairman-of-Record assignment, if any."""
+    stmt = (
+        select(EventChairAssignment)
+        .where(
+            EventChairAssignment.event_id == event_id,
+            EventChairAssignment.ended_at.is_(None),
+        )
+        .order_by(
+            EventChairAssignment.assigned_at.desc(),
+            EventChairAssignment.id.desc(),
+        )
+    )
+    if for_update:
+        stmt = stmt.with_for_update()
+    return db.exec(stmt).first()
+
+
+@app.post("/events/{event_id}/chairman-of-record")
+def assign_chairman_of_record(
+    request: Request,
+    event_id: int,
+    chairman_user_id: int = Form(...),
+):
+    """
+    Assign or replace the event's Chairman of Record.
+
+    This is an accountability record only.
+    It does not grant or revoke application permissions.
+    """
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401)
+
+    flags = effective_flags(user)
+    if not (flags.get("IS_ADMIN") or flags.get("IS_PRESIDENT")):
+        raise HTTPException(403)
+
+    with get_session() as db:
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        # Serialize chairman changes for this event.
+        locked_event = db.exec(
+            select(Event)
+            .where(Event.id == event_id)
+            .with_for_update()
+        ).first()
+        if locked_event is None:
+            raise HTTPException(404)
+
+        target = db.exec(
+            select(User)
+            .where(User.id == chairman_user_id)
+            .options(selectinload(User.roles))
+        ).first()
+
+        if target is None:
+            raise HTTPException(404, "Selected user not found")
+
+        if has_role(target, "banned"):
+            raise HTTPException(400, "A banned user cannot be Chairman of Record")
+
+        if not (
+            has_role(target, "chairman")
+            or has_role(target, "president")
+        ):
+            raise HTTPException(
+                400,
+                "Chairman of Record must have the chairman or president role",
+            )
+
+        current = _current_event_chair_assignment(
+            db,
+            event_id,
+            for_update=True,
+        )
+
+        # Assigning the already-current chairman is a harmless no-op.
+        if current and current.chairman_user_id == target.id:
+            return RedirectResponse(
+                f"/events/{event_id}/menu?chairman=unchanged",
+                status_code=303,
+            )
+
+        now = _now_utc()
+        previous_chairman_user_id = (
+            current.chairman_user_id if current else None
+        )
+
+        if current:
+            current.ended_at = now
+            db.add(current)
+
+        assignment = EventChairAssignment(
+            event_id=event_id,
+            chairman_user_id=target.id,
+            assigned_by_id=user.id,
+            assigned_at=now,
+        )
+        db.add(assignment)
+        db.commit()
+        db.refresh(assignment)
+
+        action = (
+            "CHAIRMAN_OF_RECORD_CHANGED"
+            if previous_chairman_user_id is not None
+            else "CHAIRMAN_OF_RECORD_ASSIGNED"
+        )
+
+        assignment_id = assignment.id
+        new_chairman_user_id = assignment.chairman_user_id
+
+    slog(
+        request,
+        user=user,
+        event_id=event_id,
+        phase="event_management",
+        action=action,
+        target_type="event_chair_assignment",
+        target_id=assignment_id,
+        details={
+            "chairman_user_id": new_chairman_user_id,
+            "previous_chairman_user_id": previous_chairman_user_id,
+        },
+    )
+
+    result = "changed" if previous_chairman_user_id is not None else "assigned"
+    return RedirectResponse(
+        f"/events/{event_id}/menu?chairman={result}",
+        status_code=303,
+    )
+
+
+@app.post("/events/{event_id}/chairman-of-record/acknowledge")
+def acknowledge_chairman_of_record(
+    request: Request,
+    event_id: int,
+):
+    """
+    Explicit acknowledgement by the currently assigned Chairman of Record.
+
+    Acknowledgement is attributable to this assignment and happens only once.
+    """
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401)
+
+    with get_session() as db:
+        _require_event_access(db=db, user=user, event_id=event_id)
+
+        assignment = _current_event_chair_assignment(
+            db,
+            event_id,
+            for_update=True,
+        )
+
+        if assignment is None:
+            raise HTTPException(
+                409,
+                "No Chairman of Record is currently assigned",
+            )
+
+        if assignment.chairman_user_id != user.id:
+            raise HTTPException(
+                403,
+                "Only the Chairman of Record may acknowledge this assignment",
+            )
+
+        # Repeated submission is harmless and must not create duplicate
+        # acknowledgement audit events.
+        if assignment.acknowledged_at is not None:
+            return RedirectResponse(
+                f"/events/{event_id}/menu?chairman_acknowledged=1",
+                status_code=303,
+            )
+
+        assignment.acknowledged_at = _now_utc()
+        db.add(assignment)
+        db.commit()
+
+        assignment_id = assignment.id
+
+    slog(
+        request,
+        user=user,
+        event_id=event_id,
+        phase="event_management",
+        action="CHAIRMAN_OF_RECORD_ACKNOWLEDGED",
+        target_type="event_chair_assignment",
+        target_id=assignment_id,
+        details={
+            "chairman_user_id": user.id,
+        },
+    )
+
+    return RedirectResponse(
+        f"/events/{event_id}/menu?chairman_acknowledged=1",
+        status_code=303,
+    )
+
+
 @app.get("/events/{event_id}/menu", response_class=HTMLResponse)
 def event_menu(request: Request, event_id: int):
     user = current_user(request)
     if user is None:
         qs = urlencode({"next": str(request.url)})
         return RedirectResponse(f"/login?{qs}", status_code=303)
+
+    flags = effective_flags(user)
 
     with get_session() as s:
         event = _require_event_access(db=s, user=user, event_id=event_id)
@@ -2480,14 +2685,115 @@ def event_menu(request: Request, event_id: int):
             ],
         }
 
-    return templates.TemplateResponse(request, "events_menu.html",
+        assignments = s.exec(
+            select(EventChairAssignment)
+            .where(EventChairAssignment.event_id == event.id)
+            .order_by(
+                EventChairAssignment.assigned_at.desc(),
+                EventChairAssignment.id.desc(),
+            )
+        ).all()
+
+        current_assignment = next(
+            (a for a in assignments if a.ended_at is None),
+            None,
+        )
+
+        related_user_ids = {
+            uid
+            for assignment in assignments
+            for uid in (
+                assignment.chairman_user_id,
+                assignment.assigned_by_id,
+            )
+            if uid is not None
+        }
+
+        related_users = (
+            s.exec(
+                select(User)
+                .where(User.id.in_(related_user_ids))
+                .options(selectinload(User.roles))
+            ).all()
+            if related_user_ids
+            else []
+        )
+        chair_user_map = {u.id: u for u in related_users}
+
+        chairman_record = None
+        if current_assignment:
+            chairman = chair_user_map.get(current_assignment.chairman_user_id)
+            assigned_by = chair_user_map.get(current_assignment.assigned_by_id)
+
+            chairman_record = {
+                "assignment_id": current_assignment.id,
+                "chairman_user_id": current_assignment.chairman_user_id,
+                "chairman_handle": chairman.handle if chairman else None,
+                "assigned_by_id": current_assignment.assigned_by_id,
+                "assigned_by_handle": assigned_by.handle if assigned_by else None,
+                "assigned_at": current_assignment.assigned_at,
+                "acknowledged_at": current_assignment.acknowledged_at,
+            }
+
+        chairman_history = []
+        for assignment in assignments:
+            chairman = chair_user_map.get(assignment.chairman_user_id)
+            assigned_by = chair_user_map.get(assignment.assigned_by_id)
+            chairman_history.append({
+                "assignment_id": assignment.id,
+                "chairman_user_id": assignment.chairman_user_id,
+                "chairman_handle": chairman.handle if chairman else None,
+                "assigned_by_handle": assigned_by.handle if assigned_by else None,
+                "assigned_at": assignment.assigned_at,
+                "acknowledged_at": assignment.acknowledged_at,
+                "ended_at": assignment.ended_at,
+                "is_current": assignment.ended_at is None,
+            })
+
+        eligible_chairmen = []
+        if flags.get("IS_ADMIN") or flags.get("IS_PRESIDENT"):
+            candidates = s.exec(
+                select(User)
+                .options(selectinload(User.roles))
+                .order_by(User.handle)
+            ).all()
+
+            eligible_chairmen = [
+                {
+                    "id": candidate.id,
+                    "handle": candidate.handle,
+                    "is_president": has_role(candidate, "president"),
+                    "is_chairman": has_role(candidate, "chairman"),
+                }
+                for candidate in candidates
+                if not has_role(candidate, "banned")
+                and (
+                    has_role(candidate, "chairman")
+                    or has_role(candidate, "president")
+                )
+            ]
+
+        needs_chair_acknowledgement = bool(
+            current_assignment
+            and current_assignment.chairman_user_id == user.id
+            and current_assignment.acknowledged_at is None
+        )
+
+    return templates.TemplateResponse(
+        request,
+        "events_menu.html",
         {
             "request": request,
             "user": user,
-            "flags": effective_flags(user),
+            "flags": flags,
             "event": event_ctx,
+            "chairman_record": chairman_record,
+            "chairman_history": chairman_history,
+            "eligible_chairmen": eligible_chairmen,
+            "needs_chair_acknowledgement": needs_chair_acknowledgement,
         },
     )
+
 
 def _normalize_url(u: str | None) -> str | None:
     if not u: return None

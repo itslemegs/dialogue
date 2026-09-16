@@ -11,7 +11,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
-from app.models import Event, EventChairAssignment, User
+from app.models import Event, EventAttendance, EventChairAssignment, User
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +22,13 @@ MIGRATION = (
     / "alembic"
     / "versions"
     / "9d7f3b1a6c20_add_event_chair_assignments.py"
+)
+
+ATTENDANCE_MIGRATION = (
+    ROOT
+    / "alembic"
+    / "versions"
+    / "4b83d27e91af_add_event_attendance.py"
 )
 
 
@@ -177,6 +184,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
             "selectinload": selectinload,
             "Event": Event,
             "User": User,
+            "EventAttendance": EventAttendance,
             "EventChairAssignment": EventChairAssignment,
             "current_user": lambda request: self.actor,
             "effective_flags": effective_flags,
@@ -192,12 +200,53 @@ class ChairmanOfRecordTests(unittest.TestCase):
 
         self.ns = load_functions(
             {
+                "_current_event_attendance",
+                "_touch_event_attendance",
+                "acknowledge_event_entry",
                 "_current_event_chair_assignment",
                 "assign_chairman_of_record",
                 "acknowledge_chairman_of_record",
                 "event_menu",
             },
             namespace,
+        )
+
+        self.real_touch_event_attendance = self.ns["_touch_event_attendance"]
+
+        # Event-menu tests focus on rendered context. Dedicated tests below
+        # exercise the real attendance creation/update helper.
+        self.ns["_touch_event_attendance"] = (
+            lambda db, event_id, user_id: (
+                self.attendance(user_id=user_id),
+                False,
+            )
+        )
+
+    def attendance(
+        self,
+        *,
+        ident=200,
+        user_id=None,
+        acknowledged=None,
+        first_seen=None,
+        last_seen=None,
+    ):
+        if user_id is None:
+            user_id = self.member.id
+
+        if first_seen is None:
+            first_seen = self.now
+
+        if last_seen is None:
+            last_seen = first_seen
+
+        return EventAttendance(
+            id=ident,
+            event_id=self.event.id,
+            user_id=user_id,
+            first_seen_at=first_seen,
+            last_seen_at=last_seen,
+            acknowledged_at=acknowledged,
         )
 
     def assignment(
@@ -422,6 +471,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.db = FakeSession([
             [current],
             [self.chair, self.president],
+            [],  # attendance roster
         ])
 
         response = self.ns["event_menu"](object(), self.event.id)
@@ -450,6 +500,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.db = FakeSession([
             [current],
             [self.chair, self.president],
+            [],  # attendance roster
         ])
 
         response = self.ns["event_menu"](object(), self.event.id)
@@ -483,6 +534,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
             [current, old],
             [self.chair, self.chair2, self.president],
             [self.chair, self.chair2, self.president, self.member],
+            [],  # attendance roster
         ])
 
         response = self.ns["event_menu"](object(), self.event.id)
@@ -505,24 +557,266 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.assertTrue(context["chairman_history"][0]["is_current"])
         self.assertFalse(context["chairman_history"][1]["is_current"])
 
-    def test_template_has_assignment_panel_and_pending_ack_modal(self):
+    def test_template_has_assignment_attendance_and_unified_ack_modal(self):
         source = TEMPLATE.read_text()
 
+        # Chairman-of-Record management remains present.
         self.assertIn('id="event-chairman-of-record"', source)
         self.assertIn(
             'action="/events/{{ event.id }}/chairman-of-record"',
             source,
         )
-        self.assertIn('id="chair-acknowledgement-modal"', source)
+
+        # Attendance summary is available to authorized viewers.
+        self.assertIn('id="event-attendance-summary"', source)
+        self.assertIn("attendance_summary.observed", source)
+        self.assertIn("attendance_summary.acknowledged", source)
+        self.assertIn("attendance_summary.awaiting", source)
+
+        # Entry acknowledgement is now one unified modal.
         self.assertIn(
-            'action="/events/{{ event.id }}/chairman-of-record/acknowledge"',
+            'id="event-entry-acknowledgement-modal"',
             source,
         )
         self.assertIn(
-            "{% if needs_chair_acknowledgement and chairman_record %}",
+            'action="/events/{{ event.id }}/entry/acknowledge"',
             source,
         )
-        self.assertIn("chairAcknowledgementPending", source)
+        self.assertIn(
+            "{% set entry_ack_pending = "
+            "attendance_ack_pending or chair_ack_pending %}",
+            source,
+        )
+        self.assertIn(
+            "eventEntryAcknowledgementPending",
+            source,
+        )
+
+        # The old Chairman-only popup is no longer rendered.
+        self.assertNotIn(
+            'id="chair-acknowledgement-modal"',
+            source,
+        )
+
+
+    def test_first_event_entry_creates_attendance(self):
+        self.db = FakeSession([
+            None,        # no existing attendance
+            self.event,  # lock event
+            None,        # re-check after event lock
+        ])
+
+        attendance, created = self.real_touch_event_attendance(
+            self.db,
+            self.event.id,
+            self.member.id,
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(attendance.event_id, self.event.id)
+        self.assertEqual(attendance.user_id, self.member.id)
+        self.assertEqual(attendance.first_seen_at, self.now)
+        self.assertEqual(attendance.last_seen_at, self.now)
+        self.assertIsNone(attendance.acknowledged_at)
+        self.assertEqual(self.db.commit_count, 1)
+        self.assertEqual(self.db.refresh_count, 1)
+
+
+    def test_repeat_event_entry_updates_last_seen_without_new_row(self):
+        earlier = datetime(
+            2026,
+            9,
+            17,
+            0,
+            45,
+            tzinfo=timezone.utc,
+        )
+
+        attendance = self.attendance(
+            first_seen=earlier,
+            last_seen=earlier,
+        )
+
+        self.db = FakeSession([
+            attendance,
+        ])
+
+        result, created = self.real_touch_event_attendance(
+            self.db,
+            self.event.id,
+            self.member.id,
+        )
+
+        self.assertFalse(created)
+        self.assertIs(result, attendance)
+        self.assertEqual(attendance.first_seen_at, earlier)
+        self.assertEqual(attendance.last_seen_at, self.now)
+        self.assertEqual(self.db.commit_count, 1)
+
+
+    def test_member_unified_acknowledgement_records_attendance_only(self):
+        attendance = self.attendance(
+            user_id=self.member.id,
+        )
+
+        self.actor = self.member
+        self.db = FakeSession([
+            attendance,
+            None,  # no Chairman-of-Record assignment
+        ])
+
+        response = self.ns["acknowledge_event_entry"](
+            object(),
+            self.event.id,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertIn(
+            "entry_acknowledged=1",
+            response.headers["location"],
+        )
+        self.assertEqual(attendance.acknowledged_at, self.now)
+        self.assertEqual(attendance.last_seen_at, self.now)
+
+        self.assertEqual(self.slog.call_count, 1)
+        log = self.slog.call_args.kwargs
+        self.assertEqual(
+            log["action"],
+            "EVENT_ATTENDANCE_ACKNOWLEDGED",
+        )
+        self.assertEqual(
+            log["details"],
+            {"user_id": self.member.id},
+        )
+
+
+    def test_chair_unified_acknowledgement_records_attendance_and_role(self):
+        attendance = self.attendance(
+            user_id=self.chair.id,
+        )
+        current = self.assignment(
+            chairman=self.chair.id,
+        )
+
+        self.actor = self.chair
+        self.db = FakeSession([
+            attendance,
+            current,
+        ])
+
+        response = self.ns["acknowledge_event_entry"](
+            object(),
+            self.event.id,
+        )
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(attendance.acknowledged_at, self.now)
+        self.assertEqual(current.acknowledged_at, self.now)
+
+        actions = [
+            call.kwargs["action"]
+            for call in self.slog.call_args_list
+        ]
+
+        self.assertEqual(
+            actions,
+            [
+                "EVENT_ATTENDANCE_ACKNOWLEDGED",
+                "CHAIRMAN_OF_RECORD_ACKNOWLEDGED",
+            ],
+        )
+
+
+    def test_unified_acknowledgement_does_not_duplicate_semantic_logs(self):
+        attendance = self.attendance(
+            user_id=self.member.id,
+            acknowledged=self.now,
+        )
+
+        self.actor = self.member
+        self.db = FakeSession([
+            attendance,
+            None,
+        ])
+
+        response = self.ns["acknowledge_event_entry"](
+            object(),
+            self.event.id,
+        )
+
+        self.assertEqual(response.status_code, 303)
+
+        # last_seen may still be refreshed, but acknowledgement itself
+        # must not create another semantic event.
+        self.assertEqual(self.db.commit_count, 1)
+        self.slog.assert_not_called()
+
+
+    def test_admin_event_menu_gets_attendance_summary_and_roster(self):
+        attendance = self.attendance(
+            user_id=self.member.id,
+            acknowledged=self.now,
+        )
+
+        self.actor = self.admin
+
+        # query order:
+        # 1. Chairman assignment history
+        # 2. eligible Chairman candidates
+        # 3. event attendance rows
+        # 4. users referenced by attendance rows
+        self.db = FakeSession([
+            [],
+            [],
+            [attendance],
+            [self.member],
+        ])
+
+        response = self.ns["event_menu"](
+            object(),
+            self.event.id,
+        )
+
+        context = response["context"]
+
+        self.assertTrue(context["can_view_attendance"])
+        self.assertEqual(
+            context["attendance_summary"],
+            {
+                "observed": 1,
+                "acknowledged": 1,
+                "awaiting": 0,
+            },
+        )
+        self.assertEqual(
+            context["attendance_roster"][0]["user_id"],
+            self.member.id,
+        )
+        self.assertEqual(
+            context["attendance_roster"][0]["handle"],
+            self.member.handle,
+        )
+
+
+    def test_ordinary_member_cannot_view_attendance_roster(self):
+        self.actor = self.member
+
+        # Only Chairman assignment history is queried.
+        self.db = FakeSession([
+            [],
+        ])
+
+        response = self.ns["event_menu"](
+            object(),
+            self.event.id,
+        )
+
+        context = response["context"]
+
+        self.assertFalse(context["can_view_attendance"])
+        self.assertIsNone(context["attendance_summary"])
+        self.assertEqual(context["attendance_roster"], [])
+
 
     def test_feature_does_not_change_role_permissions(self):
         source = MAIN.read_text()
@@ -553,6 +847,23 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.assertIn(
             'postgresql_where=sa.text("ended_at IS NULL")',
             source,
+        )
+
+
+    def test_attendance_migration_is_unique_and_cascades(self):
+        source = ATTENDANCE_MIGRATION.read_text()
+
+        self.assertIn(
+            'down_revision = "9d7f3b1a6c20"',
+            source,
+        )
+        self.assertIn(
+            '"uq_event_attendance_event_user"',
+            source,
+        )
+        self.assertGreaterEqual(
+            source.count('ondelete="CASCADE"'),
+            2,
         )
 
 

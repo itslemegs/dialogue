@@ -160,6 +160,110 @@
       {% endif %}
     </section>
 
+    {% if can_view_attendance and attendance_summary %}
+    <section id="event-attendance-summary"
+             class="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+
+      <div class="flex items-center justify-between gap-4">
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {{ t('event.attendance.section') }}
+          </div>
+          <div class="mt-1 text-sm text-slate-500">
+            {{ event.title }}
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div class="rounded-xl bg-slate-50 p-4">
+          <div class="text-2xl font-bold text-slate-900">
+            {{ attendance_summary.observed }}
+          </div>
+          <div class="mt-1 text-xs font-medium text-slate-500">
+            {{ t('event.attendance.observed') }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-emerald-50 p-4">
+          <div class="text-2xl font-bold text-emerald-700">
+            {{ attendance_summary.acknowledged }}
+          </div>
+          <div class="mt-1 text-xs font-medium text-emerald-700">
+            {{ t('event.attendance.acknowledged') }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-amber-50 p-4">
+          <div class="text-2xl font-bold text-amber-700">
+            {{ attendance_summary.awaiting }}
+          </div>
+          <div class="mt-1 text-xs font-medium text-amber-700">
+            {{ t('event.attendance.awaiting') }}
+          </div>
+        </div>
+      </div>
+
+      {% if attendance_roster %}
+      <details class="mt-4 border-t border-slate-100 pt-4">
+        <summary class="cursor-pointer text-sm font-semibold text-slate-700">
+          {{ t('event.attendance.roster') }}
+          · {{ attendance_summary.observed }}
+        </summary>
+
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full min-w-[620px] text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+                <th class="px-3 py-2 font-semibold">User</th>
+                <th class="px-3 py-2 font-semibold">
+                  {{ t('event.attendance.first_seen') }}
+                </th>
+                <th class="px-3 py-2 font-semibold">
+                  {{ t('event.attendance.last_seen') }}
+                </th>
+                <th class="px-3 py-2 font-semibold">
+                  {{ t('event.attendance.section') }}
+                </th>
+              </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-100">
+              {% for attendee in attendance_roster %}
+              <tr>
+                <td class="px-3 py-3 font-medium text-slate-900">
+                  @{{ attendee.handle or attendee.user_id }}
+                </td>
+
+                <td class="px-3 py-3 text-slate-600">
+                  {{ attendee.first_seen_at | jst }}
+                </td>
+
+                <td class="px-3 py-3 text-slate-600">
+                  {{ attendee.last_seen_at | jst }}
+                </td>
+
+                <td class="px-3 py-3">
+                  {% if attendee.acknowledged_at %}
+                    <span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">
+                      {{ t('event.attendance.acknowledged') }}
+                    </span>
+                  {% else %}
+                    <span class="rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
+                      {{ t('event.attendance.seen_only') }}
+                    </span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+    </section>
+    {% endif %}
+
     <!-- Grid of menu cards -->
     <div id="menu-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <!-- Propose Agenda -->
@@ -282,59 +386,90 @@
   {% endif %}
 </div>
 
-{% if needs_chair_acknowledgement and chairman_record %}
-<div id="chair-acknowledgement-modal"
+{% set attendance_ack_pending = needs_attendance_acknowledgement | default(false) %}
+{% set chair_ack_pending = needs_chair_acknowledgement | default(false) %}
+{% set entry_ack_pending = attendance_ack_pending or chair_ack_pending %}
+
+{% if entry_ack_pending %}
+<div id="event-entry-acknowledgement-modal"
      class="fixed inset-0 z-[10020] flex items-center justify-center bg-slate-950/60 p-4"
      role="dialog"
      aria-modal="true"
-     aria-labelledby="chair-acknowledgement-title">
+     aria-labelledby="event-entry-acknowledgement-title">
 
   <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
     <div class="flex items-start gap-4">
       <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xl">
-        ⚖️
+        ✓
       </div>
 
-      <div>
-        <h2 id="chair-acknowledgement-title"
+      <div class="min-w-0">
+        <h2 id="event-entry-acknowledgement-title"
             class="text-xl font-bold text-slate-900">
-          {{ t('event.chair.popup.title') }}
+          {% if chair_ack_pending %}
+            {{ t('event.attendance.popup.chair_title') }}
+          {% else %}
+            {{ t('event.attendance.popup.title') }}
+          {% endif %}
         </h2>
 
         <p class="mt-2 text-sm leading-6 text-slate-600">
-          {{ t('event.chair.popup.body') }}
+          {% if chair_ack_pending %}
+            {{ t('event.attendance.popup.chair_body') }}
+          {% else %}
+            {{ t('event.attendance.popup.body') }}
+          {% endif %}
         </p>
 
-        <div class="mt-3 rounded-xl bg-slate-50 p-3">
+        <div class="mt-4 rounded-xl bg-slate-50 p-4">
           <div class="text-xs font-medium uppercase tracking-wide text-slate-500">
-            {{ t('event.chair.of_record') }}
-          </div>
-          <div class="mt-1 font-semibold text-slate-900">
-            @{{ chairman_record.chairman_handle or chairman_record.chairman_user_id }}
-          </div>
-          <div class="mt-1 text-xs text-slate-500">
             {{ event.title }}
+          </div>
+
+          <div class="mt-3 space-y-2 text-sm text-slate-700">
+            {% if attendance_ack_pending %}
+            <div class="flex items-center gap-2">
+              <span aria-hidden="true">✓</span>
+              <span>{{ t('event.attendance.section') }}</span>
+            </div>
+            {% endif %}
+
+            {% if chair_ack_pending %}
+            <div class="flex items-center gap-2">
+              <span aria-hidden="true">✓</span>
+              <span>
+                {{ t('event.chair.of_record') }}
+                {% if chairman_record %}
+                  · @{{ chairman_record.chairman_handle or chairman_record.chairman_user_id }}
+                {% endif %}
+              </span>
+            </div>
+            {% endif %}
           </div>
         </div>
 
         <p class="mt-3 text-xs leading-5 text-slate-500">
-          {{ t('event.chair.popup.note') }}
+          {{ t('event.attendance.popup.note') }}
         </p>
       </div>
     </div>
 
     <div class="mt-6 flex justify-end gap-3">
       <button type="button"
-              id="chair-acknowledgement-later"
+              id="event-entry-acknowledgement-later"
               class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-        {{ t('event.chair.popup.later') }}
+        {{ t('event.attendance.popup.later') }}
       </button>
 
       <form method="post"
-            action="/events/{{ event.id }}/chairman-of-record/acknowledge">
+            action="/events/{{ event.id }}/entry/acknowledge">
         <button type="submit"
                 class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
-          {{ t('event.chair.popup.acknowledge') }}
+          {% if chair_ack_pending %}
+            {{ t('event.attendance.popup.chair_confirm') }}
+          {% else %}
+            {{ t('event.attendance.popup.confirm') }}
+          {% endif %}
         </button>
       </form>
     </div>
@@ -347,10 +482,10 @@
     const tr = window.UII18n.t;
 
     document
-      .getElementById("chair-acknowledgement-later")
+      .getElementById("event-entry-acknowledgement-later")
       ?.addEventListener("click", function () {
         document
-          .getElementById("chair-acknowledgement-modal")
+          .getElementById("event-entry-acknowledgement-modal")
           ?.classList.add("hidden");
       });
 
@@ -682,11 +817,11 @@
       .getElementById("event-menu-tutorial")
       ?.addEventListener("click", startEventMenuTour);
 
-    const chairAcknowledgementPending =
-      {{ 'true' if needs_chair_acknowledgement else 'false' }};
+    const eventEntryAcknowledgementPending =
+      {{ 'true' if entry_ack_pending else 'false' }};
 
     if (
-      !chairAcknowledgementPending &&
+      !eventEntryAcknowledgementPending &&
       !window.DialogueTour.completed(storageKey)
     ) {
       window.setTimeout(startEventMenuTour, 700);

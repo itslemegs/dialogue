@@ -327,6 +327,59 @@ class Event(SQLModel, table=True):
         ]
 
 
+class EventAttendance(SQLModel, table=True):
+    """Observed and acknowledged attendance for one user in one event."""
+    __tablename__ = "event_attendance"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id",
+            "user_id",
+            name="uq_event_attendance_event_user",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    event_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("event.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    user_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("user.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    first_seen_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        )
+    )
+
+    last_seen_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        )
+    )
+
+    acknowledged_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True),
+    )
+
+
 class EventChairAssignment(SQLModel, table=True):
     """Event-specific presiding-chair record; does not grant permissions."""
     __tablename__ = "event_chair_assignment"

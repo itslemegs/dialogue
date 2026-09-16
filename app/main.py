@@ -31,6 +31,7 @@ from app.models import (
     Notification,
     RorInvite,
     Event,
+    EventAttendance,
     EventChairAssignment,
     EventStage,
     AgendaProposal,
@@ -2451,6 +2452,181 @@ def events_index(request: Request):
     )
 
 
+
+def _current_event_attendance(
+    db,
+    event_id: int,
+    user_id: int,
+    *,
+    for_update: bool = False,
+):
+    """Return this user's attendance record for the event, if it exists."""
+    stmt = select(EventAttendance).where(
+        EventAttendance.event_id == event_id,
+        EventAttendance.user_id == user_id,
+    )
+
+    if for_update:
+        stmt = stmt.with_for_update()
+
+    return db.exec(stmt).first()
+
+
+def _touch_event_attendance(db, event_id: int, user_id: int):
+    """
+    Record that a user entered an event.
+
+    Returns:
+        (attendance, created)
+
+    first_seen_at is immutable.
+    last_seen_at advances whenever the Event Menu is entered.
+    """
+    now = _now_utc()
+
+    attendance = _current_event_attendance(
+        db,
+        event_id,
+        user_id,
+        for_update=True,
+    )
+
+    if attendance is not None:
+        attendance.last_seen_at = now
+        db.add(attendance)
+        db.commit()
+        db.refresh(attendance)
+        return attendance, False
+
+    # Serialize first-time attendance creation against the event row so
+    # concurrent first visits cannot create duplicate attendance records.
+    locked_event = db.exec(
+        select(Event)
+        .where(Event.id == event_id)
+        .with_for_update()
+    ).first()
+
+    if locked_event is None:
+        raise HTTPException(404)
+
+    # Re-check after acquiring the event lock.
+    attendance = _current_event_attendance(
+        db,
+        event_id,
+        user_id,
+        for_update=True,
+    )
+
+    if attendance is not None:
+        attendance.last_seen_at = now
+        db.add(attendance)
+        db.commit()
+        db.refresh(attendance)
+        return attendance, False
+
+    attendance = EventAttendance(
+        event_id=event_id,
+        user_id=user_id,
+        first_seen_at=now,
+        last_seen_at=now,
+    )
+    db.add(attendance)
+    db.commit()
+    db.refresh(attendance)
+
+    return attendance, True
+
+
+@app.post("/events/{event_id}/attendance/acknowledge")
+def acknowledge_event_attendance(
+    request: Request,
+    event_id: int,
+):
+    """Explicitly acknowledge attendance for this event."""
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401)
+
+    first_seen_created = False
+
+    with get_session() as db:
+        _require_event_access(
+            db=db,
+            user=user,
+            event_id=event_id,
+        )
+
+        attendance = _current_event_attendance(
+            db,
+            event_id,
+            user.id,
+            for_update=True,
+        )
+
+        # Defensive path: direct POST without having opened Event Menu first.
+        if attendance is None:
+            attendance, first_seen_created = _touch_event_attendance(
+                db,
+                event_id,
+                user.id,
+            )
+
+            # Re-lock the row before acknowledgement.
+            attendance = _current_event_attendance(
+                db,
+                event_id,
+                user.id,
+                for_update=True,
+            )
+
+        if attendance.acknowledged_at is not None:
+            return RedirectResponse(
+                f"/events/{event_id}/menu?attendance_acknowledged=1",
+                status_code=303,
+            )
+
+        now = _now_utc()
+        attendance.acknowledged_at = now
+        attendance.last_seen_at = now
+
+        db.add(attendance)
+        db.commit()
+
+        attendance_id = attendance.id
+
+    if first_seen_created:
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="event_attendance",
+            action="EVENT_ATTENDANCE_FIRST_SEEN",
+            target_type="event_attendance",
+            target_id=attendance_id,
+            details={
+                "user_id": user.id,
+            },
+        )
+
+    slog(
+        request,
+        user=user,
+        event_id=event_id,
+        phase="event_attendance",
+        action="EVENT_ATTENDANCE_ACKNOWLEDGED",
+        target_type="event_attendance",
+        target_id=attendance_id,
+        details={
+            "user_id": user.id,
+        },
+    )
+
+    return RedirectResponse(
+        f"/events/{event_id}/menu?attendance_acknowledged=1",
+        status_code=303,
+    )
+
+
 def _current_event_chair_assignment(db, event_id: int, *, for_update: bool = False):
     """Return the one active Chairman-of-Record assignment, if any."""
     stmt = (
@@ -2652,6 +2828,123 @@ def acknowledge_chairman_of_record(
     )
 
 
+
+@app.post("/events/{event_id}/entry/acknowledge")
+def acknowledge_event_entry(
+    request: Request,
+    event_id: int,
+):
+    """
+    Acknowledge event attendance and, when applicable,
+    the user's current Chairman-of-Record assignment.
+    """
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401)
+
+    first_seen_created = False
+    attendance_acknowledged = False
+    chair_acknowledged = False
+    attendance_id = None
+    chair_assignment_id = None
+
+    with get_session() as db:
+        _require_event_access(
+            db=db,
+            user=user,
+            event_id=event_id,
+        )
+
+        attendance = _current_event_attendance(
+            db,
+            event_id,
+            user.id,
+            for_update=True,
+        )
+
+        if attendance is None:
+            attendance, first_seen_created = _touch_event_attendance(
+                db,
+                event_id,
+                user.id,
+            )
+            attendance = _current_event_attendance(
+                db,
+                event_id,
+                user.id,
+                for_update=True,
+            )
+
+        now = _now_utc()
+
+        if attendance.acknowledged_at is None:
+            attendance.acknowledged_at = now
+            attendance_acknowledged = True
+
+        attendance.last_seen_at = now
+        db.add(attendance)
+        attendance_id = attendance.id
+
+        chair_assignment = _current_event_chair_assignment(
+            db,
+            event_id,
+            for_update=True,
+        )
+
+        if (
+            chair_assignment is not None
+            and chair_assignment.chairman_user_id == user.id
+            and chair_assignment.acknowledged_at is None
+        ):
+            chair_assignment.acknowledged_at = now
+            db.add(chair_assignment)
+            chair_assignment_id = chair_assignment.id
+            chair_acknowledged = True
+
+        db.commit()
+
+    if first_seen_created:
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="event_attendance",
+            action="EVENT_ATTENDANCE_FIRST_SEEN",
+            target_type="event_attendance",
+            target_id=attendance_id,
+            details={"user_id": user.id},
+        )
+
+    if attendance_acknowledged:
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="event_attendance",
+            action="EVENT_ATTENDANCE_ACKNOWLEDGED",
+            target_type="event_attendance",
+            target_id=attendance_id,
+            details={"user_id": user.id},
+        )
+
+    if chair_acknowledged:
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="event_management",
+            action="CHAIRMAN_OF_RECORD_ACKNOWLEDGED",
+            target_type="event_chair_assignment",
+            target_id=chair_assignment_id,
+            details={"chairman_user_id": user.id},
+        )
+
+    return RedirectResponse(
+        f"/events/{event_id}/menu?entry_acknowledged=1",
+        status_code=303,
+    )
+
+
 @app.get("/events/{event_id}/menu", response_class=HTMLResponse)
 def event_menu(request: Request, event_id: int):
     user = current_user(request)
@@ -2661,8 +2954,25 @@ def event_menu(request: Request, event_id: int):
 
     flags = effective_flags(user)
 
+    attendance_first_seen = False
+    attendance_log_id = None
+
     with get_session() as s:
         event = _require_event_access(db=s, user=user, event_id=event_id)
+
+        attendance, attendance_first_seen = _touch_event_attendance(
+            s,
+            event.id,
+            user.id,
+        )
+        attendance_log_id = attendance.id
+
+        attendance_ctx = {
+            "id": attendance.id,
+            "first_seen_at": attendance.first_seen_at,
+            "last_seen_at": attendance.last_seen_at,
+            "acknowledged_at": attendance.acknowledged_at,
+        }
 
         event_ctx = {
             "id": event.id,
@@ -2779,6 +3089,91 @@ def event_menu(request: Request, event_id: int):
             and current_assignment.acknowledged_at is None
         )
 
+        can_view_attendance = bool(
+            flags.get("IS_ADMIN")
+            or flags.get("IS_PRESIDENT")
+            or (
+                current_assignment
+                and current_assignment.chairman_user_id == user.id
+            )
+        )
+
+        attendance_summary = None
+        attendance_roster = []
+
+        if can_view_attendance:
+            event_attendance_rows = s.exec(
+                select(EventAttendance)
+                .where(EventAttendance.event_id == event.id)
+                .order_by(
+                    EventAttendance.first_seen_at.asc(),
+                    EventAttendance.id.asc(),
+                )
+            ).all()
+
+            attendee_ids = {
+                row.user_id
+                for row in event_attendance_rows
+            }
+
+            attendee_users = (
+                s.exec(
+                    select(User)
+                    .where(User.id.in_(attendee_ids))
+                ).all()
+                if attendee_ids
+                else []
+            )
+
+            attendee_user_map = {
+                attendee.id: attendee
+                for attendee in attendee_users
+            }
+
+            attendance_roster = [
+                {
+                    "user_id": row.user_id,
+                    "handle": (
+                        attendee_user_map[row.user_id].handle
+                        if row.user_id in attendee_user_map
+                        else None
+                    ),
+                    "first_seen_at": row.first_seen_at,
+                    "last_seen_at": row.last_seen_at,
+                    "acknowledged_at": row.acknowledged_at,
+                }
+                for row in event_attendance_rows
+            ]
+
+            acknowledged_count = sum(
+                1
+                for row in event_attendance_rows
+                if row.acknowledged_at is not None
+            )
+
+            attendance_summary = {
+                "observed": len(event_attendance_rows),
+                "acknowledged": acknowledged_count,
+                "awaiting": (
+                    len(event_attendance_rows)
+                    - acknowledged_count
+                ),
+            }
+
+    if attendance_first_seen:
+        slog(
+            request,
+            user=user,
+            event_id=event_id,
+            phase="event_attendance",
+            action="EVENT_ATTENDANCE_FIRST_SEEN",
+            target_type="event_attendance",
+            target_id=attendance_log_id,
+            details={
+                "user_id": user.id,
+            },
+        )
+
     return templates.TemplateResponse(
         request,
         "events_menu.html",
@@ -2791,6 +3186,13 @@ def event_menu(request: Request, event_id: int):
             "chairman_history": chairman_history,
             "eligible_chairmen": eligible_chairmen,
             "needs_chair_acknowledgement": needs_chair_acknowledgement,
+            "attendance": attendance_ctx,
+            "needs_attendance_acknowledgement": (
+                attendance_ctx["acknowledged_at"] is None
+            ),
+            "can_view_attendance": can_view_attendance,
+            "attendance_summary": attendance_summary,
+            "attendance_roster": attendance_roster,
         },
     )
 

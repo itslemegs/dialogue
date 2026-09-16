@@ -45,7 +45,7 @@
                  data-state="{{ ev.state }}">
 
                 <div class="absolute inset-0 bg-cover bg-center"
-                     style="background-image: url('/static/img/home-bg.jpg');"></div>
+                     style="background-image: url('{{ ev.cover_image_url }}');"></div>
 
                 {% if ev.state == 'live' %}
                   <div class="absolute inset-0 bg-emerald-950/55 group-hover:bg-emerald-950/45 transition"></div>

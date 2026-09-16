@@ -977,5 +977,10 @@
   "logs.viewer.context.room_id": "ルーム",
   "logs.viewer.context.draft_id": "草案",
   "logs.viewer.context.amendment_id": "修正案",
-  "logs.viewer.context.question_id": "議題参照"
+  "logs.viewer.context.question_id": "議題参照",
+  "admin.event_cover": "カバー画像（任意）",
+  "admin.event_cover_help": "任意。JPG・PNG・WebP形式、最大5 MB。指定しない場合は標準のイベント画像を使用します。画像は公開されるため、非公開の資料はアップロードしないでください。",
+  "admin.error.event_cover_type": "JPEG・PNG・WebP形式の画像を選択してください。",
+  "admin.error.event_cover_size": "カバー画像は5 MB以下にしてください。",
+  "admin.error.event_cover_invalid": "カバー画像を読み込めないか、対応していない形式です。2,000万画素以下の静止画像を使用してください。"
 }

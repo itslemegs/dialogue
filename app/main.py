@@ -1,3 +1,5 @@
+from fastapi import File, UploadFile
+from app.services.event_covers import CoverValidationError, validate_cover, save_cover, delete_cover, cover_image_url
 from app.ai_features import AI_FEATURES_ENABLED, AIFeaturesDisabled, require_ai_features
 from fastapi import FastAPI, Request, Depends, Form, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -967,6 +969,7 @@ def _dashboard_event_cards(db: Session, request: Request, display_tz: ZoneInfo):
             {
                 "id": e.id,
                 "title": e.title,
+                "cover_image_url": cover_image_url(getattr(e, "cover_image", None)),
                 "starts_at_iso": to_iso_z(starts_at),
                 "ends_at_iso": to_iso_z(ends_at) if ends_at else None,
                 "starts_at_human": starts_at.astimezone(display_tz).strftime("%Y-%m-%d %H:%M %Z"),
@@ -1852,6 +1855,7 @@ def admin_create_event(
     vote_min: int = Form(...),
     access_mode: str = Form("open"),
     passcode: str = Form(""),
+    cover_image: UploadFile | None = File(None),
 ):
     error = None
     dt_local = None
@@ -1879,6 +1883,13 @@ def admin_create_event(
     passcode = (passcode or "").strip()
     if access_mode == "passcode" and not passcode:
         error = "Passcode is required for private events"
+
+    cover_data = None
+    if not error:
+        try:
+            cover_data = validate_cover(cover_image)
+        except CoverValidationError as exc:
+            error = translate(request_locale(request), str(exc))
 
     if error:
         preset = SimpleNamespace(
@@ -1913,26 +1924,36 @@ def admin_create_event(
     mode_enum = EventAccessMode.passcode if access_mode == "passcode" else EventAccessMode.open
     passcode_hash = hash_password(passcode) if mode_enum == EventAccessMode.passcode else None
 
-    with get_session() as s:  # type: Session
-        evt = Event(
-            title=title.strip(),
-            starts_at=start_utc,
-            ends_at=vote_end,
-            access_mode=mode_enum,
-            passcode_hash=passcode_hash,
-            created_by_id=user.id,
-        )
-        s.add(evt)
-        s.flush()
+    stored_cover = None
+    committed = False
+    try:
+        with get_session() as s:  # type: Session
+            evt = Event(
+                title=title.strip(),
+                starts_at=start_utc,
+                ends_at=vote_end,
+                access_mode=mode_enum,
+                passcode_hash=passcode_hash,
+                created_by_id=user.id,
+            )
+            s.add(evt)
+            s.flush()
 
-        s.add_all([
-            EventStage(event_id=evt.id, name="Opening",        starts_at=start_utc, ends_at=open_end),
-            EventStage(event_id=evt.id, name="General Debate", starts_at=open_end,  ends_at=debate_end),
-            EventStage(event_id=evt.id, name="Voting",         starts_at=debate_end, ends_at=vote_end),
-        ])
+            s.add_all([
+                EventStage(event_id=evt.id, name="Opening",        starts_at=start_utc, ends_at=open_end),
+                EventStage(event_id=evt.id, name="General Debate", starts_at=open_end,  ends_at=debate_end),
+                EventStage(event_id=evt.id, name="Voting",         starts_at=debate_end, ends_at=vote_end),
+            ])
 
-        s.commit()
-        s.refresh(evt)
+            evt.cover_image = save_cover(cover_data)
+            stored_cover = evt.cover_image
+            s.commit()
+            committed = True
+            s.refresh(evt)
+    except Exception:
+        if not committed:
+            delete_cover(stored_cover)
+        raise
 
     return RedirectResponse("/admin?tab=events", status_code=303)
 
@@ -2357,9 +2378,11 @@ def admin_delete_event(
         ev = s.get(Event, event_id)
 
         if ev:
+            stored_cover = getattr(ev, "cover_image", None)
             try:
                 hard_delete_event(s, event_id)
                 s.commit()
+                delete_cover(stored_cover)
             except Exception:
                 s.rollback()
                 raise

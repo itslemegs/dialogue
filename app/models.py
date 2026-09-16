@@ -276,6 +276,8 @@ class EventAccessMode(str, PyEnum):
 
 
 class Event(SQLModel, table=True):
+    cover_image: Optional[str] = Field(default=None)
+
     id: Optional[int] = Field(default=None, primary_key=True)
 
     title: str

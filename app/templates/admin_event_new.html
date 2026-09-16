@@ -8,12 +8,19 @@
       <div class="mb-4 p-3 rounded bg-rose-100 text-rose-700 text-sm">{{ error }}</div>
     {% endif %}
 
-    <form method="post" class="bg-white border rounded-xl p-6 space-y-5">
+    <form enctype="multipart/form-data" method="post" class="bg-white border rounded-xl p-6 space-y-5">
       <div>
         <label class="block text-sm font-medium text-slate-700">Title</label>
         <input name="title" type="text" required
                value="{{ preset.title }}"
                class="mt-1 w-full rounded border-slate-300 focus:border-emerald-500 focus:ring-emerald-500" />
+      </div>
+
+      <div>
+        <label for="event-cover" class="block text-sm font-medium text-slate-700">{{ t('admin.event_cover') }}</label>
+        <input id="event-cover" name="cover_image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+               aria-describedby="event-cover-help" class="mt-1 block w-full text-sm text-slate-600">
+        <p id="event-cover-help" class="mt-1 text-xs text-slate-500">{{ t('admin.event_cover_help') }}</p>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

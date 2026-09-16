@@ -39,3 +39,6 @@ __pycache__/
 *.bak
 *.bak.*
 *.backup
+
+# Runtime event cover uploads
+app/static/uploads/event-covers/

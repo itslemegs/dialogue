@@ -977,5 +977,10 @@
   "logs.viewer.context.room_id": "Room",
   "logs.viewer.context.draft_id": "Draft",
   "logs.viewer.context.amendment_id": "Amendment",
-  "logs.viewer.context.question_id": "Question"
+  "logs.viewer.context.question_id": "Question",
+  "admin.event_cover": "Cover image (optional)",
+  "admin.event_cover_help": "Optional. JPG, PNG, or WebP. Maximum 5 MB. If omitted, the default event image will be used. Images are served publicly; do not upload private material.",
+  "admin.error.event_cover_type": "Choose a JPEG, PNG, or WebP image.",
+  "admin.error.event_cover_size": "The cover image must be 5 MB or smaller.",
+  "admin.error.event_cover_invalid": "The cover image is unreadable or unsupported. Use a still image of at most 20 megapixels."
 }

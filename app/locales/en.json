@@ -1030,5 +1030,15 @@
   "proposal_floor.closing.recorded": "Recorded at closure",
   "proposal_floor.closing.original_draft": "Original Draft Resolution",
   "proposal_floor.closing.original_amendment": "Original Amendment",
-  "proposal_floor.closing.already_recorded": "A closing revision is already recorded."
+  "proposal_floor.closing.already_recorded": "A closing revision is already recorded.",
+  "records.archive": "Historical Archive",
+  "records.title": "Event Records",
+  "records.description": "Read-only records of completed d¡alogüe events preserved across experimental instances.",
+  "records.events": "events",
+  "records.none": "No event records are available.",
+  "records.source_unavailable": "One record source is currently unavailable.",
+  "records.observed": "Observed",
+  "records.acknowledged": "Acknowledged",
+  "records.awaiting": "Seen only",
+  "records.view": "View Record"
 }

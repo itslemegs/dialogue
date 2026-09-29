@@ -1011,6 +1011,111 @@ def dashboard(request: Request):
         next_event=(dashboard_events[0] if dashboard_events else None),  # temporary backward compatibility
     )
 
+
+
+@app.get("/records", response_class=HTMLResponse)
+def records_index(request: Request):
+    """
+    Read-only historical event index spanning the surviving database
+    and the restored Instance B archive.
+    """
+    user = current_user(request)
+
+    if user is None:
+        qs = urlencode({"next": str(request.url)})
+        return RedirectResponse(
+            f"/login?{qs}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    flags = effective_flags(user)
+
+    if not (
+        flags.get("IS_ADMIN")
+        or flags.get("IS_PRESIDENT")
+    ):
+        raise HTTPException(status_code=403)
+
+    from sqlalchemy import func
+    from sqlalchemy.exc import SQLAlchemyError
+
+    from app.record_db import (
+        get_record_session,
+        record_sources,
+    )
+
+    record_events = []
+    source_errors = []
+
+    for source in record_sources():
+        source_key = source["key"]
+
+        try:
+            with get_record_session(source_key) as db:
+                events = db.exec(
+                    select(Event)
+                    .order_by(
+                        Event.starts_at.desc(),
+                        Event.id.desc(),
+                    )
+                ).all()
+
+                for event in events:
+                    observed = db.exec(
+                        select(func.count(EventAttendance.id))
+                        .where(
+                            EventAttendance.event_id == event.id
+                        )
+                    ).one()
+
+                    acknowledged = db.exec(
+                        select(func.count(EventAttendance.id))
+                        .where(
+                            EventAttendance.event_id == event.id,
+                            EventAttendance.acknowledged_at.is_not(None),
+                        )
+                    ).one()
+
+                    observed = int(observed or 0)
+                    acknowledged = int(acknowledged or 0)
+
+                    record_events.append({
+                        "source": source_key,
+                        "source_label": source["label"],
+                        "database": source["database"],
+                        "event_id": event.id,
+                        "title": event.title,
+                        "starts_at": event.starts_at,
+                        "ends_at": event.ends_at,
+                        "observed": observed,
+                        "acknowledged": acknowledged,
+                        "awaiting": max(
+                            observed - acknowledged,
+                            0,
+                        ),
+                        "record_href": (
+                            f"/records/{source_key}"
+                            f"/events/{event.id}"
+                        ),
+                    })
+
+        except SQLAlchemyError:
+            source_errors.append(source)
+
+    record_events.sort(
+        key=lambda item: item["starts_at"],
+        reverse=True,
+    )
+
+    return render(
+        "records/index.html",
+        request,
+        record_events=record_events,
+        record_sources=record_sources(),
+        record_source_errors=source_errors,
+    )
+
+
 from collections import defaultdict
 from datetime import datetime
 from datetime import timezone

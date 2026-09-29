@@ -1030,5 +1030,15 @@
   "proposal_floor.closing.recorded": "討議終了時の記録",
   "proposal_floor.closing.original_draft": "決議案の原文",
   "proposal_floor.closing.original_amendment": "修正案の原文",
-  "proposal_floor.closing.already_recorded": "討議終了時の文案はすでに記録されています。"
+  "proposal_floor.closing.already_recorded": "討議終了時の文案はすでに記録されています。",
+  "records.archive": "履歴アーカイブ",
+  "records.title": "イベント記録",
+  "records.description": "複数の実験環境に保存された d¡alogüe の終了済みイベントを読み取り専用で表示します。",
+  "records.events": "件のイベント",
+  "records.none": "イベント記録はありません。",
+  "records.source_unavailable": "一部の記録データベースに現在アクセスできません。",
+  "records.observed": "アクセス確認",
+  "records.acknowledged": "参加確認済み",
+  "records.awaiting": "アクセスのみ",
+  "records.view": "記録を見る"
 }

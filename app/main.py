@@ -1410,6 +1410,61 @@ def record_event_detail(
                 )
             ).all()
 
+            early_ballots = db.exec(
+                select(ProposalEarlyBallot)
+                .where(
+                    ProposalEarlyBallot.event_id == event.id
+                )
+                .order_by(
+                    ProposalEarlyBallot.created_at.asc(),
+                    ProposalEarlyBallot.id.asc(),
+                )
+            ).all()
+
+            formal_ballots = db.exec(
+                select(ProposalFormalBallot)
+                .where(
+                    ProposalFormalBallot.event_id == event.id
+                )
+                .order_by(
+                    ProposalFormalBallot.created_at.asc(),
+                    ProposalFormalBallot.id.asc(),
+                )
+            ).all()
+
+            # Older amendment-only voting subsystem.
+            # Keep it as a separate historical record rather than
+            # merging it with Proposal Floor early/formal voting.
+            legacy_amendment_vote_states = (
+                db.exec(
+                    select(AmendmentVoteState)
+                    .where(
+                        AmendmentVoteState.amendment_id.in_(
+                            amendment_ids
+                        )
+                    )
+                ).all()
+                if amendment_ids
+                else []
+            )
+
+            legacy_amendment_votes = (
+                db.exec(
+                    select(AmendmentVote)
+                    .where(
+                        AmendmentVote.amendment_id.in_(
+                            amendment_ids
+                        )
+                    )
+                    .order_by(
+                        AmendmentVote.created_at.asc(),
+                        AmendmentVote.id.asc(),
+                    )
+                ).all()
+                if amendment_ids
+                else []
+            )
+
             early_by_draft = {
                 vote.draft_id: vote
                 for vote in early_votes
@@ -1597,6 +1652,18 @@ def record_event_detail(
                 if amendment.submitted_by_id:
                     user_ids.add(amendment.submitted_by_id)
 
+            for ballot in early_ballots:
+                if ballot.user_id:
+                    user_ids.add(ballot.user_id)
+
+            for ballot in formal_ballots:
+                if ballot.user_id:
+                    user_ids.add(ballot.user_id)
+
+            for ballot in legacy_amendment_votes:
+                if ballot.user_id:
+                    user_ids.add(ballot.user_id)
+
             for floor_state in floor_states:
                 if floor_state.closing_revision_by_id:
                     user_ids.add(
@@ -1748,7 +1815,78 @@ def record_event_detail(
             def enum_value(value):
                 return getattr(value, "value", str(value))
 
-            def vote_summary(vote):
+            def materialize_ballots(rows):
+                records = []
+
+                for ballot in rows:
+                    voter = user_map.get(
+                        ballot.user_id
+                    )
+
+                    records.append({
+                        "user_id": ballot.user_id,
+                        "handle": (
+                            voter.handle
+                            if voter
+                            else None
+                        ),
+                        "choice": ballot.choice,
+                        "created_at":
+                            ballot.created_at,
+                    })
+
+                return records
+
+
+            early_ballots_by_draft = {}
+            early_ballots_by_amendment = {}
+
+            for ballot in early_ballots:
+                if ballot.draft_id is not None:
+                    early_ballots_by_draft.setdefault(
+                        ballot.draft_id,
+                        [],
+                    ).append(ballot)
+
+                if ballot.amendment_id is not None:
+                    early_ballots_by_amendment.setdefault(
+                        ballot.amendment_id,
+                        [],
+                    ).append(ballot)
+
+
+            formal_ballots_by_draft = {}
+            formal_ballots_by_amendment = {}
+
+            for ballot in formal_ballots:
+                if ballot.draft_id is not None:
+                    formal_ballots_by_draft.setdefault(
+                        ballot.draft_id,
+                        [],
+                    ).append(ballot)
+
+                if ballot.amendment_id is not None:
+                    formal_ballots_by_amendment.setdefault(
+                        ballot.amendment_id,
+                        [],
+                    ).append(ballot)
+
+
+            legacy_state_by_amendment = {
+                state.amendment_id: state
+                for state in legacy_amendment_vote_states
+            }
+
+            legacy_votes_by_amendment = {}
+
+            for ballot in legacy_amendment_votes:
+                legacy_votes_by_amendment.setdefault(
+                    ballot.amendment_id,
+                    [],
+                ).append(ballot)
+
+
+            def vote_summary(vote, ballots=None):
                 if vote is None:
                     return None
 
@@ -1765,6 +1903,72 @@ def record_event_detail(
                     "is_open": bool(
                         getattr(vote, "is_open", False)
                     ),
+                    "opened_at": getattr(
+                        vote,
+                        "opened_at",
+                        None,
+                    ),
+                    "closed_at": getattr(
+                        vote,
+                        "closed_at",
+                        None,
+                    ),
+                    "updated_at": getattr(
+                        vote,
+                        "updated_at",
+                        None,
+                    ),
+                    "ballots": materialize_ballots(
+                        ballots or []
+                    ),
+                }
+
+
+            def legacy_amendment_vote_summary(
+                amendment_id,
+            ):
+                state = legacy_state_by_amendment.get(
+                    amendment_id
+                )
+
+                ballots = legacy_votes_by_amendment.get(
+                    amendment_id,
+                    [],
+                )
+
+                if state is None and not ballots:
+                    return None
+
+                return {
+                    "yes": (
+                        int(state.yes or 0)
+                        if state
+                        else 0
+                    ),
+                    "no": (
+                        int(state.no or 0)
+                        if state
+                        else 0
+                    ),
+                    "abstain": (
+                        int(state.abstain or 0)
+                        if state
+                        else 0
+                    ),
+                    "is_open": (
+                        bool(state.is_open)
+                        if state
+                        else False
+                    ),
+                    "created_at": (
+                        state.created_at
+                        if state
+                        else None
+                    ),
+                    "ballots":
+                        materialize_ballots(
+                            ballots
+                        ),
                 }
 
             def draft_outcome(
@@ -2025,11 +2229,23 @@ def record_event_detail(
                             ),
                         "early_vote":
                             vote_summary(
-                                amendment_early
+                                amendment_early,
+                                early_ballots_by_amendment.get(
+                                    amendment.id,
+                                    [],
+                                ),
                             ),
                         "formal_vote":
                             vote_summary(
-                                amendment_formal
+                                amendment_formal,
+                                formal_ballots_by_amendment.get(
+                                    amendment.id,
+                                    [],
+                                ),
+                            ),
+                        "legacy_vote":
+                            legacy_amendment_vote_summary(
+                                amendment.id
                             ),
                         "closing_revision":
                             closure_record(
@@ -2064,9 +2280,21 @@ def record_event_detail(
                     "submitted_at":
                         draft.submitted_at,
                     "early_vote":
-                        vote_summary(early_vote),
+                        vote_summary(
+                            early_vote,
+                            early_ballots_by_draft.get(
+                                draft.id,
+                                [],
+                            ),
+                        ),
                     "formal_vote":
-                        vote_summary(formal_vote),
+                        vote_summary(
+                            formal_vote,
+                            formal_ballots_by_draft.get(
+                                draft.id,
+                                [],
+                            ),
+                        ),
                     "closing_revision":
                         closure_record(
                             closure_by_draft.get(

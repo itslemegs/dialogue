@@ -1092,5 +1092,12 @@
   "records.threads": "スレッド",
   "records.no_discussion_messages": "記録された議論はありません。",
   "records.draft": "草案",
-  "records.amendment": "修正案"
+  "records.amendment": "修正案",
+  "records.view_ballots": "個別投票を見る",
+  "records.voter": "投票者",
+  "records.choice": "選択",
+  "records.recorded_at": "記録日時",
+  "records.last_recorded": "最終記録",
+  "records.opened": "開始",
+  "records.legacy_amendment_vote": "旧方式の修正案投票記録"
 }

@@ -1092,5 +1092,12 @@
   "records.threads": "threads",
   "records.no_discussion_messages": "No discussion messages were recorded.",
   "records.draft": "Draft",
-  "records.amendment": "Amendment"
+  "records.amendment": "Amendment",
+  "records.view_ballots": "View individual ballots",
+  "records.voter": "Voter",
+  "records.choice": "Choice",
+  "records.recorded_at": "Recorded at",
+  "records.last_recorded": "Last recorded",
+  "records.opened": "Opened",
+  "records.legacy_amendment_vote": "Earlier amendment vote record"
 }

@@ -360,5 +360,66 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_record_detail_preserves_ballot_history(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        for model_name in (
+            "ProposalEarlyBallot",
+            "ProposalFormalBallot",
+            "AmendmentVoteState",
+            "AmendmentVote",
+        ):
+            self.assertIn(
+                model_name,
+                function_text,
+            )
+
+        self.assertIn(
+            "materialize_ballots",
+            function_text,
+        )
+
+        self.assertIn(
+            "legacy_amendment_vote_summary",
+            function_text,
+        )
+
+        template = (
+            ROOT
+            / "app/templates/records/event_detail.html"
+        ).read_text()
+
+        self.assertIn(
+            "macro ballot_roster",
+            template,
+        )
+
+        self.assertIn(
+            "records.view_ballots",
+            template,
+        )
+
+        self.assertIn(
+            "records.legacy_amendment_vote",
+            template,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

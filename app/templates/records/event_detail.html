@@ -48,6 +48,65 @@
   {% endfor %}
 {% endmacro %}
 
+{% macro ballot_roster(ballots) %}
+  {% if ballots %}
+  <details class="mt-3">
+    <summary class="cursor-pointer text-xs font-semibold text-indigo-700">
+      {{ t('records.view_ballots') }}
+      ({{ ballots|length }})
+    </summary>
+
+    <div class="mt-2 overflow-x-auto">
+      <table class="w-full text-left text-xs">
+        <thead class="text-slate-400">
+          <tr>
+            <th class="pb-2 pr-3">
+              {{ t('records.voter') }}
+            </th>
+            <th class="pb-2 pr-3">
+              {{ t('records.choice') }}
+            </th>
+            <th class="pb-2">
+              {{ t('records.recorded_at') }}
+            </th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-slate-100">
+          {% for ballot in ballots %}
+          <tr>
+            <td class="py-2 pr-3 font-medium text-slate-700">
+              {% if ballot.handle %}
+                @{{ ballot.handle }}
+              {% else %}
+                User #{{ ballot.user_id }}
+              {% endif %}
+            </td>
+
+            <td class="py-2 pr-3 font-semibold
+              {% if ballot.choice == 'YES' %}
+                text-emerald-700
+              {% elif ballot.choice == 'NO' %}
+                text-rose-700
+              {% else %}
+                text-slate-500
+              {% endif %}
+            ">
+              {{ ballot.choice }}
+            </td>
+
+            <td class="py-2 text-slate-500">
+              {{ ballot.created_at | jst }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% endif %}
+{% endmacro %}
+
 <div class="mx-auto max-w-6xl space-y-6">
 
   <!-- =========================================================
@@ -477,6 +536,15 @@
                       · NO {{ draft.early_vote.no }}
                       · ABSTAIN {{ draft.early_vote.abstain }}
                     </div>
+
+                    {% if draft.early_vote.updated_at %}
+                    <div class="mt-1 text-slate-400">
+                      {{ t('records.last_recorded') }}:
+                      {{ draft.early_vote.updated_at | jst }}
+                    </div>
+                    {% endif %}
+
+                    {{ ballot_roster(draft.early_vote.ballots) }}
                   </div>
                   {% endif %}
 
@@ -491,6 +559,22 @@
                       · NO {{ draft.formal_vote.no }}
                       · ABSTAIN {{ draft.formal_vote.abstain }}
                     </div>
+
+                    {% if draft.formal_vote.opened_at %}
+                    <div class="mt-1 text-slate-400">
+                      {{ t('records.opened') }}:
+                      {{ draft.formal_vote.opened_at | jst }}
+                    </div>
+                    {% endif %}
+
+                    {% if draft.formal_vote.closed_at %}
+                    <div class="text-slate-400">
+                      {{ t('records.closed_at') }}:
+                      {{ draft.formal_vote.closed_at | jst }}
+                    </div>
+                    {% endif %}
+
+                    {{ ballot_roster(draft.formal_vote.ballots) }}
                   </div>
                   {% endif %}
 
@@ -557,6 +641,71 @@
                         </span>
 
                       </div>
+
+
+                      {% if amendment.early_vote %}
+                      <div class="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                        <div class="font-semibold text-slate-800">
+                          {{ t('records.early_vote') }}
+                        </div>
+
+                        <div class="mt-1">
+                          YES {{ amendment.early_vote.yes }}
+                          · NO {{ amendment.early_vote.no }}
+                          · ABSTAIN {{ amendment.early_vote.abstain }}
+                        </div>
+
+                        {{ ballot_roster(amendment.early_vote.ballots) }}
+                      </div>
+                      {% endif %}
+
+
+                      {% if amendment.formal_vote %}
+                      <div class="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                        <div class="font-semibold text-slate-800">
+                          {{ t('records.formal_vote') }}
+                        </div>
+
+                        <div class="mt-1">
+                          YES {{ amendment.formal_vote.yes }}
+                          · NO {{ amendment.formal_vote.no }}
+                          · ABSTAIN {{ amendment.formal_vote.abstain }}
+                        </div>
+
+                        {% if amendment.formal_vote.opened_at %}
+                        <div class="mt-1 text-slate-400">
+                          {{ t('records.opened') }}:
+                          {{ amendment.formal_vote.opened_at | jst }}
+                        </div>
+                        {% endif %}
+
+                        {% if amendment.formal_vote.closed_at %}
+                        <div class="text-slate-400">
+                          {{ t('records.closed_at') }}:
+                          {{ amendment.formal_vote.closed_at | jst }}
+                        </div>
+                        {% endif %}
+
+                        {{ ballot_roster(amendment.formal_vote.ballots) }}
+                      </div>
+                      {% endif %}
+
+
+                      {% if amendment.legacy_vote %}
+                      <details class="mt-3 rounded-lg border border-slate-200 p-3">
+                        <summary class="cursor-pointer text-xs font-semibold text-slate-600">
+                          {{ t('records.legacy_amendment_vote') }}
+                        </summary>
+
+                        <div class="mt-2 text-xs text-slate-600">
+                          YES {{ amendment.legacy_vote.yes }}
+                          · NO {{ amendment.legacy_vote.no }}
+                          · ABSTAIN {{ amendment.legacy_vote.abstain }}
+                        </div>
+
+                        {{ ballot_roster(amendment.legacy_vote.ballots) }}
+                      </details>
+                      {% endif %}
 
 
                       {% if amendment.closing_revision %}

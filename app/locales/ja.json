@@ -1079,5 +1079,8 @@
   "records.amendments": "件の修正案",
   "records.no_tabled_drafts": "この議題には提出済み草案の記録がありません。",
   "records.no_agenda": "このイベントには議題記録がありません。",
-  "records.read_only_help": "この履歴ページでは、投票、編集、参加確認、撤回、その他のイベント操作は行えません。"
+  "records.read_only_help": "この履歴ページでは、投票、編集、参加確認、撤回、その他のイベント操作は行えません。",
+  "records.closing_revision": "終了時の修正",
+  "records.recorded": "記録",
+  "records.by": "記録者"
 }

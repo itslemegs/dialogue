@@ -1435,6 +1435,29 @@ def record_event_detail(
             }
 
             # --------------------------------------------------------
+            # CLOSING REVISIONS
+            # --------------------------------------------------------
+
+            floor_states = db.exec(
+                select(ProposalFloorState)
+                .where(
+                    ProposalFloorState.event_id == event.id
+                )
+            ).all()
+
+            closure_by_draft = {
+                state.draft_id: state
+                for state in floor_states
+                if state.draft_id is not None
+            }
+
+            closure_by_amendment = {
+                state.amendment_id: state
+                for state in floor_states
+                if state.amendment_id is not None
+            }
+
+            # --------------------------------------------------------
             # USERS NEEDED FOR DISPLAY
             # --------------------------------------------------------
 
@@ -1464,6 +1487,12 @@ def record_event_detail(
                 if amendment.submitted_by_id:
                     user_ids.add(amendment.submitted_by_id)
 
+            for floor_state in floor_states:
+                if floor_state.closing_revision_by_id:
+                    user_ids.add(
+                        floor_state.closing_revision_by_id
+                    )
+
             if (
                 manual_closure
                 and manual_closure.closed_by_id
@@ -1483,6 +1512,33 @@ def record_event_detail(
                 item.id: item
                 for item in users
             }
+
+            def closure_record(closure):
+                if closure is None:
+                    return None
+
+                revision_text = (
+                    closure.closing_revision_text or ""
+                ).strip()
+
+                if not revision_text:
+                    return None
+
+                recorded_by = user_map.get(
+                    closure.closing_revision_by_id
+                )
+
+                return {
+                    "text": revision_text,
+                    "recorded_at":
+                        closure.closing_revision_at,
+                    "recorded_by_id":
+                        closure.closing_revision_by_id,
+                    "recorded_by_handle":
+                        recorded_by.handle
+                        if recorded_by
+                        else None,
+                }
 
             # --------------------------------------------------------
             # DISPLAY HELPERS
@@ -1774,6 +1830,12 @@ def record_event_detail(
                             vote_summary(
                                 amendment_formal
                             ),
+                        "closing_revision":
+                            closure_record(
+                                closure_by_amendment.get(
+                                    amendment.id
+                                )
+                            ),
                     })
 
                 sponsor = user_map.get(
@@ -1804,6 +1866,12 @@ def record_event_detail(
                         vote_summary(early_vote),
                     "formal_vote":
                         vote_summary(formal_vote),
+                    "closing_revision":
+                        closure_record(
+                            closure_by_draft.get(
+                                draft.id
+                            )
+                        ),
                     "amendments":
                         amendment_records,
                 }

@@ -221,5 +221,61 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_record_detail_preserves_closing_revisions(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        self.assertIn(
+            "ProposalFloorState",
+            function_text,
+        )
+
+        self.assertIn(
+            "closure_by_draft",
+            function_text,
+        )
+
+        self.assertIn(
+            "closure_by_amendment",
+            function_text,
+        )
+
+        self.assertIn(
+            '"closing_revision"',
+            function_text,
+        )
+
+        template = (
+            ROOT
+            / "app/templates/records/event_detail.html"
+        ).read_text()
+
+        self.assertIn(
+            "draft.closing_revision",
+            template,
+        )
+
+        self.assertIn(
+            "amendment.closing_revision",
+            template,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

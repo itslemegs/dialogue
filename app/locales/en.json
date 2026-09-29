@@ -1079,5 +1079,8 @@
   "records.amendments": "amendments",
   "records.no_tabled_drafts": "No submitted drafts were recorded for this agenda item.",
   "records.no_agenda": "No agenda records were found for this event.",
-  "records.read_only_help": "This historical page does not permit voting, editing, acknowledgement, withdrawal, or other event actions."
+  "records.read_only_help": "This historical page does not permit voting, editing, acknowledgement, withdrawal, or other event actions.",
+  "records.closing_revision": "Closing Revision",
+  "records.recorded": "Recorded",
+  "records.by": "by"
 }

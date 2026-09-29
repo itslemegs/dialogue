@@ -451,6 +451,31 @@
                 {% endif %}
 
 
+                {% if draft.closing_revision %}
+                <div class="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+                  <div class="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+                    {{ t('records.closing_revision') }}
+                  </div>
+
+                  <div class="mt-2 whitespace-pre-line text-sm leading-6 text-slate-800">
+                    {{ draft.closing_revision.text }}
+                  </div>
+
+                  <div class="mt-3 text-xs text-slate-500">
+                    {{ t('records.recorded') }}
+
+                    {% if draft.closing_revision.recorded_by_handle %}
+                      {{ t('records.by') }}
+                      @{{ draft.closing_revision.recorded_by_handle }}
+                    {% endif %}
+
+                    {% if draft.closing_revision.recorded_at %}
+                      · {{ draft.closing_revision.recorded_at | jst }}
+                    {% endif %}
+                  </div>
+                </div>
+                {% endif %}
+
                 {% if draft.amendments %}
                 <details class="mt-4">
                   <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
@@ -486,6 +511,31 @@
 
                       </div>
 
+
+                      {% if amendment.closing_revision %}
+                      <div class="mt-3 rounded-lg bg-indigo-50 p-3">
+                        <div class="text-xs font-semibold text-indigo-700">
+                          {{ t('records.closing_revision') }}
+                        </div>
+
+                        <div class="mt-1 whitespace-pre-line text-sm leading-5 text-slate-700">
+                          {{ amendment.closing_revision.text }}
+                        </div>
+
+                        <div class="mt-2 text-xs text-slate-500">
+                          {{ t('records.recorded') }}
+
+                          {% if amendment.closing_revision.recorded_by_handle %}
+                            {{ t('records.by') }}
+                            @{{ amendment.closing_revision.recorded_by_handle }}
+                          {% endif %}
+
+                          {% if amendment.closing_revision.recorded_at %}
+                            · {{ amendment.closing_revision.recorded_at | jst }}
+                          {% endif %}
+                        </div>
+                      </div>
+                      {% endif %}
 
                       {% if amendment.early_vote or amendment.formal_vote %}
                       <div class="mt-2 text-xs text-slate-500">

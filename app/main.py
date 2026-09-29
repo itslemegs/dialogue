@@ -2354,11 +2354,15 @@ def record_event_detail(
                 or is_record_chairman
             )
 
-            # The existing session-log route reads the live DB.
-            # Therefore only expose it from source A Records.
+            # Record Session Logs are source-aware and
+            # President-only. Source B remains read-only.
             can_view_session_log = bool(
                 flags.get("IS_PRESIDENT")
-                and source_key == "a"
+            )
+
+            session_log_href = (
+                f"/records/{source_key}/events/"
+                f"{event_id}/session-log"
             )
 
             # --------------------------------------------------------
@@ -2876,6 +2880,7 @@ def record_event_detail(
         can_view_individual_ballots=can_view_individual_ballots,
         can_view_private_record=can_view_private_record,
         can_view_session_log=can_view_session_log,
+        session_log_href=session_log_href,
     )
 
 

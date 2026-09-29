@@ -12,13 +12,18 @@
 <main class="max-w-7xl mx-auto px-4 py-8 sm:px-8">
   <header class="flex flex-wrap justify-between items-start gap-4 mb-6">
     <div>
-      <a class="text-sm text-indigo-700 hover:underline" href="/events/{{ event_id }}/menu">{{ t('nav.back') }}</a>
+      <a class="text-sm text-indigo-700 hover:underline" href="{{ back_href }}">{{ t('nav.back') }}</a>
       <h1 class="text-3xl font-bold tracking-tight mt-2">{{ t('logs.title', id=event_id) }}</h1>
+      {% if record_source_key %}
+      <div class="mt-2 inline-flex rounded-full bg-violet-100 px-2.5 py-1 text-xs font-semibold text-violet-700">
+        Record source {{ record_source_key|upper }}
+      </div>
+      {% endif %}
       <p class="text-slate-500 mt-1">{{ t('logs.viewer.subtitle') }}</p>
     </div>
     <div class="flex gap-2">
-      <a class="rounded-lg bg-indigo-700 text-white px-4 py-2 text-sm font-semibold" href="/events/{{ event_id }}/session-log/export?format=csv">{{ t('logs.csv') }}</a>
-      <a class="rounded-lg border bg-white px-4 py-2 text-sm" href="/events/{{ event_id }}/session-log/export?format=json">{{ t('logs.json') }}</a>
+      <a class="rounded-lg bg-indigo-700 text-white px-4 py-2 text-sm font-semibold" href="{{ export_href_base }}?format=csv">{{ t('logs.csv') }}</a>
+      <a class="rounded-lg border bg-white px-4 py-2 text-sm" href="{{ export_href_base }}?format=json">{{ t('logs.json') }}</a>
     </div>
   </header>
   <p class="text-sm text-slate-600 mb-2">{{ t('logs.viewer.limit') }}</p>

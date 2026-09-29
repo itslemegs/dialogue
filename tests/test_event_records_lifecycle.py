@@ -681,7 +681,11 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
         self.assertIn(
-            'href="/events/{{ event.id }}/session-log"',
+            'href="{{ session_log_href }}"',
+            template,
+        )
+        self.assertIn(
+            "{% if can_view_session_log %}",
             template,
         )
 

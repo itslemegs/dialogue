@@ -7,7 +7,7 @@ from app.i18n import request_locale
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,7 +15,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlmodel import select
 
 from app.db import get_session
-from app.models import ExperimentSessionLog, User
+from app.models import (
+    ExperimentSessionLog,
+    User,
+    Event,
+    EventArchiveState,
+    RecordSourceArchiveState,
+)
 from app.services.session_log import add_session_log
 from app.security import effective_flags, unsign_cookie
 
@@ -71,6 +77,100 @@ def _require_log_viewer(request: Request, event_id: int, db):
             status_code=403,
             detail="Experiment logs are restricted to admins, presidents, and chairmen",
         )
+
+    return user
+
+
+
+
+def _require_record_log_viewer(
+    request: Request,
+    source_key: str,
+    event_id: int,
+    record_db,
+):
+    """
+    Record Session Logs are President-only.
+
+    Event/log data is read from the selected Record source.
+    Any source-B manual closure override is checked only in
+    surviving Instance A.
+    """
+    user = _require_user(request)
+    flags = effective_flags(user)
+
+    if not flags.get("IS_PRESIDENT"):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Record Session Logs are restricted "
+                "to the President"
+            ),
+        )
+
+    event = record_db.get(
+        Event,
+        event_id,
+    )
+
+    if event is None:
+        raise HTTPException(status_code=404)
+
+    event_end = event.ends_at
+
+    if (
+        event_end is not None
+        and event_end.tzinfo is None
+    ):
+        event_end = event_end.replace(
+            tzinfo=timezone.utc
+        )
+
+    timer_closed = bool(
+        event_end
+        and event_end <= datetime.now(timezone.utc)
+    )
+
+    manual_closed = False
+
+    if source_key == "a":
+        manual_closed = (
+            record_db.exec(
+                select(EventArchiveState.id)
+                .where(
+                    EventArchiveState.event_id
+                    == event_id
+                )
+            ).first()
+            is not None
+        )
+
+    elif source_key == "b":
+        # B itself remains read-only. Its manual archive state
+        # lives only in the surviving A database.
+        with get_session() as live_db:
+            manual_closed = (
+                live_db.exec(
+                    select(
+                        RecordSourceArchiveState.id
+                    )
+                    .where(
+                        RecordSourceArchiveState.source_key
+                        == "b",
+                        RecordSourceArchiveState.event_id
+                        == event_id,
+                    )
+                ).first()
+                is not None
+            )
+
+    else:
+        raise HTTPException(status_code=404)
+
+    # A Record Session Log must never expose an event that has
+    # not yet entered the Records lifecycle.
+    if not (manual_closed or timer_closed):
+        raise HTTPException(status_code=404)
 
     return user
 
@@ -269,7 +369,261 @@ def view_session_log(event_id: int, request: Request):
     return _render_log_view(logs, user_map, event_id, request)
 
 
-def _render_log_view(logs, user_map, event_id, request):
+
+@router.get(
+    "/records/{source_key}/events/"
+    "{event_id}/session-log/export"
+)
+def export_record_session_log(
+    source_key: str,
+    event_id: int,
+    request: Request,
+    format: str = "csv",
+):
+    """
+    Source-aware, read-only Session Log export for Records.
+    """
+    from app.record_db import get_record_session
+
+    if source_key not in ("a", "b"):
+        raise HTTPException(status_code=404)
+
+    try:
+        with get_record_session(source_key) as db:
+            _require_record_log_viewer(
+                request,
+                source_key,
+                event_id,
+                db,
+            )
+
+            logs = db.exec(
+                select(ExperimentSessionLog)
+                .where(
+                    ExperimentSessionLog.event_id
+                    == event_id
+                )
+                .order_by(
+                    ExperimentSessionLog.created_at,
+                    ExperimentSessionLog.id,
+                )
+            ).all()
+
+            user_ids = sorted({
+                log.user_id
+                for log in logs
+                if log.user_id
+            })
+
+            users = (
+                db.exec(
+                    select(User)
+                    .where(
+                        User.id.in_(user_ids)
+                    )
+                ).all()
+                if user_ids
+                else []
+            )
+
+            user_map = {
+                u.id: u
+                for u in users
+            }
+
+            # Materialize while the Record DB session is open.
+            rows = []
+
+            for log in logs:
+                row = _log_to_dict(log)
+
+                user_label = ""
+                user_handle = ""
+
+                if log.user_id:
+                    record_user = user_map.get(
+                        log.user_id
+                    )
+
+                    if record_user:
+                        user_handle = (
+                            record_user.handle or ""
+                        )
+                        user_label = (
+                            f"@{record_user.handle} "
+                            f"({log.user_id})"
+                        )
+                    else:
+                        user_label = str(
+                            log.user_id
+                        )
+
+                row["user_handle"] = user_handle
+                row["user_label"] = user_label
+
+                rows.append(row)
+
+    except KeyError:
+        raise HTTPException(status_code=404)
+
+    if format.lower() == "json":
+        return JSONResponse(rows)
+
+    output = io.StringIO()
+
+    fieldnames = [
+        "id",
+        "created_at",
+        "event_id",
+        "user_id",
+        "user_handle",
+        "user_label",
+        "session_key",
+        "source",
+        "action",
+        "page",
+        "route",
+        "method",
+        "status_code",
+        "duration_ms",
+        "phase",
+        "target_type",
+        "target_id",
+        "ip_hash",
+        "user_agent",
+        "request_id",
+        "details",
+    ]
+
+    writer = csv.DictWriter(
+        output,
+        fieldnames=fieldnames,
+    )
+
+    writer.writeheader()
+
+    for row in rows:
+        row = dict(row)
+
+        row["details"] = json.dumps(
+            row.get("details"),
+            ensure_ascii=False,
+            default=str,
+        )
+
+        writer.writerow(row)
+
+    filename = (
+        f"record_{source_key}_event_"
+        f"{event_id}_session_log.csv"
+    )
+
+    return Response(
+        output.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="{filename}"'
+        },
+    )
+
+
+@router.get(
+    "/records/{source_key}/events/"
+    "{event_id}/session-log",
+    response_class=HTMLResponse,
+)
+def view_record_session_log(
+    source_key: str,
+    event_id: int,
+    request: Request,
+):
+    """
+    Source-aware, read-only Session Log viewer for Records.
+    """
+    from app.record_db import get_record_session
+
+    if source_key not in ("a", "b"):
+        raise HTTPException(status_code=404)
+
+    try:
+        with get_record_session(source_key) as db:
+            _require_record_log_viewer(
+                request,
+                source_key,
+                event_id,
+                db,
+            )
+
+            logs = db.exec(
+                select(ExperimentSessionLog)
+                .where(
+                    ExperimentSessionLog.event_id
+                    == event_id
+                )
+                .order_by(
+                    ExperimentSessionLog.created_at.desc(),
+                    ExperimentSessionLog.id.desc(),
+                )
+                .limit(300)
+            ).all()
+
+            user_ids = sorted({
+                log.user_id
+                for log in logs
+                if log.user_id
+            })
+
+            users = (
+                db.exec(
+                    select(User)
+                    .where(
+                        User.id.in_(user_ids)
+                    )
+                ).all()
+                if user_ids
+                else []
+            )
+
+            user_map = {
+                u.id: u
+                for u in users
+            }
+
+            # Render/materialize before the read-only archive
+            # session rolls back and expires ORM state.
+            return _render_log_view(
+                logs,
+                user_map,
+                event_id,
+                request,
+                back_href=(
+                    f"/records/{source_key}/"
+                    f"events/{event_id}"
+                ),
+                export_href_base=(
+                    f"/records/{source_key}/"
+                    f"events/{event_id}/"
+                    "session-log/export"
+                ),
+                record_source_key=source_key,
+            )
+
+    except KeyError:
+        raise HTTPException(status_code=404)
+
+
+
+def _render_log_view(
+    logs,
+    user_map,
+    event_id,
+    request,
+    *,
+    back_href=None,
+    export_href_base=None,
+    record_source_key=None,
+):
     # Reuse the application's final Jinja environment, including t() and |jst.
     from app.main import templates
     from app.services.session_log_view import build_log_view
@@ -281,5 +635,16 @@ def _render_log_view(logs, user_map, event_id, request):
         records.append(record)
     view = build_log_view(records, user_map, request_locale(request))
     return templates.env.get_template("session_log.html").render(
-        request=request, event_id=event_id, view=view,
+        request=request,
+        event_id=event_id,
+        view=view,
+        back_href=(
+            back_href
+            or f"/events/{event_id}/menu"
+        ),
+        export_href_base=(
+            export_href_base
+            or f"/events/{event_id}/session-log/export"
+        ),
+        record_source_key=record_source_key,
     )

@@ -149,7 +149,7 @@
       </div>
 
       {% if can_view_session_log %}
-      <a href="/events/{{ event.id }}/session-log"
+      <a href="{{ session_log_href }}"
          class="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800">
         {{ t('records.session_log') }}
       </a>

@@ -1040,5 +1040,11 @@
   "records.observed": "Observed",
   "records.acknowledged": "Acknowledged",
   "records.awaiting": "Seen only",
-  "records.view": "View Record"
+  "records.view": "View Record",
+  "event.close.title": "Close this event",
+  "event.close.help": "Closing removes this event from the live Dashboard and sends it to the permanent read-only Records archive.",
+  "event.close.button": "Close Event & Send to Records",
+  "event.close.confirm": "Close this event? It will disappear from the live Dashboard and remain in the read-only Records archive.",
+  "records.lifecycle.title": "Closed events remain here",
+  "records.lifecycle.body": "Events appear in Records only after their scheduled time ends or the President/Chairman of Record closes them. Once an event leaves the live Dashboard, its read-only record remains available here."
 }

@@ -15,7 +15,7 @@ from fastapi.responses import RedirectResponse
 from starlette.datastructures import Headers
 from PIL import Image
 from app import i18n
-from app.models import Event, EventStage, EventAccessMode
+from app.models import Event, EventArchiveState, EventStage, EventAccessMode
 from app.security import role_required
 from app.services import event_covers as covers
 
@@ -129,19 +129,69 @@ class EventCoverTests(unittest.TestCase):
         self.assertFalse((self.directory/path.split('/')[-1]).exists())
 
     def test_dashboard_uses_safe_url_and_records_visual_is_unchanged(self):
-        event=Event(id=17,title='Test',starts_at=datetime(2027,1,1,tzinfo=timezone.utc),stages=[])
-        self.db.exec.return_value.all.return_value=[event]
-        ns=dict(datetime=datetime,timezone=timezone,select=MagicMock(),selectinload=MagicMock(),
-                or_=lambda *args:None,Event=Event,json=json,to_iso_z=lambda dt:dt.isoformat(),cover_image_url=covers.cover_image_url)
+        event=Event(
+            id=17,
+            title='Test',
+            starts_at=datetime(2027,1,1,tzinfo=timezone.utc),
+            stages=[],
+        )
+
+        ns=dict(
+            datetime=datetime,
+            timezone=timezone,
+            select=MagicMock(),
+            selectinload=MagicMock(),
+            or_=lambda *args:None,
+            Event=Event,
+            EventArchiveState=EventArchiveState,
+            json=json,
+            to_iso_z=lambda dt:dt.isoformat(),
+            cover_image_url=covers.cover_image_url,
+        )
+
         cards=load_function('_dashboard_event_cards',ns)
-        for value in (None,covers.URL_PREFIX+'event-cover-'+'a'*32+'.webp',"');evil"):
+
+        for value in (
+            None,
+            covers.URL_PREFIX+'event-cover-'+'a'*32+'.webp',
+            "');evil",
+        ):
             event.cover_image=value
-            card=cards(self.db,SimpleNamespace(cookies={}),ZoneInfo('Asia/Tokyo'))[0]
-            self.assertEqual(card['cover_image_url'],covers.cover_image_url(value))
+
+            # _dashboard_event_cards now performs:
+            # 1. manual archive-state query
+            # 2. visible event query
+            closure_result=MagicMock()
+            closure_result.all.return_value=[]
+
+            event_result=MagicMock()
+            event_result.all.return_value=[event]
+
+            self.db.exec.side_effect=[
+                closure_result,
+                event_result,
+            ]
+
+            card=cards(
+                self.db,
+                SimpleNamespace(cookies={}),
+                ZoneInfo('Asia/Tokyo'),
+            )[0]
+
+            self.assertEqual(
+                card['cover_image_url'],
+                covers.cover_image_url(value),
+            )
+
         text=(ROOT/'app/templates/dashboard.html').read_text()
+
         self.assertIn("url('{{ ev.cover_image_url }}')",text)
         self.assertEqual(text.count('home-bg.jpg'),1)
         self.assertIn('bg-cover bg-center',text)
+
+        # Records now has a real index route rather than /records/menu.
+        self.assertIn('href="/records"',text)
+        self.assertNotIn('href="/records/menu"',text)
 
     def test_forms_and_creation_role_dependency(self):
         for file in ('admin_event_new.html','admin/_events.html'):

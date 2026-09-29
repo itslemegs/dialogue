@@ -32,6 +32,7 @@ from app.models import (
     RorInvite,
     Event,
     EventAttendance,
+    EventArchiveState,
     EventChairAssignment,
     EventStage,
     AgendaProposal,
@@ -920,6 +921,12 @@ import json
 def _dashboard_event_cards(db: Session, request: Request, display_tz: ZoneInfo):
     now_utc = datetime.now(timezone.utc)
 
+    manually_closed_event_ids = set(
+        db.exec(
+            select(EventArchiveState.event_id)
+        ).all()
+    )
+
     rows = db.exec(
         select(Event)
         .options(selectinload(Event.stages))
@@ -934,6 +941,9 @@ def _dashboard_event_cards(db: Session, request: Request, display_tz: ZoneInfo):
 
     cards = []
     for e in rows:
+        if e.id in manually_closed_event_ids:
+            continue
+
         starts_at = e.starts_at if e.starts_at.tzinfo else e.starts_at.replace(tzinfo=timezone.utc)
         ends_at = (
             e.ends_at if (e.ends_at and e.ends_at.tzinfo)
@@ -1016,8 +1026,11 @@ def dashboard(request: Request):
 @app.get("/records", response_class=HTMLResponse)
 def records_index(request: Request):
     """
-    Read-only historical event index spanning the surviving database
-    and the restored Instance B archive.
+    Permanent read-only archive.
+
+    An event appears only after:
+      1. its scheduled end time has passed, or
+      2. it was manually closed by the President/current Chairman.
     """
     user = current_user(request)
 
@@ -1046,12 +1059,29 @@ def records_index(request: Request):
 
     record_events = []
     source_errors = []
+    now_utc = datetime.now(timezone.utc)
 
     for source in record_sources():
         source_key = source["key"]
 
         try:
             with get_record_session(source_key) as db:
+
+                # Only the surviving/live database has the new manual
+                # event-closure table. The restored B archive remains
+                # untouched on its historical schema.
+                manual_closures = {}
+
+                if source_key == "a":
+                    closures = db.exec(
+                        select(EventArchiveState)
+                    ).all()
+
+                    manual_closures = {
+                        closure.event_id: closure
+                        for closure in closures
+                    }
+
                 events = db.exec(
                     select(Event)
                     .order_by(
@@ -1061,6 +1091,26 @@ def records_index(request: Request):
                 ).all()
 
                 for event in events:
+                    manual_closure = manual_closures.get(event.id)
+
+                    event_end = event.ends_at
+
+                    if (
+                        event_end is not None
+                        and event_end.tzinfo is None
+                    ):
+                        event_end = event_end.replace(
+                            tzinfo=timezone.utc
+                        )
+
+                    timer_closed = bool(
+                        event_end
+                        and event_end <= now_utc
+                    )
+
+                    if not (manual_closure or timer_closed):
+                        continue
+
                     observed = db.exec(
                         select(func.count(EventAttendance.id))
                         .where(
@@ -1092,6 +1142,16 @@ def records_index(request: Request):
                         "awaiting": max(
                             observed - acknowledged,
                             0,
+                        ),
+                        "closure_mode": (
+                            "manual"
+                            if manual_closure
+                            else "scheduled"
+                        ),
+                        "closed_at": (
+                            manual_closure.closed_at
+                            if manual_closure
+                            else event.ends_at
                         ),
                         "record_href": (
                             f"/records/{source_key}"
@@ -3050,6 +3110,93 @@ def acknowledge_event_entry(
     )
 
 
+
+@app.post("/events/{event_id}/close")
+def close_event_to_records(
+    request: Request,
+    event_id: int,
+):
+    """
+    Manually close an event and move it from the live Dashboard
+    into the permanent read-only Records archive.
+
+    Authorized:
+      - President
+      - current Chairman of Record
+    """
+    user = current_user(request)
+    if user is None:
+        raise HTTPException(401)
+
+    with get_session() as db:
+        event = _require_event_access(
+            db=db,
+            user=user,
+            event_id=event_id,
+        )
+
+        existing = db.exec(
+            select(EventArchiveState)
+            .where(EventArchiveState.event_id == event_id)
+        ).first()
+
+        if existing is not None:
+            return RedirectResponse(
+                "/records?closed=already",
+                status_code=303,
+            )
+
+        flags = effective_flags(user)
+
+        assignment = _current_event_chair_assignment(
+            db,
+            event_id,
+            for_update=True,
+        )
+
+        is_president = bool(flags.get("IS_PRESIDENT"))
+        is_current_chair = bool(
+            assignment
+            and assignment.chairman_user_id == user.id
+        )
+
+        if not (is_president or is_current_chair):
+            raise HTTPException(403)
+
+        closed_at = _now_utc()
+
+        archive_state = EventArchiveState(
+            event_id=event.id,
+            closed_at=closed_at,
+            closed_by_id=user.id,
+        )
+
+        db.add(archive_state)
+        db.commit()
+        db.refresh(archive_state)
+
+        archive_state_id = archive_state.id
+
+    slog(
+        request,
+        user=user,
+        event_id=event_id,
+        phase="event_management",
+        action="EVENT_CLOSED",
+        target_type="event_archive_state",
+        target_id=archive_state_id,
+        details={
+            "closed_by_user_id": user.id,
+            "close_mode": "manual",
+        },
+    )
+
+    return RedirectResponse(
+        "/records?closed=1",
+        status_code=303,
+    )
+
+
 @app.get("/events/{event_id}/menu", response_class=HTMLResponse)
 def event_menu(request: Request, event_id: int):
     user = current_user(request)
@@ -3194,6 +3341,39 @@ def event_menu(request: Request, event_id: int):
             and current_assignment.acknowledged_at is None
         )
 
+        event_archive_state = s.exec(
+            select(EventArchiveState)
+            .where(EventArchiveState.event_id == event.id)
+        ).first()
+
+        now_for_closure = _now_utc()
+        event_end_for_closure = event.ends_at
+
+        if (
+            event_end_for_closure is not None
+            and event_end_for_closure.tzinfo is None
+        ):
+            event_end_for_closure = event_end_for_closure.replace(
+                tzinfo=timezone.utc
+            )
+
+        event_timer_closed = bool(
+            event_end_for_closure
+            and event_end_for_closure <= now_for_closure
+        )
+
+        can_close_event = bool(
+            event_archive_state is None
+            and not event_timer_closed
+            and (
+                flags.get("IS_PRESIDENT")
+                or (
+                    current_assignment
+                    and current_assignment.chairman_user_id == user.id
+                )
+            )
+        )
+
         can_view_attendance = bool(
             flags.get("IS_ADMIN")
             or flags.get("IS_PRESIDENT")
@@ -3298,6 +3478,9 @@ def event_menu(request: Request, event_id: int):
             "can_view_attendance": can_view_attendance,
             "attendance_summary": attendance_summary,
             "attendance_roster": attendance_roster,
+            "event_archive_state": event_archive_state,
+            "event_timer_closed": event_timer_closed,
+            "can_close_event": can_close_event,
         },
     )
 

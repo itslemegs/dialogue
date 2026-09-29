@@ -11,7 +11,13 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
-from app.models import Event, EventAttendance, EventChairAssignment, User
+from app.models import (
+    Event,
+    EventArchiveState,
+    EventAttendance,
+    EventChairAssignment,
+    User,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -184,6 +190,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
             "selectinload": selectinload,
             "Event": Event,
             "User": User,
+            "EventArchiveState": EventArchiveState,
             "EventAttendance": EventAttendance,
             "EventChairAssignment": EventChairAssignment,
             "current_user": lambda request: self.actor,
@@ -471,7 +478,8 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.db = FakeSession([
             [current],
             [self.chair, self.president],
-            [],  # attendance roster
+            None,  # event archive state
+            [],    # attendance roster
         ])
 
         response = self.ns["event_menu"](object(), self.event.id)
@@ -500,7 +508,8 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.db = FakeSession([
             [current],
             [self.chair, self.president],
-            [],  # attendance roster
+            None,  # event archive state
+            [],    # attendance roster
         ])
 
         response = self.ns["event_menu"](object(), self.event.id)
@@ -534,7 +543,8 @@ class ChairmanOfRecordTests(unittest.TestCase):
             [current, old],
             [self.chair, self.chair2, self.president],
             [self.chair, self.chair2, self.president, self.member],
-            [],  # attendance roster
+            None,  # event archive state
+            [],    # attendance roster
         ])
 
         response = self.ns["event_menu"](object(), self.event.id)
@@ -768,6 +778,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
         self.db = FakeSession([
             [],
             [],
+            None,  # event archive state
             [attendance],
             [self.member],
         ])
@@ -804,6 +815,7 @@ class ChairmanOfRecordTests(unittest.TestCase):
         # Only Chairman assignment history is queried.
         self.db = FakeSession([
             [],
+            None,  # event archive state
         ])
 
         response = self.ns["event_menu"](

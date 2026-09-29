@@ -1040,5 +1040,11 @@
   "records.observed": "アクセス確認",
   "records.acknowledged": "参加確認済み",
   "records.awaiting": "アクセスのみ",
-  "records.view": "記録を見る"
+  "records.view": "記録を見る",
+  "event.close.title": "イベントを終了する",
+  "event.close.help": "イベントを終了すると、ライブのダッシュボードから削除され、読み取り専用の記録アーカイブに保存されます。",
+  "event.close.button": "イベントを終了して記録へ送る",
+  "event.close.confirm": "このイベントを終了しますか？ライブのダッシュボードから表示されなくなり、読み取り専用の記録アーカイブに残ります。",
+  "records.lifecycle.title": "終了したイベントはここに残ります",
+  "records.lifecycle.body": "イベントは予定終了時刻を過ぎた場合、または会長・記録上の議長が終了した場合にのみ記録へ表示されます。ライブのダッシュボードから消えた後も、読み取り専用の記録はここに残ります。"
 }

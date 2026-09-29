@@ -380,6 +380,46 @@ class EventAttendance(SQLModel, table=True):
     )
 
 
+class EventArchiveState(SQLModel, table=True):
+    """Manual event closure that moves a live event into Records."""
+    __tablename__ = "event_archive_state"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id",
+            name="uq_event_archive_state_event_id",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    event_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("event.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    closed_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        )
+    )
+
+    closed_by_id: Optional[int] = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+
+
 class EventChairAssignment(SQLModel, table=True):
     """Event-specific presiding-chair record; does not grant permissions."""
     __tablename__ = "event_chair_assignment"

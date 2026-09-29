@@ -492,5 +492,39 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_record_permissions_run_after_final_chairman_is_built(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        chairman_assignment = function_text.index(
+            "final_chairman ="
+        )
+
+        permission_check = function_text.index(
+            "is_record_chairman = bool("
+        )
+
+        self.assertLess(
+            chairman_assignment,
+            permission_check,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

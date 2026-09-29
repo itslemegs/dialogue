@@ -1319,37 +1319,6 @@ def record_event_detail(
             ).all()
 
             # --------------------------------------------------------
-            # RECORD ACCESS + BALLOT PRIVACY
-            # --------------------------------------------------------
-
-            is_record_chairman = bool(
-                final_chairman
-                and final_chairman.get(
-                    "chairman_user_id"
-                ) == user.id
-            )
-
-            can_view_event_record = bool(
-                flags.get("IS_ADMIN")
-                or flags.get("IS_PRESIDENT")
-                or is_record_chairman
-            )
-
-            if not can_view_event_record:
-                raise HTTPException(
-                    status_code=403
-                )
-
-            # Individual ballot identities are more restricted:
-            # President or the event's final Chairman of Record.
-            # Admin alone may see aggregate results but not
-            # named voting choices.
-            can_view_individual_ballots = bool(
-                flags.get("IS_PRESIDENT")
-                or is_record_chairman
-            )
-
-            # --------------------------------------------------------
             # ATTENDANCE
             # --------------------------------------------------------
 
@@ -2150,6 +2119,37 @@ def record_event_detail(
                 chairman_history[-1]
                 if chairman_history
                 else None
+            )
+
+            # --------------------------------------------------------
+            # RECORD ACCESS + BALLOT PRIVACY
+            # --------------------------------------------------------
+
+            is_record_chairman = bool(
+                final_chairman
+                and final_chairman.get(
+                    "chairman_user_id"
+                ) == user.id
+            )
+
+            can_view_event_record = bool(
+                flags.get("IS_ADMIN")
+                or flags.get("IS_PRESIDENT")
+                or is_record_chairman
+            )
+
+            if not can_view_event_record:
+                raise HTTPException(
+                    status_code=403
+                )
+
+            # Individual ballot identities are more restricted:
+            # President or the event's final Chairman of Record.
+            # Admin alone may see aggregate results but not
+            # named voting choices.
+            can_view_individual_ballots = bool(
+                flags.get("IS_PRESIDENT")
+                or is_record_chairman
             )
 
             # --------------------------------------------------------

@@ -1043,11 +1043,6 @@ def records_index(request: Request):
 
     flags = effective_flags(user)
 
-    if not (
-        flags.get("IS_ADMIN")
-        or flags.get("IS_PRESIDENT")
-    ):
-        raise HTTPException(status_code=403)
 
     from sqlalchemy import func
     from sqlalchemy.exc import SQLAlchemyError
@@ -1166,6 +1161,94 @@ def records_index(request: Request):
         key=lambda item: item["starts_at"],
         reverse=True,
     )
+
+    # --------------------------------------------------------
+    # RECORD VISIBILITY
+    #
+    # Admin / President:
+    #   see the complete archive.
+    #
+    # Other users:
+    #   see only events for which they were the FINAL
+    #   Chairman of Record.
+    #
+    # Source users are resolved by handle because archive
+    # source B may use different numeric user IDs.
+    # --------------------------------------------------------
+
+    can_view_all_records = bool(
+        flags.get("IS_ADMIN")
+        or flags.get("IS_PRESIDENT")
+    )
+
+    if not can_view_all_records:
+        chaired_record_keys = set()
+
+        for source in record_sources():
+            source_key = source["key"]
+
+            try:
+                with get_record_session(
+                    source_key
+                ) as record_db:
+
+                    source_viewer = record_db.exec(
+                        select(User).where(
+                            User.handle == user.handle
+                        )
+                    ).first()
+
+                    if source_viewer is None:
+                        continue
+
+                    assignments = record_db.exec(
+                        select(EventChairAssignment)
+                        .order_by(
+                            EventChairAssignment.event_id.asc(),
+                            EventChairAssignment.assigned_at.asc(),
+                            EventChairAssignment.id.asc(),
+                        )
+                    ).all()
+
+                    # Last assignment per event is the final
+                    # Chairman-of-Record assignment.
+                    final_by_event = {}
+
+                    for assignment in assignments:
+                        final_by_event[
+                            assignment.event_id
+                        ] = assignment
+
+                    for (
+                        chaired_event_id,
+                        assignment,
+                    ) in final_by_event.items():
+
+                        if (
+                            assignment.chairman_user_id
+                            == source_viewer.id
+                        ):
+                            chaired_record_keys.add(
+                                (
+                                    source_key,
+                                    chaired_event_id,
+                                )
+                            )
+
+            except SQLAlchemyError:
+                # Existing source errors are already handled by
+                # the Records page. A failed archive source must
+                # not expose additional records.
+                continue
+
+        record_events = [
+            item
+            for item in record_events
+            if (
+                item.get("source_key"),
+                item.get("event_id"),
+            ) in chaired_record_keys
+        ]
 
     return render(
         "records/index.html",
@@ -2125,11 +2208,27 @@ def record_event_detail(
             # RECORD ACCESS + BALLOT PRIVACY
             # --------------------------------------------------------
 
+            # Resolve the authenticated user inside this
+            # record source. Source A/B may not share numeric IDs,
+            # so use the stable account handle for cross-source lookup.
+            source_viewer = db.exec(
+                select(User).where(
+                    User.handle == user.handle
+                )
+            ).first()
+
+            source_viewer_id = (
+                source_viewer.id
+                if source_viewer
+                else None
+            )
+
             is_record_chairman = bool(
                 final_chairman
+                and source_viewer_id is not None
                 and final_chairman.get(
                     "chairman_user_id"
-                ) == user.id
+                ) == source_viewer_id
             )
 
             can_view_event_record = bool(

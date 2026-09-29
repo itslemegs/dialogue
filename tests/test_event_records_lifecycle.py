@@ -526,5 +526,66 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_records_index_filters_for_final_chairman(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        self.assertIn(
+            "chaired_record_keys = set()",
+            main_text,
+        )
+
+        self.assertIn(
+            "source_viewer = record_db.exec(",
+            main_text,
+        )
+
+        self.assertIn(
+            "User.handle == user.handle",
+            main_text,
+        )
+
+        self.assertIn(
+            "final_by_event",
+            main_text,
+        )
+
+        self.assertIn(
+            "assignment.chairman_user_id",
+            main_text,
+        )
+
+    def test_record_detail_resolves_chairman_by_source_handle(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        self.assertIn(
+            "source_viewer_id",
+            function_text,
+        )
+
+        self.assertIn(
+            "User.handle == user.handle",
+            function_text,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

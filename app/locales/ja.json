@@ -1099,5 +1099,6 @@
   "records.recorded_at": "記録日時",
   "records.last_recorded": "最終記録",
   "records.opened": "開始",
-  "records.legacy_amendment_vote": "旧方式の修正案投票記録"
+  "records.legacy_amendment_vote": "旧方式の修正案投票記録",
+  "records.session_log": "セッションログ"
 }

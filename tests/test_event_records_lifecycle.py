@@ -526,34 +526,46 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
-    def test_records_index_filters_for_final_chairman(self):
+    def test_records_index_is_available_to_authenticated_members(self):
         main_text = (
             ROOT / "app/main.py"
         ).read_text()
 
+        start = main_text.index(
+            "def records_index"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        # Authentication remains required.
         self.assertIn(
+            "if user is None:",
+            function_text,
+        )
+
+        # All authenticated users may browse closed Records.
+        self.assertNotIn(
             "chaired_record_keys = set()",
-            main_text,
+            function_text,
+        )
+
+        self.assertNotIn(
+            "if not can_view_all_records",
+            function_text,
         )
 
         self.assertIn(
-            "source_viewer = record_db.exec(",
-            main_text,
-        )
-
-        self.assertIn(
-            "User.handle == user.handle",
-            main_text,
-        )
-
-        self.assertIn(
-            "final_by_event",
-            main_text,
-        )
-
-        self.assertIn(
-            "assignment.chairman_user_id",
-            main_text,
+            "record_events=record_events",
+            function_text,
         )
 
     def test_record_detail_resolves_chairman_by_source_handle(self):
@@ -584,6 +596,94 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         self.assertIn(
             "User.handle == user.handle",
             function_text,
+        )
+
+
+    def test_normal_record_view_hides_person_level_admin_data(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        self.assertIn(
+            "can_view_event_record = bool(user)",
+            function_text,
+        )
+
+        self.assertIn(
+            "can_view_private_record = bool(",
+            function_text,
+        )
+
+        self.assertIn(
+            "can_view_individual_ballots = bool(",
+            function_text,
+        )
+
+        self.assertIn(
+            "can_view_session_log = bool(",
+            function_text,
+        )
+
+        self.assertIn(
+            'source_key == "a"',
+            function_text,
+        )
+
+        template = (
+            ROOT
+            / "app/templates/records/event_detail.html"
+        ).read_text()
+
+        self.assertIn(
+            "can_view_private_record and chairman_history",
+            template,
+        )
+
+        self.assertIn(
+            "can_view_private_record and attendance_roster",
+            template,
+        )
+
+        self.assertIn(
+            "can_view_session_log",
+            template,
+        )
+
+        self.assertIn(
+            'href="/events/{{ event.id }}/session-log"',
+            template,
+        )
+
+
+    def test_session_log_backend_includes_president_access(self):
+        route_text = (
+            ROOT
+            / "app/routes/session_log.py"
+        ).read_text()
+
+        self.assertIn(
+            'flags.get("IS_PRESIDENT")',
+            route_text,
+        )
+
+        self.assertIn(
+            '@router.get("/events/{event_id}/session-log"',
+            route_text,
         )
 
 

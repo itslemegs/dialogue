@@ -147,6 +147,13 @@
           {% endif %}
         </p>
       </div>
+
+      {% if can_view_session_log %}
+      <a href="/events/{{ event.id }}/session-log"
+         class="inline-flex items-center justify-center rounded-lg bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800">
+        {{ t('records.session_log') }}
+      </a>
+      {% endif %}
     </div>
   </div>
 
@@ -279,7 +286,7 @@
           {% endif %}
         </div>
 
-        {% if chairman_history|length > 1 %}
+        {% if can_view_private_record and chairman_history|length > 1 %}
         <details class="mt-4">
           <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
             {{ t('records.chair_history') }}
@@ -355,7 +362,7 @@
         </div>
       </div>
 
-      {% if attendance_roster %}
+      {% if can_view_private_record and attendance_roster %}
       <details class="mt-4">
         <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
           {{ t('records.view_attendance') }}

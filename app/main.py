@@ -1162,93 +1162,11 @@ def records_index(request: Request):
         reverse=True,
     )
 
-    # --------------------------------------------------------
-    # RECORD VISIBILITY
+    # All authenticated members may browse the
+    # permanent closed-event archive.
     #
-    # Admin / President:
-    #   see the complete archive.
-    #
-    # Other users:
-    #   see only events for which they were the FINAL
-    #   Chairman of Record.
-    #
-    # Source users are resolved by handle because archive
-    # source B may use different numeric user IDs.
-    # --------------------------------------------------------
-
-    can_view_all_records = bool(
-        flags.get("IS_ADMIN")
-        or flags.get("IS_PRESIDENT")
-    )
-
-    if not can_view_all_records:
-        chaired_record_keys = set()
-
-        for source in record_sources():
-            source_key = source["key"]
-
-            try:
-                with get_record_session(
-                    source_key
-                ) as record_db:
-
-                    source_viewer = record_db.exec(
-                        select(User).where(
-                            User.handle == user.handle
-                        )
-                    ).first()
-
-                    if source_viewer is None:
-                        continue
-
-                    assignments = record_db.exec(
-                        select(EventChairAssignment)
-                        .order_by(
-                            EventChairAssignment.event_id.asc(),
-                            EventChairAssignment.assigned_at.asc(),
-                            EventChairAssignment.id.asc(),
-                        )
-                    ).all()
-
-                    # Last assignment per event is the final
-                    # Chairman-of-Record assignment.
-                    final_by_event = {}
-
-                    for assignment in assignments:
-                        final_by_event[
-                            assignment.event_id
-                        ] = assignment
-
-                    for (
-                        chaired_event_id,
-                        assignment,
-                    ) in final_by_event.items():
-
-                        if (
-                            assignment.chairman_user_id
-                            == source_viewer.id
-                        ):
-                            chaired_record_keys.add(
-                                (
-                                    source_key,
-                                    chaired_event_id,
-                                )
-                            )
-
-            except SQLAlchemyError:
-                # Existing source errors are already handled by
-                # the Records page. A failed archive source must
-                # not expose additional records.
-                continue
-
-        record_events = [
-            item
-            for item in record_events
-            if (
-                item.get("source_key"),
-                item.get("event_id"),
-            ) in chaired_record_keys
-        ]
+    # Sensitive person-level information is controlled
+    # inside each event's Record detail page.
 
     return render(
         "records/index.html",
@@ -2231,24 +2149,32 @@ def record_event_detail(
                 ) == source_viewer_id
             )
 
-            can_view_event_record = bool(
+            # Every authenticated member may read the
+            # institutional Record for a CLOSED event.
+            can_view_event_record = bool(user)
+
+            # Person-level administrative information remains
+            # restricted to Admin, President, or the FINAL
+            # Chairman of Record for this event.
+            can_view_private_record = bool(
                 flags.get("IS_ADMIN")
                 or flags.get("IS_PRESIDENT")
                 or is_record_chairman
             )
 
-            if not can_view_event_record:
-                raise HTTPException(
-                    status_code=403
-                )
-
             # Individual ballot identities are more restricted:
-            # President or the event's final Chairman of Record.
-            # Admin alone may see aggregate results but not
-            # named voting choices.
+            # President or the event's FINAL Chairman of Record.
+            # Admin alone sees aggregate tallies, not identities.
             can_view_individual_ballots = bool(
                 flags.get("IS_PRESIDENT")
                 or is_record_chairman
+            )
+
+            # The existing session-log route reads the live DB.
+            # Therefore only expose it from source A Records.
+            can_view_session_log = bool(
+                flags.get("IS_PRESIDENT")
+                and source_key == "a"
             )
 
             # --------------------------------------------------------
@@ -2760,6 +2686,8 @@ def record_event_detail(
         proposal_room_records=proposal_room_records,
         proposal_floor_records=proposal_floor_records,
         can_view_individual_ballots=can_view_individual_ballots,
+        can_view_private_record=can_view_private_record,
+        can_view_session_log=can_view_session_log,
     )
 
 

@@ -1099,5 +1099,6 @@
   "records.recorded_at": "Recorded at",
   "records.last_recorded": "Last recorded",
   "records.opened": "Opened",
-  "records.legacy_amendment_vote": "Earlier amendment vote record"
+  "records.legacy_amendment_vote": "Earlier amendment vote record",
+  "records.session_log": "Session Log"
 }

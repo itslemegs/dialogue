@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl space-y-6">
+
+  <!-- =========================================================
+       HEADER
+       ========================================================= -->
+  <div>
+    <a href="/records"
+       class="text-sm font-semibold text-indigo-700 hover:text-indigo-900">
+      ← {{ t('records.back') }}
+    </a>
+
+    <div class="mt-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+            {{ record_source.label }}
+          </span>
+
+          <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+            {{ t('records.read_only') }}
+          </span>
+
+          <span class="text-xs text-slate-400">
+            Event #{{ event.id }}
+          </span>
+        </div>
+
+        <h1 class="mt-3 text-3xl font-bold text-slate-900">
+          {{ event.title }}
+        </h1>
+
+        <p class="mt-2 text-sm text-slate-500">
+          {{ event.starts_at | jst }}
+
+          {% if event.ends_at %}
+            <span class="mx-1">→</span>
+            {{ event.ends_at | jst }}
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- =========================================================
+       RECORD STATUS
+       ========================================================= -->
+  <section class="rounded-2xl border border-indigo-200 bg-indigo-50 p-5">
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+          {{ t('records.record_status') }}
+        </div>
+
+        <div class="mt-1 font-semibold text-indigo-950">
+          {{ t('records.closed') }}
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+          {{ t('records.closure_type') }}
+        </div>
+
+        <div class="mt-1 font-semibold text-indigo-950">
+          {% if closure_mode == 'manual' %}
+            {{ t('records.manual_close') }}
+          {% else %}
+            {{ t('records.scheduled_close') }}
+          {% endif %}
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+          {{ t('records.closed_at') }}
+        </div>
+
+        <div class="mt-1 font-semibold text-indigo-950">
+          {% if closed_at %}
+            {{ closed_at | jst }}
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      </div>
+
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+          {{ t('records.closed_by') }}
+        </div>
+
+        <div class="mt-1 font-semibold text-indigo-950">
+          {% if closure_mode == 'manual' %}
+            {% if closure_user_handle %}
+              @{{ closure_user_handle }}
+            {% else %}
+              —
+            {% endif %}
+          {% else %}
+            {{ t('records.timer') }}
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- =========================================================
+       EVENT STAGES
+       ========================================================= -->
+  {% if stages %}
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <h2 class="text-lg font-bold text-slate-900">
+      {{ t('records.schedule') }}
+    </h2>
+
+    <div class="mt-4 grid gap-3 md:grid-cols-3">
+      {% for stage in stages %}
+      <div class="rounded-xl bg-slate-50 p-4">
+        <div class="font-semibold text-slate-900">
+          {{ stage.name }}
+        </div>
+
+        <div class="mt-2 text-xs leading-5 text-slate-500">
+          {{ stage.starts_at | jst }}
+          <br>
+          →
+          {{ stage.ends_at | jst }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+
+  <!-- =========================================================
+       OFFICIALS + ATTENDANCE
+       ========================================================= -->
+  <div class="grid gap-6 lg:grid-cols-2">
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+      <h2 class="text-lg font-bold text-slate-900">
+        {{ t('records.chairman_of_record') }}
+      </h2>
+
+      {% if final_chairman %}
+        <div class="mt-4 rounded-xl bg-slate-50 p-4">
+          <div class="text-lg font-semibold text-slate-900">
+            {% if final_chairman.chairman_handle %}
+              @{{ final_chairman.chairman_handle }}
+            {% else %}
+              User #{{ final_chairman.chairman_user_id }}
+            {% endif %}
+          </div>
+
+          <div class="mt-2 text-xs text-slate-500">
+            {{ t('records.assigned') }}:
+            {{ final_chairman.assigned_at | jst }}
+          </div>
+
+          {% if final_chairman.acknowledged_at %}
+          <div class="mt-1 text-xs text-slate-500">
+            {{ t('records.acknowledged_at') }}:
+            {{ final_chairman.acknowledged_at | jst }}
+          </div>
+          {% endif %}
+        </div>
+
+        {% if chairman_history|length > 1 %}
+        <details class="mt-4">
+          <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
+            {{ t('records.chair_history') }}
+          </summary>
+
+          <div class="mt-3 space-y-2">
+            {% for chair in chairman_history %}
+            <div class="rounded-xl border border-slate-100 p-3 text-sm">
+              <div class="font-medium text-slate-900">
+                {% if chair.chairman_handle %}
+                  @{{ chair.chairman_handle }}
+                {% else %}
+                  User #{{ chair.chairman_user_id }}
+                {% endif %}
+              </div>
+
+              <div class="mt-1 text-xs text-slate-500">
+                {{ chair.assigned_at | jst }}
+
+                {% if chair.ended_at %}
+                  →
+                  {{ chair.ended_at | jst }}
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+
+      {% else %}
+        <p class="mt-4 text-sm text-slate-500">
+          {{ t('records.no_chair') }}
+        </p>
+      {% endif %}
+    </section>
+
+
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+      <h2 class="text-lg font-bold text-slate-900">
+        {{ t('records.attendance') }}
+      </h2>
+
+      <div class="mt-4 grid grid-cols-3 gap-2">
+        <div class="rounded-xl bg-slate-50 p-3 text-center">
+          <div class="text-2xl font-bold text-slate-900">
+            {{ attendance_summary.observed }}
+          </div>
+
+          <div class="mt-1 text-xs text-slate-500">
+            {{ t('records.observed') }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-emerald-50 p-3 text-center">
+          <div class="text-2xl font-bold text-emerald-700">
+            {{ attendance_summary.acknowledged }}
+          </div>
+
+          <div class="mt-1 text-xs text-emerald-700">
+            {{ t('records.acknowledged') }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-amber-50 p-3 text-center">
+          <div class="text-2xl font-bold text-amber-700">
+            {{ attendance_summary.awaiting }}
+          </div>
+
+          <div class="mt-1 text-xs text-amber-700">
+            {{ t('records.awaiting') }}
+          </div>
+        </div>
+      </div>
+
+      {% if attendance_roster %}
+      <details class="mt-4">
+        <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
+          {{ t('records.view_attendance') }}
+        </summary>
+
+        <div class="mt-3 overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs text-slate-500">
+              <tr>
+                <th class="pb-2 pr-3">
+                  {{ t('records.user') }}
+                </th>
+
+                <th class="pb-2 pr-3">
+                  {{ t('records.first_seen') }}
+                </th>
+
+                <th class="pb-2">
+                  {{ t('records.attendance_status') }}
+                </th>
+              </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-100">
+              {% for row in attendance_roster %}
+              <tr>
+                <td class="py-2 pr-3 font-medium text-slate-900">
+                  {% if row.handle %}
+                    @{{ row.handle }}
+                  {% else %}
+                    User #{{ row.user_id }}
+                  {% endif %}
+                </td>
+
+                <td class="py-2 pr-3 text-slate-500">
+                  {{ row.first_seen_at | jst }}
+                </td>
+
+                <td class="py-2">
+                  {% if row.acknowledged_at %}
+                    <span class="font-medium text-emerald-700">
+                      {{ t('records.acknowledged') }}
+                    </span>
+                  {% else %}
+                    <span class="text-amber-700">
+                      {{ t('records.awaiting') }}
+                    </span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endif %}
+    </section>
+
+  </div>
+
+
+  <!-- =========================================================
+       AGENDA + DECISIONS
+       ========================================================= -->
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+
+    <div>
+      <h2 class="text-xl font-bold text-slate-900">
+        {{ t('records.agenda_outcomes') }}
+      </h2>
+
+      <p class="mt-1 text-sm text-slate-500">
+        {{ t('records.agenda_outcomes_help') }}
+      </p>
+    </div>
+
+    {% if agenda_records %}
+      <div class="mt-6 space-y-6">
+
+        {% for agenda in agenda_records %}
+        <article class="rounded-2xl border border-slate-200">
+
+          <div class="p-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {{ t('records.agenda_item') }}
+                  #{{ agenda.id }}
+                </div>
+
+                <h3 class="mt-1 text-lg font-bold text-slate-900">
+                  {{ agenda.title }}
+                </h3>
+              </div>
+
+              <span class="self-start rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                {{ agenda.status }}
+              </span>
+
+            </div>
+
+            {% if agenda.background %}
+            <p class="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">
+              {{ agenda.background }}
+            </p>
+            {% endif %}
+
+            {% if agenda.decided_at %}
+            <div class="mt-3 text-xs text-slate-500">
+              {{ t('records.agenda_decided') }}:
+              {{ agenda.decided_at | jst }}
+
+              {% if agenda.decided_by_handle %}
+                · @{{ agenda.decided_by_handle }}
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+
+
+          {% if agenda.drafts %}
+          <div class="border-t border-slate-100 bg-slate-50/60 p-4 sm:p-5">
+
+            <div class="space-y-3">
+              {% for draft in agenda.drafts %}
+              <div class="rounded-xl border border-slate-200 bg-white p-4">
+
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+                  <div>
+                    <div class="font-bold text-slate-900">
+                      {{ draft.l_number }}
+
+                      {% if draft.title %}
+                        · {{ draft.title }}
+                      {% endif %}
+                    </div>
+
+                    <div class="mt-1 text-xs text-slate-500">
+                      {{ t('records.draft_status') }}:
+                      {{ draft.status }}
+
+                      {% if draft.sponsor_handle %}
+                        · {{ t('records.sponsor') }}
+                        @{{ draft.sponsor_handle }}
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  <span class="
+                    self-start rounded-full px-3 py-1 text-xs font-semibold
+                    {% if draft.outcome == 'Adopted' %}
+                      bg-emerald-100 text-emerald-800
+                    {% elif draft.outcome == 'Not adopted' or draft.outcome == 'Withdrawn' %}
+                      bg-rose-100 text-rose-800
+                    {% else %}
+                      bg-amber-100 text-amber-800
+                    {% endif %}
+                  ">
+                    {{ draft.outcome }}
+                  </span>
+
+                </div>
+
+
+                {% if draft.early_vote or draft.formal_vote %}
+                <div class="mt-4 grid gap-2 sm:grid-cols-2">
+
+                  {% if draft.early_vote %}
+                  <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                    <div class="font-semibold text-slate-800">
+                      {{ t('records.early_vote') }}
+                    </div>
+
+                    <div class="mt-1">
+                      YES {{ draft.early_vote.yes }}
+                      · NO {{ draft.early_vote.no }}
+                      · ABSTAIN {{ draft.early_vote.abstain }}
+                    </div>
+                  </div>
+                  {% endif %}
+
+                  {% if draft.formal_vote %}
+                  <div class="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+                    <div class="font-semibold text-slate-800">
+                      {{ t('records.formal_vote') }}
+                    </div>
+
+                    <div class="mt-1">
+                      YES {{ draft.formal_vote.yes }}
+                      · NO {{ draft.formal_vote.no }}
+                      · ABSTAIN {{ draft.formal_vote.abstain }}
+                    </div>
+                  </div>
+                  {% endif %}
+
+                </div>
+                {% endif %}
+
+
+                {% if draft.amendments %}
+                <details class="mt-4">
+                  <summary class="cursor-pointer text-sm font-semibold text-indigo-700">
+                    {{ draft.amendments|length }}
+                    {{ t('records.amendments') }}
+                  </summary>
+
+                  <div class="mt-3 space-y-2">
+
+                    {% for amendment in draft.amendments %}
+                    <div class="rounded-lg border border-slate-100 p-3">
+
+                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div>
+                          <div class="text-sm font-semibold text-slate-900">
+                            {{ amendment.label }}
+                          </div>
+
+                          <div class="mt-1 text-xs text-slate-500">
+                            {% if amendment.submitted_by_handle %}
+                              @{{ amendment.submitted_by_handle }}
+                              ·
+                            {% endif %}
+
+                            {{ amendment.created_at | jst }}
+                          </div>
+                        </div>
+
+                        <span class="text-xs font-semibold text-slate-700">
+                          {{ amendment.outcome }}
+                        </span>
+
+                      </div>
+
+
+                      {% if amendment.early_vote or amendment.formal_vote %}
+                      <div class="mt-2 text-xs text-slate-500">
+
+                        {% if amendment.formal_vote %}
+                          {{ t('records.formal_vote') }}:
+                          YES {{ amendment.formal_vote.yes }}
+                          · NO {{ amendment.formal_vote.no }}
+                          · ABSTAIN {{ amendment.formal_vote.abstain }}
+
+                        {% elif amendment.early_vote %}
+                          {{ t('records.early_vote') }}:
+                          YES {{ amendment.early_vote.yes }}
+                          · NO {{ amendment.early_vote.no }}
+                          · ABSTAIN {{ amendment.early_vote.abstain }}
+                        {% endif %}
+
+                      </div>
+                      {% endif %}
+
+                    </div>
+                    {% endfor %}
+
+                  </div>
+                </details>
+                {% endif %}
+
+              </div>
+              {% endfor %}
+            </div>
+
+          </div>
+          {% else %}
+
+          <div class="border-t border-slate-100 p-4 text-sm text-slate-500">
+            {{ t('records.no_tabled_drafts') }}
+          </div>
+
+          {% endif %}
+
+        </article>
+        {% endfor %}
+
+      </div>
+
+    {% else %}
+
+      <div class="mt-6 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500">
+        {{ t('records.no_agenda') }}
+      </div>
+
+    {% endif %}
+  </section>
+
+
+  <!-- =========================================================
+       READ-ONLY FOOTER
+       ========================================================= -->
+  <div class="rounded-2xl bg-slate-900 p-5 text-sm leading-6 text-slate-300">
+    <span class="font-semibold text-white">
+      {{ t('records.read_only') }}.
+    </span>
+
+    {{ t('records.read_only_help') }}
+  </div>
+
+</div>
+{% endblock %}

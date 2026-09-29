@@ -120,5 +120,61 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_record_detail_route_is_source_aware(self):
+        text = (ROOT / "app/main.py").read_text()
+
+        self.assertIn(
+            '"/records/{source_key}/events/{event_id}"',
+            text,
+        )
+        self.assertIn(
+            "def record_event_detail",
+            text,
+        )
+
+    def test_record_detail_rejects_open_events(self):
+        text = (ROOT / "app/main.py").read_text()
+
+        start = text.index("def record_event_detail")
+        end = text.find("\n@app.", start)
+
+        function_text = (
+            text[start:end]
+            if end != -1
+            else text[start:]
+        )
+
+        self.assertIn(
+            "if not (manual_closure or timer_closed):",
+            function_text,
+        )
+
+    def test_record_detail_uses_archive_session(self):
+        text = (ROOT / "app/main.py").read_text()
+
+        start = text.index("def record_event_detail")
+        end = text.find("\n@app.", start)
+
+        function_text = (
+            text[start:end]
+            if end != -1
+            else text[start:]
+        )
+
+        self.assertIn(
+            "get_record_session(source_key)",
+            function_text,
+        )
+
+    def test_record_detail_template_has_no_forms(self):
+        text = (
+            ROOT
+            / "app/templates/records/event_detail.html"
+        ).read_text()
+
+        self.assertNotIn("<form", text)
+        self.assertNotIn("method=\"post\"", text.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

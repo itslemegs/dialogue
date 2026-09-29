@@ -1176,6 +1176,710 @@ def records_index(request: Request):
     )
 
 
+
+@app.get(
+    "/records/{source_key}/events/{event_id}",
+    response_class=HTMLResponse,
+)
+def record_event_detail(
+    source_key: str,
+    event_id: int,
+    request: Request,
+):
+    """
+    Permanent read-only record for one closed event.
+
+    source_key:
+      a -> surviving consensus database
+      b -> restored consensus_archive_b database
+    """
+    user = current_user(request)
+
+    if user is None:
+        qs = urlencode({"next": str(request.url)})
+        return RedirectResponse(
+            f"/login?{qs}",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+
+    flags = effective_flags(user)
+
+    if not (
+        flags.get("IS_ADMIN")
+        or flags.get("IS_PRESIDENT")
+    ):
+        raise HTTPException(status_code=403)
+
+    from app.record_db import (
+        get_record_session,
+        record_sources,
+    )
+
+    source_map = {
+        source["key"]: source
+        for source in record_sources()
+    }
+
+    record_source = source_map.get(source_key)
+
+    if record_source is None:
+        raise HTTPException(status_code=404)
+
+    now_utc = datetime.now(timezone.utc)
+
+    try:
+        with get_record_session(source_key) as db:
+
+            # --------------------------------------------------------
+            # EVENT + CLOSURE
+            # --------------------------------------------------------
+
+            event = db.get(Event, event_id)
+
+            if event is None:
+                raise HTTPException(status_code=404)
+
+            manual_closure = None
+
+            # Historical Instance B intentionally remains on its
+            # original schema and has no event_archive_state table.
+            if source_key == "a":
+                manual_closure = db.exec(
+                    select(EventArchiveState)
+                    .where(
+                        EventArchiveState.event_id == event.id
+                    )
+                ).first()
+
+            event_end = event.ends_at
+
+            if event_end is not None and event_end.tzinfo is None:
+                event_end = event_end.replace(
+                    tzinfo=timezone.utc
+                )
+
+            timer_closed = bool(
+                event_end
+                and event_end <= now_utc
+            )
+
+            # Direct URL access must not expose live/upcoming events.
+            if not (manual_closure or timer_closed):
+                raise HTTPException(status_code=404)
+
+            closure_mode = (
+                "manual"
+                if manual_closure
+                else "scheduled"
+            )
+
+            closed_at = (
+                manual_closure.closed_at
+                if manual_closure
+                else event.ends_at
+            )
+
+            # --------------------------------------------------------
+            # STAGES
+            # --------------------------------------------------------
+
+            stages = db.exec(
+                select(EventStage)
+                .where(EventStage.event_id == event.id)
+                .order_by(
+                    EventStage.starts_at.asc(),
+                    EventStage.id.asc(),
+                )
+            ).all()
+
+            # --------------------------------------------------------
+            # CHAIRMAN OF RECORD
+            # --------------------------------------------------------
+
+            chair_assignments = db.exec(
+                select(EventChairAssignment)
+                .where(
+                    EventChairAssignment.event_id == event.id
+                )
+                .order_by(
+                    EventChairAssignment.assigned_at.asc(),
+                    EventChairAssignment.id.asc(),
+                )
+            ).all()
+
+            # --------------------------------------------------------
+            # ATTENDANCE
+            # --------------------------------------------------------
+
+            attendance_rows = db.exec(
+                select(EventAttendance)
+                .where(
+                    EventAttendance.event_id == event.id
+                )
+                .order_by(
+                    EventAttendance.first_seen_at.asc(),
+                    EventAttendance.id.asc(),
+                )
+            ).all()
+
+            # --------------------------------------------------------
+            # AGENDA
+            # --------------------------------------------------------
+
+            proposals = db.exec(
+                select(AgendaProposal)
+                .where(
+                    AgendaProposal.event_id == event.id
+                )
+                .order_by(
+                    AgendaProposal.created_at.asc(),
+                    AgendaProposal.id.asc(),
+                )
+            ).all()
+
+            drafts = db.exec(
+                select(ProposalDraft)
+                .where(
+                    ProposalDraft.event_id == event.id,
+                    ProposalDraft.is_submitted == True,
+                )
+                .order_by(
+                    ProposalDraft.l_number.asc(),
+                    ProposalDraft.id.asc(),
+                )
+            ).all()
+
+            draft_ids = [
+                draft.id
+                for draft in drafts
+                if draft.id is not None
+            ]
+
+            amendments = []
+
+            if draft_ids:
+                amendments = db.exec(
+                    select(Amendment)
+                    .where(
+                        Amendment.draft_id.in_(draft_ids)
+                    )
+                    .order_by(
+                        Amendment.draft_id.asc(),
+                        Amendment.am_no.asc(),
+                    )
+                ).all()
+
+            amendment_ids = [
+                amendment.id
+                for amendment in amendments
+                if amendment.id is not None
+            ]
+
+            # --------------------------------------------------------
+            # VOTES
+            # --------------------------------------------------------
+
+            early_votes = db.exec(
+                select(ProposalEarlyVote)
+                .where(
+                    ProposalEarlyVote.event_id == event.id
+                )
+            ).all()
+
+            formal_votes = db.exec(
+                select(ProposalFormalVote)
+                .where(
+                    ProposalFormalVote.event_id == event.id
+                )
+            ).all()
+
+            early_by_draft = {
+                vote.draft_id: vote
+                for vote in early_votes
+                if vote.draft_id is not None
+            }
+
+            formal_by_draft = {
+                vote.draft_id: vote
+                for vote in formal_votes
+                if vote.draft_id is not None
+            }
+
+            early_by_amendment = {
+                vote.amendment_id: vote
+                for vote in early_votes
+                if vote.amendment_id is not None
+            }
+
+            formal_by_amendment = {
+                vote.amendment_id: vote
+                for vote in formal_votes
+                if vote.amendment_id is not None
+            }
+
+            # --------------------------------------------------------
+            # USERS NEEDED FOR DISPLAY
+            # --------------------------------------------------------
+
+            user_ids = set()
+
+            for assignment in chair_assignments:
+                if assignment.chairman_user_id:
+                    user_ids.add(assignment.chairman_user_id)
+                if assignment.assigned_by_id:
+                    user_ids.add(assignment.assigned_by_id)
+
+            for row in attendance_rows:
+                if row.user_id:
+                    user_ids.add(row.user_id)
+
+            for proposal in proposals:
+                if proposal.proposer_id:
+                    user_ids.add(proposal.proposer_id)
+                if proposal.decided_by_id:
+                    user_ids.add(proposal.decided_by_id)
+
+            for draft in drafts:
+                if draft.sponsor_id:
+                    user_ids.add(draft.sponsor_id)
+
+            for amendment in amendments:
+                if amendment.submitted_by_id:
+                    user_ids.add(amendment.submitted_by_id)
+
+            if (
+                manual_closure
+                and manual_closure.closed_by_id
+            ):
+                user_ids.add(manual_closure.closed_by_id)
+
+            users = (
+                db.exec(
+                    select(User)
+                    .where(User.id.in_(user_ids))
+                ).all()
+                if user_ids
+                else []
+            )
+
+            user_map = {
+                item.id: item
+                for item in users
+            }
+
+            # --------------------------------------------------------
+            # DISPLAY HELPERS
+            # --------------------------------------------------------
+
+            def enum_value(value):
+                return getattr(value, "value", str(value))
+
+            def vote_summary(vote):
+                if vote is None:
+                    return None
+
+                return {
+                    "yes": int(
+                        getattr(vote, "yes", 0) or 0
+                    ),
+                    "no": int(
+                        getattr(vote, "no", 0) or 0
+                    ),
+                    "abstain": int(
+                        getattr(vote, "abstain", 0) or 0
+                    ),
+                    "is_open": bool(
+                        getattr(vote, "is_open", False)
+                    ),
+                }
+
+            def draft_outcome(
+                draft,
+                early_vote,
+                formal_vote,
+            ):
+                status_value = enum_value(
+                    draft.status
+                ).upper()
+
+                if status_value == "ADOPTED":
+                    return "Adopted"
+
+                if status_value == "WITHDRAWN":
+                    return "Withdrawn"
+
+                if status_value == "REINTRODUCED":
+                    return "Reintroduced"
+
+                if (
+                    early_vote
+                    and getattr(
+                        early_vote,
+                        "is_open",
+                        False,
+                    )
+                ):
+                    return "Pending"
+
+                if (
+                    formal_vote
+                    and getattr(
+                        formal_vote,
+                        "is_open",
+                        False,
+                    )
+                ):
+                    return "Pending"
+
+                if early_vote or formal_vote:
+                    return "Not adopted"
+
+                return "Pending"
+
+            def amendment_outcome(
+                early_vote,
+                formal_vote,
+            ):
+                # Match the current Decision-page priority:
+                # formal vote first, then early consensus.
+                if formal_vote:
+                    if getattr(
+                        formal_vote,
+                        "is_open",
+                        False,
+                    ):
+                        return "Pending"
+
+                    yes = (
+                        getattr(
+                            formal_vote,
+                            "yes",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    no = (
+                        getattr(
+                            formal_vote,
+                            "no",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    return (
+                        "Adopted"
+                        if yes > no
+                        else "Not adopted"
+                    )
+
+                if early_vote:
+                    if getattr(
+                        early_vote,
+                        "is_open",
+                        False,
+                    ):
+                        return "Pending"
+
+                    yes = (
+                        getattr(
+                            early_vote,
+                            "yes",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    no = (
+                        getattr(
+                            early_vote,
+                            "no",
+                            0,
+                        )
+                        or 0
+                    )
+
+                    if no == 0 and yes > 0:
+                        return "Adopted by consensus"
+
+                    return "Not adopted"
+
+                return "Pending"
+
+            # --------------------------------------------------------
+            # CHAIR HISTORY
+            # --------------------------------------------------------
+
+            chairman_history = []
+
+            for assignment in chair_assignments:
+                chairman = user_map.get(
+                    assignment.chairman_user_id
+                )
+
+                assigned_by = user_map.get(
+                    assignment.assigned_by_id
+                )
+
+                chairman_history.append({
+                    "chairman_user_id":
+                        assignment.chairman_user_id,
+                    "chairman_handle":
+                        chairman.handle
+                        if chairman
+                        else None,
+                    "assigned_by_id":
+                        assignment.assigned_by_id,
+                    "assigned_by_handle":
+                        assigned_by.handle
+                        if assigned_by
+                        else None,
+                    "assigned_at":
+                        assignment.assigned_at,
+                    "acknowledged_at":
+                        assignment.acknowledged_at,
+                    "ended_at":
+                        assignment.ended_at,
+                })
+
+            final_chairman = (
+                chairman_history[-1]
+                if chairman_history
+                else None
+            )
+
+            # --------------------------------------------------------
+            # ATTENDANCE DISPLAY
+            # --------------------------------------------------------
+
+            attendance_roster = []
+
+            for row in attendance_rows:
+                attendee = user_map.get(row.user_id)
+
+                attendance_roster.append({
+                    "user_id": row.user_id,
+                    "handle":
+                        attendee.handle
+                        if attendee
+                        else None,
+                    "first_seen_at":
+                        row.first_seen_at,
+                    "last_seen_at":
+                        row.last_seen_at,
+                    "acknowledged_at":
+                        row.acknowledged_at,
+                })
+
+            observed = len(attendance_rows)
+
+            acknowledged = sum(
+                1
+                for row in attendance_rows
+                if row.acknowledged_at is not None
+            )
+
+            attendance_summary = {
+                "observed": observed,
+                "acknowledged": acknowledged,
+                "awaiting": max(
+                    observed - acknowledged,
+                    0,
+                ),
+            }
+
+            # --------------------------------------------------------
+            # DRAFT / AMENDMENT RECORDS
+            # --------------------------------------------------------
+
+            amendments_by_draft = {}
+
+            for amendment in amendments:
+                amendments_by_draft.setdefault(
+                    amendment.draft_id,
+                    [],
+                ).append(amendment)
+
+            draft_records_by_proposal = {}
+
+            for draft in drafts:
+                early_vote = early_by_draft.get(
+                    draft.id
+                )
+
+                formal_vote = formal_by_draft.get(
+                    draft.id
+                )
+
+                amendment_records = []
+
+                for amendment in amendments_by_draft.get(
+                    draft.id,
+                    [],
+                ):
+                    amendment_early = (
+                        early_by_amendment.get(
+                            amendment.id
+                        )
+                    )
+
+                    amendment_formal = (
+                        formal_by_amendment.get(
+                            amendment.id
+                        )
+                    )
+
+                    submitter = user_map.get(
+                        amendment.submitted_by_id
+                    )
+
+                    amendment_records.append({
+                        "id": amendment.id,
+                        "label": amendment.label,
+                        "am_no": amendment.am_no,
+                        "submitted_by_handle":
+                            submitter.handle
+                            if submitter
+                            else None,
+                        "created_at":
+                            amendment.created_at,
+                        "outcome":
+                            amendment_outcome(
+                                amendment_early,
+                                amendment_formal,
+                            ),
+                        "early_vote":
+                            vote_summary(
+                                amendment_early
+                            ),
+                        "formal_vote":
+                            vote_summary(
+                                amendment_formal
+                            ),
+                    })
+
+                sponsor = user_map.get(
+                    draft.sponsor_id
+                )
+
+                draft_record = {
+                    "id": draft.id,
+                    "l_number":
+                        draft.l_number
+                        or f"Draft #{draft.id}",
+                    "title": draft.title,
+                    "status":
+                        enum_value(draft.status),
+                    "outcome":
+                        draft_outcome(
+                            draft,
+                            early_vote,
+                            formal_vote,
+                        ),
+                    "sponsor_handle":
+                        sponsor.handle
+                        if sponsor
+                        else None,
+                    "submitted_at":
+                        draft.submitted_at,
+                    "early_vote":
+                        vote_summary(early_vote),
+                    "formal_vote":
+                        vote_summary(formal_vote),
+                    "amendments":
+                        amendment_records,
+                }
+
+                draft_records_by_proposal.setdefault(
+                    draft.proposal_id,
+                    [],
+                ).append(draft_record)
+
+            # --------------------------------------------------------
+            # AGENDA RECORDS
+            # --------------------------------------------------------
+
+            agenda_records = []
+
+            for proposal in proposals:
+                proposer = (
+                    user_map.get(
+                        proposal.proposer_id
+                    )
+                    if proposal.proposer_id
+                    else None
+                )
+
+                decided_by = (
+                    user_map.get(
+                        proposal.decided_by_id
+                    )
+                    if proposal.decided_by_id
+                    else None
+                )
+
+                agenda_records.append({
+                    "id": proposal.id,
+                    "title": proposal.title,
+                    "background":
+                        proposal.background,
+                    "status":
+                        enum_value(
+                            proposal.status
+                        ),
+                    "proposer_handle":
+                        proposer.handle
+                        if proposer
+                        else None,
+                    "decided_by_handle":
+                        decided_by.handle
+                        if decided_by
+                        else None,
+                    "decided_at":
+                        proposal.decided_at,
+                    "drafts":
+                        draft_records_by_proposal.get(
+                            proposal.id,
+                            [],
+                        ),
+                })
+
+            closure_user = (
+                user_map.get(
+                    manual_closure.closed_by_id
+                )
+                if (
+                    manual_closure
+                    and manual_closure.closed_by_id
+                )
+                else None
+            )
+
+    except KeyError:
+        raise HTTPException(status_code=404)
+
+    return render(
+        "records/event_detail.html",
+        request,
+        record_source=record_source,
+        event=event,
+        stages=stages,
+        closure_mode=closure_mode,
+        closed_at=closed_at,
+        closure_user_handle=(
+            closure_user.handle
+            if closure_user
+            else None
+        ),
+        final_chairman=final_chairman,
+        chairman_history=chairman_history,
+        attendance_summary=attendance_summary,
+        attendance_roster=attendance_roster,
+        agenda_records=agenda_records,
+    )
+
+
 from collections import defaultdict
 from datetime import datetime
 from datetime import timezone

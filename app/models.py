@@ -420,6 +420,67 @@ class EventArchiveState(SQLModel, table=True):
     )
 
 
+
+class RecordSourceArchiveState(SQLModel, table=True):
+    """
+    Live-database override for archiving an event that belongs
+    to another historical Record source.
+
+    event_id intentionally has NO foreign key to Event because
+    it refers to an event ID inside another database.
+    """
+    __tablename__ = "record_source_archive_state"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_key",
+            "event_id",
+            name="uq_record_source_archive_state_source_event",
+        ),
+    )
+
+    id: Optional[int] = Field(
+        default=None,
+        primary_key=True,
+    )
+
+    source_key: str = Field(
+        sa_column=sa.Column(
+            sa.String(16),
+            nullable=False,
+            index=True,
+        )
+    )
+
+    event_id: int = Field(
+        sa_column=sa.Column(
+            sa.Integer,
+            nullable=False,
+            index=True,
+        )
+    )
+
+    closed_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+        )
+    )
+
+    closed_by_id: Optional[int] = Field(
+        default=None,
+        sa_column=sa.Column(
+            sa.Integer,
+            sa.ForeignKey(
+                "user.id",
+                ondelete="SET NULL",
+            ),
+            nullable=True,
+            index=True,
+        ),
+    )
+
+
 class EventChairAssignment(SQLModel, table=True):
     """Event-specific presiding-chair record; does not grant permissions."""
     __tablename__ = "event_chair_assignment"

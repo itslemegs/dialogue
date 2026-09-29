@@ -94,7 +94,15 @@ class EventRecordsLifecycleTests(unittest.TestCase):
             function_text,
         )
         self.assertIn(
-            "if not (manual_closure or timer_closed):",
+            "effective_manual_closure",
+            function_text,
+        )
+        self.assertIn(
+            "or timer_closed",
+            function_text,
+        )
+        self.assertIn(
+            "continue",
             function_text,
         )
 
@@ -145,7 +153,15 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
         self.assertIn(
-            "if not (manual_closure or timer_closed):",
+            "effective_manual_closure",
+            function_text,
+        )
+        self.assertIn(
+            "or timer_closed",
+            function_text,
+        )
+        self.assertIn(
+            "raise HTTPException(status_code=404)",
             function_text,
         )
 

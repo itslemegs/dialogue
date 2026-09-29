@@ -33,6 +33,7 @@ from app.models import (
     Event,
     EventAttendance,
     EventArchiveState,
+    RecordSourceArchiveState,
     EventChairAssignment,
     EventStage,
     AgendaProposal,
@@ -1053,8 +1054,25 @@ def records_index(request: Request):
     )
 
     record_events = []
+    archive_candidates = []
     source_errors = []
     now_utc = datetime.now(timezone.utc)
+
+    # Source-aware manual archive overrides always live in
+    # surviving Instance A. Never query this table through the
+    # historical B database.
+    with get_session() as live_db:
+        override_rows = live_db.exec(
+            select(RecordSourceArchiveState)
+        ).all()
+
+        source_overrides = {
+            (row.source_key, row.event_id): {
+                "closed_at": row.closed_at,
+                "closed_by_id": row.closed_by_id,
+            }
+            for row in override_rows
+        }
 
     for source in record_sources():
         source_key = source["key"]
@@ -1088,6 +1106,15 @@ def records_index(request: Request):
                 for event in events:
                     manual_closure = manual_closures.get(event.id)
 
+                    source_override = source_overrides.get(
+                        (source_key, event.id)
+                    )
+
+                    effective_manual_closure = (
+                        manual_closure
+                        or source_override
+                    )
+
                     event_end = event.ends_at
 
                     if (
@@ -1103,7 +1130,30 @@ def records_index(request: Request):
                         and event_end <= now_utc
                     )
 
-                    if not (manual_closure or timer_closed):
+                    if not (
+                        effective_manual_closure
+                        or timer_closed
+                    ):
+                        # Instance B is historical/read-only.
+                        # Presidents may archive its still-future
+                        # events by creating an override in live A.
+                        if (
+                            source_key == "b"
+                            and flags.get("IS_PRESIDENT")
+                        ):
+                            archive_candidates.append({
+                                "source": source_key,
+                                "source_label": source["label"],
+                                "event_id": event.id,
+                                "title": event.title,
+                                "starts_at": event.starts_at,
+                                "ends_at": event.ends_at,
+                                "archive_href": (
+                                    f"/records/b/events/"
+                                    f"{event.id}/close"
+                                ),
+                            })
+
                         continue
 
                     observed = db.exec(
@@ -1140,13 +1190,17 @@ def records_index(request: Request):
                         ),
                         "closure_mode": (
                             "manual"
-                            if manual_closure
+                            if effective_manual_closure
                             else "scheduled"
                         ),
                         "closed_at": (
                             manual_closure.closed_at
                             if manual_closure
-                            else event.ends_at
+                            else (
+                                source_override["closed_at"]
+                                if source_override
+                                else event.ends_at
+                            )
                         ),
                         "record_href": (
                             f"/records/{source_key}"
@@ -1174,8 +1228,91 @@ def records_index(request: Request):
         record_events=record_events,
         record_sources=record_sources(),
         record_source_errors=source_errors,
+        record_archive_candidates=archive_candidates,
+        can_manage_source_archives=bool(
+            flags.get("IS_PRESIDENT")
+        ),
     )
 
+
+
+
+@app.post("/records/b/events/{event_id}/close")
+def close_instance_b_record(
+    event_id: int,
+    request: Request,
+):
+    """
+    Archive a historical Instance B event by recording the
+    closure override in live Instance A.
+
+    Instance B itself remains read-only and unchanged.
+    """
+    user = current_user(request)
+
+    if user is None:
+        raise HTTPException(401)
+
+    flags = effective_flags(user)
+
+    # Cross-database Chairman IDs are intentionally not used
+    # here. Only the live-A President role may perform this.
+    if not flags.get("IS_PRESIDENT"):
+        raise HTTPException(403)
+
+    from app.record_db import get_record_session
+
+    # Verify the historical event actually exists.
+    with get_record_session("b") as archive_db:
+        historical_event = archive_db.get(
+            Event,
+            event_id,
+        )
+
+        if historical_event is None:
+            raise HTTPException(404)
+
+    with get_session() as live_db:
+        existing = live_db.exec(
+            select(RecordSourceArchiveState)
+            .where(
+                RecordSourceArchiveState.source_key == "b",
+                RecordSourceArchiveState.event_id == event_id,
+            )
+        ).first()
+
+        if existing is not None:
+            return RedirectResponse(
+                "/records?closed=already",
+                status_code=303,
+            )
+
+        override = RecordSourceArchiveState(
+            source_key="b",
+            event_id=event_id,
+            closed_at=_now_utc(),
+            closed_by_id=user.id,
+        )
+
+        live_db.add(override)
+
+        try:
+            live_db.commit()
+            live_db.refresh(override)
+
+        except IntegrityError:
+            # Concurrent/idempotent duplicate close.
+            live_db.rollback()
+
+            return RedirectResponse(
+                "/records?closed=already",
+                status_code=303,
+            )
+
+    return RedirectResponse(
+        "/records?closed=1",
+        status_code=303,
+    )
 
 
 @app.get(
@@ -1222,6 +1359,41 @@ def record_event_detail(
 
     now_utc = datetime.now(timezone.utc)
 
+    # Source-aware closure overrides are stored only in live A.
+    # Materialize everything needed here before entering the
+    # historical read-only session.
+    source_override = None
+
+    if source_key != "a":
+        with get_session() as live_db:
+            override_row = live_db.exec(
+                select(RecordSourceArchiveState)
+                .where(
+                    RecordSourceArchiveState.source_key
+                    == source_key,
+                    RecordSourceArchiveState.event_id
+                    == event_id,
+                )
+            ).first()
+
+            if override_row is not None:
+                closed_by_handle = None
+
+                if override_row.closed_by_id:
+                    closer = live_db.get(
+                        User,
+                        override_row.closed_by_id,
+                    )
+
+                    if closer is not None:
+                        closed_by_handle = closer.handle
+
+                source_override = {
+                    "closed_at": override_row.closed_at,
+                    "closed_by_id": override_row.closed_by_id,
+                    "closed_by_handle": closed_by_handle,
+                }
+
     try:
         with get_record_session(source_key) as db:
 
@@ -1266,19 +1438,31 @@ def record_event_detail(
             )
 
             # Direct URL access must not expose live/upcoming events.
-            if not (manual_closure or timer_closed):
+            effective_manual_closure = (
+                manual_closure
+                or source_override
+            )
+
+            if not (
+                effective_manual_closure
+                or timer_closed
+            ):
                 raise HTTPException(status_code=404)
 
             closure_mode = (
                 "manual"
-                if manual_closure
+                if effective_manual_closure
                 else "scheduled"
             )
 
             closed_at = (
                 manual_closure.closed_at
                 if manual_closure
-                else event.ends_at
+                else (
+                    source_override["closed_at"]
+                    if source_override
+                    else event.ends_at
+                )
             )
 
             # --------------------------------------------------------
@@ -2676,7 +2860,11 @@ def record_event_detail(
         stages=stage_records,
         closure_mode=closure_mode,
         closed_at=closed_at,
-        closure_user_handle=closure_user_handle,
+        closure_user_handle=(
+            source_override["closed_by_handle"]
+            if source_override
+            else closure_user_handle
+        ),
         final_chairman=final_chairman,
         chairman_history=chairman_history,
         attendance_summary=attendance_summary,

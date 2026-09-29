@@ -421,5 +421,76 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_record_ballot_privacy_uses_chairman_of_record(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        self.assertIn(
+            "is_record_chairman = bool(",
+            function_text,
+        )
+
+        self.assertIn(
+            'flags.get("IS_ADMIN")',
+            function_text,
+        )
+
+        self.assertIn(
+            'flags.get("IS_PRESIDENT")',
+            function_text,
+        )
+
+        self.assertIn(
+            '"chairman_user_id"',
+            function_text,
+        )
+
+        self.assertIn(
+            "can_view_event_record = bool(",
+            function_text,
+        )
+
+        self.assertIn(
+            "can_view_individual_ballots = bool(",
+            function_text,
+        )
+
+        template = (
+            ROOT
+            / "app/templates/records/event_detail.html"
+        ).read_text()
+
+        self.assertIn(
+            "macro ballot_roster(ballots, can_view=False)",
+            template,
+        )
+
+        self.assertIn(
+            "ballots and can_view",
+            template,
+        )
+
+        self.assertIn(
+            "can_view_individual_ballots",
+            template,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

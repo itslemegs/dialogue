@@ -277,5 +277,88 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         )
 
 
+    def test_record_detail_preserves_discussion_history(self):
+        main_text = (
+            ROOT / "app/main.py"
+        ).read_text()
+
+        start = main_text.index(
+            "def record_event_detail"
+        )
+
+        end = main_text.find(
+            "\n@app.",
+            start,
+        )
+
+        function_text = (
+            main_text[start:end]
+            if end != -1
+            else main_text[start:]
+        )
+
+        for model_name in (
+            "GeneralFloorLink",
+            "Intervention",
+            "ProposalRoom",
+            "ProposalMessage",
+            "ProposalIntervention",
+        ):
+            self.assertIn(
+                model_name,
+                function_text,
+            )
+
+        self.assertIn(
+            "materialize_thread",
+            function_text,
+        )
+
+        self.assertIn(
+            "general_floor_records",
+            function_text,
+        )
+
+        self.assertIn(
+            "proposal_room_records",
+            function_text,
+        )
+
+        self.assertIn(
+            "proposal_floor_records",
+            function_text,
+        )
+
+        template = (
+            ROOT
+            / "app/templates/records/event_detail.html"
+        ).read_text()
+
+        self.assertIn(
+            "record_thread",
+            template,
+        )
+
+        self.assertIn(
+            "records.discussion_history",
+            template,
+        )
+
+        self.assertIn(
+            "general_floor_records",
+            template,
+        )
+
+        self.assertIn(
+            "proposal_room_records",
+            template,
+        )
+
+        self.assertIn(
+            "proposal_floor_records",
+            template,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

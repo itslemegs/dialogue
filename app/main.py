@@ -1458,6 +1458,116 @@ def record_event_detail(
             }
 
             # --------------------------------------------------------
+            # DISCUSSION HISTORY
+            # --------------------------------------------------------
+
+            proposal_ids = [
+                proposal.id
+                for proposal in proposals
+                if proposal.id is not None
+            ]
+
+            # -------- General Floor --------
+
+            general_floor_links = (
+                db.exec(
+                    select(GeneralFloorLink)
+                    .where(
+                        GeneralFloorLink.proposal_id.in_(
+                            proposal_ids
+                        )
+                    )
+                ).all()
+                if proposal_ids
+                else []
+            )
+
+            general_question_ids = [
+                link.question_id
+                for link in general_floor_links
+            ]
+
+            general_questions = (
+                db.exec(
+                    select(Question)
+                    .where(
+                        Question.id.in_(
+                            general_question_ids
+                        )
+                    )
+                ).all()
+                if general_question_ids
+                else []
+            )
+
+            general_interventions = (
+                db.exec(
+                    select(Intervention)
+                    .where(
+                        Intervention.question_id.in_(
+                            general_question_ids
+                        )
+                    )
+                    .order_by(
+                        Intervention.created_at.asc(),
+                        Intervention.id.asc(),
+                    )
+                ).all()
+                if general_question_ids
+                else []
+            )
+
+            # -------- Proposal Rooms --------
+
+            proposal_rooms = db.exec(
+                select(ProposalRoom)
+                .where(
+                    ProposalRoom.event_id == event.id
+                )
+                .order_by(
+                    ProposalRoom.created_at.asc(),
+                    ProposalRoom.id.asc(),
+                )
+            ).all()
+
+            room_ids = [
+                room.id
+                for room in proposal_rooms
+                if room.id is not None
+            ]
+
+            proposal_messages = (
+                db.exec(
+                    select(ProposalMessage)
+                    .where(
+                        ProposalMessage.room_id.in_(
+                            room_ids
+                        )
+                    )
+                    .order_by(
+                        ProposalMessage.created_at.asc(),
+                        ProposalMessage.id.asc(),
+                    )
+                ).all()
+                if room_ids
+                else []
+            )
+
+            # -------- Proposal Floor --------
+
+            proposal_floor_interventions = db.exec(
+                select(ProposalIntervention)
+                .where(
+                    ProposalIntervention.event_id
+                    == event.id
+                )
+                .order_by(
+                    ProposalIntervention.created_at.asc(),
+                    ProposalIntervention.id.asc(),
+                )
+            ).all()
+
+            # --------------------------------------------------------
             # USERS NEEDED FOR DISPLAY
             # --------------------------------------------------------
 
@@ -1493,6 +1603,30 @@ def record_event_detail(
                         floor_state.closing_revision_by_id
                     )
 
+            for intervention in general_interventions:
+                if intervention.by_user:
+                    user_ids.add(
+                        intervention.by_user
+                    )
+
+            for room in proposal_rooms:
+                if room.sponsor_id:
+                    user_ids.add(
+                        room.sponsor_id
+                    )
+
+            for message in proposal_messages:
+                if message.user_id:
+                    user_ids.add(
+                        message.user_id
+                    )
+
+            for intervention in proposal_floor_interventions:
+                if intervention.by_user:
+                    user_ids.add(
+                        intervention.by_user
+                    )
+
             if (
                 manual_closure
                 and manual_closure.closed_by_id
@@ -1512,6 +1646,73 @@ def record_event_detail(
                 item.id: item
                 for item in users
             }
+
+            def materialize_thread(
+                rows,
+                *,
+                parent_field,
+                user_field,
+            ):
+                """
+                Convert ORM discussion rows into plain nested
+                dictionaries before the archive session closes.
+                """
+                by_id = {}
+                ordered = []
+
+                for row in rows:
+                    author_id = getattr(
+                        row,
+                        user_field,
+                    )
+
+                    author = user_map.get(
+                        author_id
+                    )
+
+                    item = {
+                        "id": row.id,
+                        "local_no": getattr(
+                            row,
+                            "local_no",
+                            None,
+                        ),
+                        "author_id": author_id,
+                        "author_handle": (
+                            author.handle
+                            if author
+                            else None
+                        ),
+                        "body": row.body,
+                        "created_at": row.created_at,
+                        "children": [],
+                    }
+
+                    by_id[row.id] = item
+                    ordered.append(
+                        (row, item)
+                    )
+
+                roots = []
+
+                for row, item in ordered:
+                    parent_id = getattr(
+                        row,
+                        parent_field,
+                    )
+
+                    if (
+                        parent_id is not None
+                        and parent_id in by_id
+                    ):
+                        by_id[parent_id][
+                            "children"
+                        ].append(item)
+                    else:
+                        roots.append(item)
+
+                return roots
+
 
             def closure_record(closure):
                 if closure is None:
@@ -1930,6 +2131,245 @@ def record_event_detail(
                         ),
                 })
 
+            # --------------------------------------------------------
+            # MATERIALIZED DISCUSSION HISTORY
+            # --------------------------------------------------------
+
+            proposal_by_id = {
+                proposal.id: proposal
+                for proposal in proposals
+            }
+
+            submitted_draft_by_room = {
+                draft.room_id: draft
+                for draft in drafts
+            }
+
+            draft_by_id = {
+                draft.id: draft
+                for draft in drafts
+            }
+
+            amendment_by_id = {
+                amendment.id: amendment
+                for amendment in amendments
+            }
+
+            # -------- General Floor --------
+
+            link_by_proposal = {
+                link.proposal_id: link
+                for link in general_floor_links
+            }
+
+            question_by_id = {
+                question.id: question
+                for question in general_questions
+            }
+
+            general_rows_by_question = {}
+
+            for intervention in general_interventions:
+                general_rows_by_question.setdefault(
+                    intervention.question_id,
+                    [],
+                ).append(intervention)
+
+            general_floor_records = []
+
+            for proposal in proposals:
+                link = link_by_proposal.get(
+                    proposal.id
+                )
+
+                if not link:
+                    continue
+
+                question = question_by_id.get(
+                    link.question_id
+                )
+
+                rows = general_rows_by_question.get(
+                    link.question_id,
+                    [],
+                )
+
+                if not question and not rows:
+                    continue
+
+                general_floor_records.append({
+                    "proposal_id": proposal.id,
+                    "proposal_title": proposal.title,
+                    "question_id": (
+                        question.id
+                        if question
+                        else link.question_id
+                    ),
+                    "question_text": (
+                        question.text
+                        if question
+                        else proposal.title
+                    ),
+                    "threads": materialize_thread(
+                        rows,
+                        parent_field="relates_to_id",
+                        user_field="by_user",
+                    ),
+                })
+
+            # -------- Proposal Rooms --------
+
+            messages_by_room = {}
+
+            for message in proposal_messages:
+                messages_by_room.setdefault(
+                    message.room_id,
+                    [],
+                ).append(message)
+
+            proposal_room_records = []
+
+            for room in proposal_rooms:
+                proposal = proposal_by_id.get(
+                    room.proposal_id
+                )
+
+                draft = submitted_draft_by_room.get(
+                    room.id
+                )
+
+                sponsor = user_map.get(
+                    room.sponsor_id
+                )
+
+                proposal_room_records.append({
+                    "room_id": room.id,
+                    "proposal_id": room.proposal_id,
+                    "proposal_title": (
+                        proposal.title
+                        if proposal
+                        else None
+                    ),
+                    "room_title": room.title,
+                    "description": room.description,
+                    "sponsor_handle": (
+                        sponsor.handle
+                        if sponsor
+                        else None
+                    ),
+                    "draft_label": (
+                        draft.l_number
+                        if draft
+                        else None
+                    ),
+                    "threads": materialize_thread(
+                        messages_by_room.get(
+                            room.id,
+                            [],
+                        ),
+                        parent_field="parent_id",
+                        user_field="user_id",
+                    ),
+                })
+
+            # -------- Proposal Floor --------
+
+            floor_rows_by_scope = {}
+
+            for intervention in proposal_floor_interventions:
+                if intervention.draft_id is not None:
+                    scope_key = (
+                        "draft",
+                        intervention.draft_id,
+                    )
+                elif intervention.amendment_id is not None:
+                    scope_key = (
+                        "amendment",
+                        intervention.amendment_id,
+                    )
+                else:
+                    continue
+
+                floor_rows_by_scope.setdefault(
+                    scope_key,
+                    [],
+                ).append(intervention)
+
+            proposal_floor_records = []
+
+            for (
+                scope_type,
+                scope_id,
+            ), rows in floor_rows_by_scope.items():
+
+                first_row = rows[0]
+
+                proposal = proposal_by_id.get(
+                    first_row.proposal_id
+                )
+
+                if scope_type == "draft":
+                    draft = draft_by_id.get(
+                        scope_id
+                    )
+
+                    scope_label = (
+                        draft.l_number
+                        if draft
+                        and draft.l_number
+                        else f"Draft #{scope_id}"
+                    )
+
+                    scope_title = (
+                        draft.title
+                        if draft
+                        else None
+                    )
+
+                else:
+                    amendment = amendment_by_id.get(
+                        scope_id
+                    )
+
+                    scope_label = (
+                        amendment.label
+                        if amendment
+                        else f"Amendment #{scope_id}"
+                    )
+
+                    parent_draft = (
+                        draft_by_id.get(
+                            amendment.draft_id
+                        )
+                        if amendment
+                        else None
+                    )
+
+                    scope_title = (
+                        parent_draft.l_number
+                        if parent_draft
+                        else None
+                    )
+
+                proposal_floor_records.append({
+                    "scope_type": scope_type,
+                    "scope_id": scope_id,
+                    "scope_label": scope_label,
+                    "scope_title": scope_title,
+                    "proposal_id":
+                        first_row.proposal_id,
+                    "proposal_title": (
+                        proposal.title
+                        if proposal
+                        else None
+                    ),
+                    "threads": materialize_thread(
+                        rows,
+                        parent_field="parent_id",
+                        user_field="by_user",
+                    ),
+                })
+
             closure_user = (
                 user_map.get(
                     manual_closure.closed_by_id
@@ -1964,6 +2404,9 @@ def record_event_detail(
         attendance_summary=attendance_summary,
         attendance_roster=attendance_roster,
         agenda_records=agenda_records,
+        general_floor_records=general_floor_records,
+        proposal_room_records=proposal_room_records,
+        proposal_floor_records=proposal_floor_records,
     )
 
 

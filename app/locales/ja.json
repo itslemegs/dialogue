@@ -1082,5 +1082,15 @@
   "records.read_only_help": "この履歴ページでは、投票、編集、参加確認、撤回、その他のイベント操作は行えません。",
   "records.closing_revision": "終了時の修正",
   "records.recorded": "記録",
-  "records.by": "記録者"
+  "records.by": "記録者",
+  "records.discussion_history": "議論履歴",
+  "records.discussion_history_help": "一般討論、提案作成ルーム、提案フロアで行われた議論を読み取り専用で保存しています。",
+  "records.general_floor": "一般討論",
+  "records.proposal_rooms": "提案作成ルーム",
+  "records.proposal_floor": "提案フロア",
+  "records.reply": "返信",
+  "records.threads": "スレッド",
+  "records.no_discussion_messages": "記録された議論はありません。",
+  "records.draft": "草案",
+  "records.amendment": "修正案"
 }

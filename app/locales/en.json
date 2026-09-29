@@ -1082,5 +1082,15 @@
   "records.read_only_help": "This historical page does not permit voting, editing, acknowledgement, withdrawal, or other event actions.",
   "records.closing_revision": "Closing Revision",
   "records.recorded": "Recorded",
-  "records.by": "by"
+  "records.by": "by",
+  "records.discussion_history": "Discussion History",
+  "records.discussion_history_help": "Read-only discussion preserved from the General Floor, proposal drafting rooms, and Proposal Floor.",
+  "records.general_floor": "General Floor",
+  "records.proposal_rooms": "Proposal Drafting Rooms",
+  "records.proposal_floor": "Proposal Floor",
+  "records.reply": "Reply",
+  "records.threads": "threads",
+  "records.no_discussion_messages": "No discussion messages were recorded.",
+  "records.draft": "Draft",
+  "records.amendment": "Amendment"
 }

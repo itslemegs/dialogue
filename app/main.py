@@ -1239,6 +1239,13 @@ def record_event_detail(
             if event is None:
                 raise HTTPException(status_code=404)
 
+            event_record = {
+                "id": event.id,
+                "title": event.title,
+                "starts_at": event.starts_at,
+                "ends_at": event.ends_at,
+            }
+
             manual_closure = None
 
             # Historical Instance B intentionally remains on its
@@ -1291,6 +1298,16 @@ def record_event_detail(
                     EventStage.id.asc(),
                 )
             ).all()
+
+            stage_records = [
+                {
+                    "id": stage.id,
+                    "name": stage.name,
+                    "starts_at": stage.starts_at,
+                    "ends_at": stage.ends_at,
+                }
+                for stage in stages
+            ]
 
             # --------------------------------------------------------
             # CHAIRMAN OF RECORD
@@ -1856,6 +1873,12 @@ def record_event_detail(
                 else None
             )
 
+            closure_user_handle = (
+                closure_user.handle
+                if closure_user
+                else None
+            )
+
     except KeyError:
         raise HTTPException(status_code=404)
 
@@ -1863,15 +1886,11 @@ def record_event_detail(
         "records/event_detail.html",
         request,
         record_source=record_source,
-        event=event,
-        stages=stages,
+        event=event_record,
+        stages=stage_records,
         closure_mode=closure_mode,
         closed_at=closed_at,
-        closure_user_handle=(
-            closure_user.handle
-            if closure_user
-            else None
-        ),
+        closure_user_handle=closure_user_handle,
         final_chairman=final_chairman,
         chairman_history=chairman_history,
         attendance_summary=attendance_summary,

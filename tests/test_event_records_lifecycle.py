@@ -176,5 +176,50 @@ class EventRecordsLifecycleTests(unittest.TestCase):
         self.assertNotIn("method=\"post\"", text.lower())
 
 
+    def test_record_detail_materializes_archive_objects_before_session_close(self):
+        text = (ROOT / "app/main.py").read_text()
+
+        start = text.index("def record_event_detail")
+        end = text.find("\n@app.", start)
+
+        function_text = (
+            text[start:end]
+            if end != -1
+            else text[start:]
+        )
+
+        self.assertIn(
+            'event_record = {',
+            function_text,
+        )
+
+        self.assertIn(
+            'stage_records = [',
+            function_text,
+        )
+
+        self.assertIn(
+            'closure_user_handle = (',
+            function_text,
+        )
+
+        self.assertIn(
+            'event=event_record',
+            function_text,
+        )
+
+        self.assertIn(
+            'stages=stage_records',
+            function_text,
+        )
+
+        self.assertNotIn(
+            'closure_user.handle\n            if closure_user',
+            function_text[
+                function_text.find("return render("):
+            ],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
